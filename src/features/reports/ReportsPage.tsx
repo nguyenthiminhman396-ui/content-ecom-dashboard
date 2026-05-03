@@ -38,7 +38,6 @@ export default function ReportsPage() {
   const [dateTo,   setDateTo]   = useState('');
 
   const isManager = currentUser?.role === 'Manager';
-  const isLeader = currentUser?.role === 'Leader';
   const canEdit = isManager;
 
   // Page-level guard: chỉ Manager mới xem được

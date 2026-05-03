@@ -189,7 +189,6 @@ export default function TodoPage() {
       {showForm && (
         <TodoFormModal
           item={editItem}
-          ownerName={currentUser.name}
           onClose={() => { setShowForm(false); setEditItem(null); }}
           onSave={data => {
             if (editItem) {
@@ -296,9 +295,8 @@ function TodoCard({ item, onToggle, onEdit, onDelete }: {
 }
 
 // ── Form Modal ───────────────────────────────────────────────────────────────
-function TodoFormModal({ item, ownerName, onClose, onSave }: {
+function TodoFormModal({ item, onClose, onSave }: {
   item: TodoItem | null;
-  ownerName: string;
   onClose: () => void;
   onSave: (data: Partial<TodoItem>) => void;
 }) {
