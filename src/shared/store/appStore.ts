@@ -31,7 +31,14 @@ function loadLS<T>(key: string, fallback: T): T {
   } catch { return fallback; }
 }
 function saveLS(key: string, value: unknown) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* ignore */ }
+  try { 
+    localStorage.setItem(key, JSON.stringify(value)); 
+    fetch('/api/store', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, value })
+    }).catch(e => console.error("DB Save Error:", e));
+  } catch { /* ignore */ }
 }
 
 const defaultFilters: FilterState = {
@@ -599,5 +606,48 @@ export async function syncKPIFromSheets(): Promise<number> {
     return entries.length;
   } finally {
     store.setSyncing(false);
+  }
+}
+
+// ── Helper: load data từ Postgres Vercel ────────────────────────────────
+export async function initPostgresSync() {
+  try {
+    const res = await fetch('/api/store');
+    if (!res.ok) return;
+    const data = await res.json();
+    const stateUpdate: any = {};
+    
+    const keyMap: Record<string, string> = {
+      'hcms_submissions': 'submissions',
+      'hcms_projects': 'projects',
+      'hcms_todos': 'todos',
+      'hcms_members': 'members',
+      'hcms_contents': 'contents',
+      'hcms_clients': 'clients',
+      'hcms_expenses': 'expenses',
+      'hcms_task_point_rules': 'taskPointRules',
+      'hcms_perf_reviews': 'performanceReviews',
+      'hcms_scale_config': 'scaleConfig',
+      'hcms_sites': 'sites',
+      'hcms_project_tasks': 'projectTasks',
+      'hcms_bonus': 'bonusPoints',
+      'hcms_rnd_logs': 'rndLogs',
+      'hcms_kpi_targets': 'kpiTargets',
+      'hcms_weekly_reports': 'weeklyReports',
+      'hcms_accounts': 'memberAccounts'
+    };
+
+    for (const [key, stateKey] of Object.entries(keyMap)) {
+      if (data[key]) {
+        stateUpdate[stateKey] = data[key];
+        localStorage.setItem(key, JSON.stringify(data[key])); // update local cache
+      }
+    }
+    
+    if (Object.keys(stateUpdate).length > 0) {
+      useAppStore.setState(stateUpdate);
+    }
+  } catch (e) {
+    console.error("DB Load Error:", e);
   }
 }

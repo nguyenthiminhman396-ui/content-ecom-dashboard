@@ -3,7 +3,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import LoginPage from '@/features/auth/LoginPage';
 import AppRouter from './router';
-import { useAppStore } from '@/shared/store/appStore';
+import { useAppStore, initPostgresSync } from '@/shared/store/appStore';
 import type { Member } from '@/shared/types';
 import '@/index.css';
 
@@ -24,6 +24,10 @@ export default function App() {
     } catch { /* ignore */ }
     const store = useAppStore.getState();
     document.documentElement.setAttribute('data-theme', store.theme);
+    
+    // Khởi chạy đồng bộ Postgres ngầm
+    initPostgresSync();
+    
     setBootstrapped(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
