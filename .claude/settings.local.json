@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /c/Users/PC/Documents/image/Dashboard/src/pages/*.tsx /c/Users/PC/Documents/image/Dashboard/src/components/layout/*.tsx)",
+      "Bash(npx tsc:*)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(echo \"--- EXIT: $?\")",
+      "Bash(npx vite:*)",
+      "Bash(python3)"
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+﻿src/pages/Dashboard.tsx(18,50): error TS6133: 'clients' is declared but its value is never read.
+src/pages/Projects.tsx(6,52): error TS6133: 'Wallet' is declared but its value is never read.
+src/services/googleSheets.ts(6,7): error TS6133: '_SCOPES' is declared but its value is never read.
+src/services/googleSheets.ts(7,7): error TS6133: '_DISCOVERY_DOC' is declared but its value is never read.
+src/store/appStore.ts(2,25): error TS6196: 'Content' is declared but never used.
+src/store/appStore.ts(2,34): error TS6196: 'Project' is declared but never used.
+src/store/appStore.ts(2,43): error TS6196: 'Expense' is declared but never used.
