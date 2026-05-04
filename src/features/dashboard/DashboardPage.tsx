@@ -166,22 +166,45 @@ export default function DashboardPage() {
     ? '—'
     : `cùng kỳ tháng trước (${prevDateFrom} → ${prevDateTo})`;
 
-  // ── Bonus trong range (chỉ tính approved) ──
-  const approvedBonus = useMemo(() => bonusPoints.filter(b => b.status === 'approved'), [bonusPoints]);
+  // ── Bonus trong range (chỉ tính approved + cùng scope nhân sự) ──
+  const scopedBonus = useMemo(() => {
+    let base = bonusPoints.filter(b => b.status === 'approved');
+    if (!currentUser) return [];
+    // Scope theo role
+    if (currentUser.role === 'Leader') {
+      const me = members.find(m => m.name === currentUser.name || m.id === currentUser.id);
+      if (!me?.teamGroup) {
+        base = base.filter(b => b.employeeName === currentUser.name);
+      } else {
+        base = base.filter(b => {
+          const emp = members.find(mm => mm.name === b.employeeName);
+          return emp?.teamGroup === me.teamGroup || b.employeeName === currentUser.name;
+        });
+      }
+    } else if (currentUser.role === 'Member') {
+      base = base.filter(b => b.employeeName === currentUser.name);
+    }
+    // Scope theo personnel filter
+    if (filterEmployee && (currentUser.role === 'Manager' || currentUser.role === 'Leader')) {
+      base = base.filter(b => b.employeeName === filterEmployee);
+    }
+    return base;
+  }, [bonusPoints, currentUser, members, filterEmployee]);
+
   const bonusInRange = useMemo(() => {
-    if (!dateFrom && !dateTo) return approvedBonus;
-    return approvedBonus.filter(b => {
+    if (!dateFrom && !dateTo) return scopedBonus;
+    return scopedBonus.filter(b => {
       const t = new Date(b.awardedAt).getTime();
       return !isNaN(t) && t >= fromMs && t <= toMs;
     });
-  }, [approvedBonus, dateFrom, dateTo, fromMs, toMs]);
+  }, [scopedBonus, dateFrom, dateTo, fromMs, toMs]);
   const bonusInPrevRange = useMemo(() => {
     if (!dateFrom && !dateTo) return [];
-    return approvedBonus.filter(b => {
+    return scopedBonus.filter(b => {
       const t = new Date(b.awardedAt).getTime();
       return !isNaN(t) && t >= prevFromMs && t <= prevToMs;
     });
-  }, [approvedBonus, dateFrom, dateTo, prevFromMs, prevToMs]);
+  }, [scopedBonus, dateFrom, dateTo, prevFromMs, prevToMs]);
 
   const totalBonusNow  = bonusInRange.reduce((s, b) => s + b.amount, 0);
   const totalBonusPrev = bonusInPrevRange.reduce((s, b) => s + b.amount, 0);
