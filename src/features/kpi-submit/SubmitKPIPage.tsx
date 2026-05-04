@@ -352,6 +352,7 @@ export default function SubmitKPIPage() {
               const tasks = projectTasks.filter(t => t.projectId === projectId);
               if (tasks.length === 0) return null;
               const selectedTask = tasks.find(t => t.id === projectTaskId);
+              const isQtyMode = selectedTask?.trackingMode === 'quantity';
               return (
                 <>
                   <select className="form-select" style={{ marginTop: '6px' }}
@@ -359,22 +360,28 @@ export default function SubmitKPIPage() {
                     <option value="">— (Tùy chọn) Gắn vào task cụ thể —</option>
                     {tasks.map(t => (
                       <option key={t.id} value={t.id}>
-                        🎯 {t.name} (target {t.targetLinks} link{t.targetQuantity ? ` · ${t.targetQuantity} SL` : ''})
+                        {(t.trackingMode || 'link') === 'quantity' ? '📊' : '🔗'} {t.name} (target {(t.trackingMode || 'link') === 'quantity' ? `${t.targetQuantity ?? 0} SL` : `${t.targetLinks} link`})
                       </option>
                     ))}
                   </select>
                   {/* Quantity input — đồng bộ tiến độ dự án */}
                   {projectTaskId && (
                     <div style={{ marginTop: '8px', padding: '10px 12px',
-                                  background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)',
-                                  border: '1px solid var(--border-light)' }}>
+                                  background: isQtyMode ? 'var(--primary-50)' : 'var(--bg-secondary)',
+                                  borderRadius: 'var(--radius-md)',
+                                  border: `1px solid ${isQtyMode ? 'var(--primary-200)' : 'var(--border-light)'}` }}>
                       <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)',
                                       display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
                         <Hash size={12} color="var(--primary-500)" />
                         Số lượng hoàn thành
-                        <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>
-                          (tùy chọn — đồng bộ tracking tiến độ)
-                        </span>
+                        {isQtyMode
+                          ? <span style={{ fontWeight: 700, color: 'var(--primary-600)', fontSize: '0.72rem' }}>
+                              (bắt buộc — task tracking theo SL)
+                            </span>
+                          : <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>
+                              (tùy chọn)
+                            </span>
+                        }
                       </label>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                         <input

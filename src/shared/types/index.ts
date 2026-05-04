@@ -56,17 +56,21 @@ export interface Site {
 // Tiến độ project = sum(submissions matching) / sum(targetLinks)
 // ============================================
 
+export type TaskTrackingMode = 'link' | 'quantity';
+
 export interface ProjectTask {
   id: string;
   projectId: string;
   name: string;
+  /** Chế độ tracking: 'link' = đếm link, 'quantity' = đếm số lượng */
+  trackingMode?: TaskTrackingMode;
   /** Đầu việc — match với KPISubmission.taskType */
   taskType?: string;
   /** Chi tiết — match với KPISubmission.taskDetail. Nếu undefined → match mọi taskDetail trong taskType */
   taskDetail?: string;
   /** Target số link cần hoàn thành */
   targetLinks: number;
-  /** Target số lượng (tuỳ chọn) — dùng khi muốn track theo số lượng thay vì link */
+  /** Target số lượng — dùng khi trackingMode = 'quantity' */
   targetQuantity?: number;
   /** Assignee tùy chọn — match với employeeName */
   assignee?: string;
@@ -528,7 +532,7 @@ export const SHEET_HEADERS = {
   SCALE:    ['key','pointPerHour','standardHoursPerMonth','memberTargetPoints','leaderProductionWeight',
              'wProductivity','wQuality','wAttitude','wTimeliness','wAttendance','allowedDaysOff','updatedAt'],
   SITES:    ['id','name','urlPattern','description','active','color'],
-  PROJ_TASKS: ['id','projectId','name','taskType','taskDetail','targetLinks','targetQuantity','assignee','deadline','notes'],
+  PROJ_TASKS: ['id','projectId','name','trackingMode','taskType','taskDetail','targetLinks','targetQuantity','assignee','deadline','notes'],
   BONUS:    ['id','employeeName','amount','reason','projectId','period','awardedAt','awardedBy',
              'status','approvedBy','approvedAt','rejectionNote'],
   TODOS:    ['id','ownerName','assigneeName','title','description','dueDate','priority','completed','completedAt','createdAt'],

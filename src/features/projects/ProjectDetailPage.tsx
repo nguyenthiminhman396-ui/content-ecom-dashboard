@@ -64,9 +64,10 @@ export default function ProjectDetailPage() {
       const links = matched.reduce((sum, s) => sum + s.links.length, 0);
       const qty = matched.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
       const points = matched.reduce((sum, s) => sum + s.totalPoints, 0);
-      // Progress: ưu tiên targetQuantity nếu có số lượng, fallback về link
+      // Progress: dựa theo trackingMode của task
       let progress = 0;
-      if (t.targetQuantity && t.targetQuantity > 0) {
+      const mode = t.trackingMode || 'link';
+      if (mode === 'quantity' && t.targetQuantity && t.targetQuantity > 0) {
         progress = Math.min(100, Math.round((qty / t.targetQuantity) * 100));
       } else if (t.targetLinks > 0) {
         progress = Math.min(100, Math.round((links / t.targetLinks) * 100));
@@ -245,11 +246,11 @@ export default function ProjectDetailPage() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem',
                                     marginBottom: '3px', color: 'var(--text-secondary)' }}>
                         <span>
-                          {task.targetQuantity
-                            ? `${qty} / ${task.targetQuantity} SL`
-                            : `${links} / ${task.targetLinks} link`}
+                          {(task.trackingMode || 'link') === 'quantity'
+                            ? `📊 ${qty} / ${task.targetQuantity ?? 0} SL`
+                            : `🔗 ${links} / ${task.targetLinks} link`}
                           {' '}· {points.toFixed(0)}đ
-                          {task.targetQuantity && links > 0 && ` · ${links} link`}
+                          {(task.trackingMode || 'link') === 'quantity' && links > 0 && ` · ${links} link`}
                         </span>
                         <span style={{ fontWeight: 700,
                                        color: progress >= 100 ? 'var(--success)' : progress >= 50 ? 'var(--primary-600)' : 'var(--warning)' }}>
@@ -433,8 +434,11 @@ function TaskFormModal({ item, projectId, members, onClose, onSave }: {
   onSave: (data: Partial<ProjectTask>) => void;
 }) {
   const [form, setForm] = useState<Partial<ProjectTask>>(item || {
-    projectId, name: '', taskType: '', taskDetail: '', targetLinks: 1, targetQuantity: 0, assignee: '', deadline: '', notes: '',
+    projectId, name: '', trackingMode: 'link', taskType: '', taskDetail: '',
+    targetLinks: 1, targetQuantity: 0, assignee: '', deadline: '', notes: '',
   });
+
+  const mode = form.trackingMode || 'link';
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -468,21 +472,58 @@ function TaskFormModal({ item, projectId, members, onClose, onSave }: {
                   onChange={e => setForm({ ...form, taskDetail: e.target.value })}
                   placeholder="VD: SEO, FAQ, Bài AI" />
               </div>
-              <div className="form-group">
-                <label className="form-label">Target số link</label>
-                <input className="form-input" type="number" min="0" value={form.targetLinks ?? 1}
-                  onChange={e => setForm({ ...form, targetLinks: parseInt(e.target.value) || 0 })} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">
-                  Target số lượng
-                  <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', fontSize: '0.74rem' }}> (tùy chọn)</span>
-                </label>
-                <input className="form-input" type="number" min="0" value={form.targetQuantity ?? 0}
-                  onChange={e => setForm({ ...form, targetQuantity: parseInt(e.target.value) || 0 })}
-                  placeholder="0 = không dùng" />
+            </div>
+
+            {/* ── Tracking mode toggle ── */}
+            <div className="form-group">
+              <label className="form-label" style={{ marginBottom: '8px' }}>Tracking tiến độ theo</label>
+              <div style={{ display: 'flex', gap: '0', borderRadius: 'var(--radius-md)', overflow: 'hidden',
+                            border: '1px solid var(--border-medium)' }}>
+                <button type="button" onClick={() => setForm({ ...form, trackingMode: 'link' })}
+                  style={{
+                    flex: 1, padding: '10px 16px', border: 'none', cursor: 'pointer',
+                    fontWeight: 600, fontSize: '0.85rem', transition: 'all 0.2s ease',
+                    background: mode === 'link' ? 'var(--primary-500)' : 'var(--bg-secondary)',
+                    color: mode === 'link' ? '#fff' : 'var(--text-secondary)',
+                  }}>
+                  🔗 Theo link
+                </button>
+                <button type="button" onClick={() => setForm({ ...form, trackingMode: 'quantity' })}
+                  style={{
+                    flex: 1, padding: '10px 16px', border: 'none', cursor: 'pointer',
+                    borderLeft: '1px solid var(--border-medium)',
+                    fontWeight: 600, fontSize: '0.85rem', transition: 'all 0.2s ease',
+                    background: mode === 'quantity' ? 'var(--primary-500)' : 'var(--bg-secondary)',
+                    color: mode === 'quantity' ? '#fff' : 'var(--text-secondary)',
+                  }}>
+                  📊 Theo số lượng
+                </button>
               </div>
             </div>
+
+            {/* ── Target field based on tracking mode ── */}
+            <div className="form-group">
+              {mode === 'link' ? (
+                <>
+                  <label className="form-label">Target số link *</label>
+                  <input className="form-input" type="number" min="1" value={form.targetLinks ?? 1}
+                    onChange={e => setForm({ ...form, targetLinks: parseInt(e.target.value) || 1 })} />
+                  <p style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: 4 }}>
+                    Tiến độ = số link đã submit / target link
+                  </p>
+                </>
+              ) : (
+                <>
+                  <label className="form-label">Target số lượng *</label>
+                  <input className="form-input" type="number" min="1" value={form.targetQuantity ?? 1}
+                    onChange={e => setForm({ ...form, targetQuantity: parseInt(e.target.value) || 1 })} />
+                  <p style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: 4 }}>
+                    Tiến độ = số lượng đã submit ở KPI / target số lượng
+                  </p>
+                </>
+              )}
+            </div>
+
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Assignee (tùy chọn)</label>
@@ -505,8 +546,9 @@ function TaskFormModal({ item, projectId, members, onClose, onSave }: {
             </div>
             <div style={{ padding: '10px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)',
                           fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-              💡 Tiến độ = link hoặc số lượng submit / target. Nếu có <strong>target số lượng</strong> thì ưu tiên dùng số lượng.
-              Member submit có thể chọn task này và nhập số lượng ở Submit KPI.
+              💡 {mode === 'link'
+                ? 'Member submit link sẽ tự động cập nhật tiến độ task này.'
+                : 'Member submit KPI và nhập "Số lượng hoàn thành" sẽ tự động cập nhật tiến độ.'}
             </div>
           </div>
           <div className="modal-footer">
