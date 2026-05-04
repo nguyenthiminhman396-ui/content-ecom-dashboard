@@ -17,6 +17,7 @@ import KPITargetsPage from '@/features/admin/KPITargetsPage';
 import BonusPointsPage from '@/features/bonus/BonusPointsPage';
 import RnDLogsPage from '@/features/rnd/RnDLogsPage';
 import TodoPage from '@/features/todo/TodoPage';
+import ExpensesPage from '@/features/expenses/ExpensesPage';
 
 export default function AppRouter() {
   return (
@@ -39,6 +40,7 @@ export default function AppRouter() {
         <Route path="/point-config"   element={<PointConfigPage />} />
         <Route path="/settings"       element={<SettingsPage />} />
         <Route path="/todo"           element={<TodoPage />} />
+        <Route path="/expenses"       element={<ExpensesPage />} />
       </Route>
     </Routes>
   );

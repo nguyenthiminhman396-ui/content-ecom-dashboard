@@ -3,7 +3,7 @@ import { useAppStore } from '@/shared/store/appStore';
 import {
   LayoutDashboard, FolderKanban, BarChart3,
   Users, ChevronLeft, ChevronRight, Heart, Settings,
-  Trophy, Calculator, Award, ClipboardList, History, Package, Database, Gift, Lightbulb, Target, CheckSquare, Sun, Moon
+  Trophy, Calculator, Award, ClipboardList, History, Package, Database, Gift, Lightbulb, Target, CheckSquare, Sun, Moon, Wallet
 } from 'lucide-react';
 import type { MemberRole } from '@/shared/types';
 
@@ -25,6 +25,7 @@ const navItems: NavItem[] = [
   { path: '/todo',            icon: CheckSquare,    label: 'Checklist',           section: 'Tổng quan' },
   // ── Quản lý ──
   { path: '/projects',      icon: FolderKanban,    label: 'Dự án',               section: 'Quản lý' },
+  { path: '/expenses',      icon: Wallet,          label: 'Chi phí',             section: 'Quản lý', allowedRoles: ['Manager', 'Leader'] },
   { path: '/contents',      icon: Package,         label: 'Sản phẩm dự án',    section: 'Quản lý' },
   { path: '/performance',   icon: Award,           label: 'Đánh giá nhân sự',    section: 'Quản lý' },
   { path: '/bonus-points',  icon: Gift,            label: 'Điểm thưởng',         section: 'Quản lý', allowedRoles: ['Manager', 'Leader'] },
