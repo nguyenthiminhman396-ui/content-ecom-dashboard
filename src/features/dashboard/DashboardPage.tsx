@@ -312,6 +312,31 @@ export default function DashboardPage() {
   }, [projects, thisMonthSubs, projectTasks, submissions]);
 
   // ── Chi tiết đầu việc — kỳ này vs cùng kỳ tháng trước ──
+  // Leader: xem TOÀN BỘ submissions (cross-team) để quản lý đầu việc mình phụ trách
+  const taskDetailNowSubs = useMemo(() => {
+    if (currentUser?.role === 'Leader') {
+      let all = submissions.filter(s => {
+        const t = new Date(s.submittedAt).getTime();
+        return !isNaN(t) && t >= fromMs && t <= toMs;
+      });
+      if (filterEmployee) all = all.filter(s => s.employeeName === filterEmployee);
+      return all;
+    }
+    return thisMonthSubs;
+  }, [currentUser, submissions, thisMonthSubs, fromMs, toMs, filterEmployee]);
+
+  const taskDetailPrevSubs = useMemo(() => {
+    if (currentUser?.role === 'Leader') {
+      let all = submissions.filter(s => {
+        const t = new Date(s.submittedAt).getTime();
+        return !isNaN(t) && t >= prevFromMs && t <= prevToMs;
+      });
+      if (filterEmployee) all = all.filter(s => s.employeeName === filterEmployee);
+      return all;
+    }
+    return prevMonthSubs;
+  }, [currentUser, submissions, prevMonthSubs, prevFromMs, prevToMs, filterEmployee]);
+
   const taskDetailBreakdown = useMemo(() => {
     type Row = { teamGroup: string; taskType: string; taskDetail: string;
                  nowLinks: number; nowPoints: number;
@@ -334,12 +359,12 @@ export default function DashboardPage() {
       map.set(key, cur);
     };
 
-    thisMonthSubs.forEach(s => upsert(s, 'now'));
-    prevMonthSubs.forEach(s => upsert(s, 'prev'));
+    taskDetailNowSubs.forEach(s => upsert(s, 'now'));
+    taskDetailPrevSubs.forEach(s => upsert(s, 'prev'));
 
     return Array.from(map.values())
       .sort((a, b) => (b.nowLinks + b.prevLinks) - (a.nowLinks + a.prevLinks));
-  }, [thisMonthSubs, prevMonthSubs]);
+  }, [taskDetailNowSubs, taskDetailPrevSubs]);
 
   // Lọc chi tiết đầu việc
   const filteredBreakdown = useMemo(() => {
