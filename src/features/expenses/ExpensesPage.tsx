@@ -361,6 +361,27 @@ function ExpenseFormModal({ item, projects, categories, createdBy, onClose, onSa
     projectId: '', category: categories[0] ?? '', amount: 0,
     date: new Date().toISOString().slice(0, 10), createdBy, notes: '',
   });
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [customCategory, setCustomCategory] = useState('');
+
+  const handleCategorySelect = (val: string) => {
+    if (val === '__NEW__') {
+      setIsCustomCategory(true);
+      setCustomCategory('');
+      setForm({ ...form, category: '' });
+    } else {
+      setIsCustomCategory(false);
+      setForm({ ...form, category: val });
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const finalCategory = isCustomCategory ? customCategory.trim() : form.category;
+    if (!finalCategory) { toast.error('Chọn hoặc nhập hạng mục'); return; }
+    if (!form.amount || form.amount <= 0) { toast.error('Nhập số tiền'); return; }
+    onSave({ ...form, category: finalCategory });
+  };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -369,15 +390,10 @@ function ExpenseFormModal({ item, projects, categories, createdBy, onClose, onSa
           <h3 className="modal-title">{item ? 'Chỉnh sửa chi phí' : 'Thêm chi phí mới'}</h3>
           <button className="modal-close" onClick={onClose}><X size={16} /></button>
         </div>
-        <form onSubmit={e => {
-          e.preventDefault();
-          if (!form.category) { toast.error('Chọn hạng mục'); return; }
-          if (!form.amount || form.amount <= 0) { toast.error('Nhập số tiền'); return; }
-          onSave(form);
-        }}>
+        <form onSubmit={handleSubmit}>
           <div className="modal-body">
             <div className="form-group">
-              <label className="form-label">Dự án *</label>
+              <label className="form-label">Dự án</label>
               <select className="form-select" value={form.projectId ?? ''}
                 onChange={e => setForm({ ...form, projectId: e.target.value })}>
                 <option value="">— Không gắn dự án —</option>
@@ -389,12 +405,27 @@ function ExpenseFormModal({ item, projects, categories, createdBy, onClose, onSa
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Hạng mục *</label>
-                <select className="form-select" value={form.category ?? ''}
-                  onChange={e => setForm({ ...form, category: e.target.value })}>
-                  {categories.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
+                {isCustomCategory ? (
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <input className="form-input" autoFocus
+                      value={customCategory}
+                      onChange={e => setCustomCategory(e.target.value)}
+                      placeholder="Nhập tên danh mục mới..." />
+                    <button type="button" className="btn btn-ghost"
+                      style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}
+                      onClick={() => { setIsCustomCategory(false); setForm({ ...form, category: categories[0] ?? '' }); }}>
+                      Hủy
+                    </button>
+                  </div>
+                ) : (
+                  <select className="form-select" value={form.category ?? ''}
+                    onChange={e => handleCategorySelect(e.target.value)}>
+                    {categories.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                    <option value="__NEW__">＋ Thêm danh mục mới...</option>
+                  </select>
+                )}
               </div>
               <div className="form-group">
                 <label className="form-label">Số tiền (VNĐ) *</label>
