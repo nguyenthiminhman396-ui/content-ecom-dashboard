@@ -70,6 +70,7 @@ export default function SubmitKPIPage() {
   const [projectId, setProjectId] = useState<string>('');
   const [siteId, setSiteId] = useState<string>(sites.find(s => s.active)?.id ?? '');
   const [projectTaskId, setProjectTaskId] = useState<string>('');
+  const [quantity, setQuantity] = useState<number>(0);
   const [linksRaw, setLinksRaw] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [showPreview, setShowPreview] = useState(false);
@@ -195,6 +196,7 @@ export default function SubmitKPIPage() {
         locked:       true,
         notes:        [projectDescription, notes].filter(Boolean).join(' — ') || undefined,
         hoursWorked,
+        quantity:     quantity || undefined,
       };
 
       addSubmissionsBatch([sub]);
@@ -230,6 +232,7 @@ export default function SubmitKPIPage() {
         totalPoints:  linkPoints,
         locked:       true,
         notes:        notes.trim() || undefined,
+        quantity:     quantity || undefined,
       };
 
       addSubmissionsBatch([sub]);
@@ -238,6 +241,7 @@ export default function SubmitKPIPage() {
       setNotes('');
       setProjectId('');
       setProjectTaskId('');
+      setQuantity(0);
     }
     setShowPreview(false);
   };
@@ -347,16 +351,55 @@ export default function SubmitKPIPage() {
             {projectId && (() => {
               const tasks = projectTasks.filter(t => t.projectId === projectId);
               if (tasks.length === 0) return null;
+              const selectedTask = tasks.find(t => t.id === projectTaskId);
               return (
-                <select className="form-select" style={{ marginTop: '6px' }}
-                  value={projectTaskId} onChange={e => setProjectTaskId(e.target.value)}>
-                  <option value="">— (Tùy chọn) Gắn vào task cụ thể —</option>
-                  {tasks.map(t => (
-                    <option key={t.id} value={t.id}>
-                      🎯 {t.name} (target {t.targetLinks} link)
-                    </option>
-                  ))}
-                </select>
+                <>
+                  <select className="form-select" style={{ marginTop: '6px' }}
+                    value={projectTaskId} onChange={e => { setProjectTaskId(e.target.value); setQuantity(0); }}>
+                    <option value="">— (Tùy chọn) Gắn vào task cụ thể —</option>
+                    {tasks.map(t => (
+                      <option key={t.id} value={t.id}>
+                        🎯 {t.name} (target {t.targetLinks} link{t.targetQuantity ? ` · ${t.targetQuantity} SL` : ''})
+                      </option>
+                    ))}
+                  </select>
+                  {/* Quantity input — đồng bộ tiến độ dự án */}
+                  {projectTaskId && (
+                    <div style={{ marginTop: '8px', padding: '10px 12px',
+                                  background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)',
+                                  border: '1px solid var(--border-light)' }}>
+                      <label style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)',
+                                      display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                        <Hash size={12} color="var(--primary-500)" />
+                        Số lượng hoàn thành
+                        <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>
+                          (tùy chọn — đồng bộ tracking tiến độ)
+                        </span>
+                      </label>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <input
+                          className="form-input"
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={quantity || ''}
+                          onChange={e => setQuantity(parseInt(e.target.value) || 0)}
+                          placeholder="VD: 5"
+                          style={{ maxWidth: '120px' }}
+                        />
+                        {selectedTask?.targetQuantity ? (
+                          <span style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>
+                            / target: <strong style={{ color: 'var(--primary-600)' }}>{selectedTask.targetQuantity}</strong> SL
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>
+                            Số lượng bài/sản phẩm đã làm
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
               );
             })()}
           </div>

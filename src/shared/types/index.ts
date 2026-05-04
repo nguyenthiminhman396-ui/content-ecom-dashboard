@@ -66,6 +66,8 @@ export interface ProjectTask {
   taskDetail?: string;
   /** Target số link cần hoàn thành */
   targetLinks: number;
+  /** Target số lượng (tuỳ chọn) — dùng khi muốn track theo số lượng thay vì link */
+  targetQuantity?: number;
   /** Assignee tùy chọn — match với employeeName */
   assignee?: string;
   deadline?: string;
@@ -400,6 +402,8 @@ export interface KPISubmission {
   notes?: string;
   /** Số giờ làm việc — dùng cho submit theo giờ (Approach A: dự án ad-hoc) */
   hoursWorked?: number;
+  /** Số lượng (tuỳ chọn) — dùng để đồng bộ tracking tiến độ dự án khi không có link */
+  quantity?: number;
   /** Spot-check (hậu kiểm chất lượng 20%) — Lead/Manager chấm */
   qualityCheck?: {
     score: number;          // 1-5
@@ -524,7 +528,7 @@ export const SHEET_HEADERS = {
   SCALE:    ['key','pointPerHour','standardHoursPerMonth','memberTargetPoints','leaderProductionWeight',
              'wProductivity','wQuality','wAttitude','wTimeliness','wAttendance','allowedDaysOff','updatedAt'],
   SITES:    ['id','name','urlPattern','description','active','color'],
-  PROJ_TASKS: ['id','projectId','name','taskType','taskDetail','targetLinks','assignee','deadline','notes'],
+  PROJ_TASKS: ['id','projectId','name','taskType','taskDetail','targetLinks','targetQuantity','assignee','deadline','notes'],
   BONUS:    ['id','employeeName','amount','reason','projectId','period','awardedAt','awardedBy',
              'status','approvedBy','approvedAt','rejectionNote'],
   TODOS:    ['id','ownerName','assigneeName','title','description','dueDate','priority','completed','completedAt','createdAt'],

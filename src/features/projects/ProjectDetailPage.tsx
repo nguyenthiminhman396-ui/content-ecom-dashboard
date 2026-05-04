@@ -49,7 +49,7 @@ export default function ProjectDetailPage() {
   const projectSubs = submissions.filter(s => s.projectId === project.id);
   const tasks = projectTasks.filter(t => t.projectId === project.id);
 
-  // ── Tính số link đã hoàn thành cho mỗi task ────────────────────────────
+  // ── Tính số link + quantity đã hoàn thành cho mỗi task ────────────────
   const taskProgress = useMemo(() => {
     return tasks.map(t => {
       const matched = projectSubs.filter(s => {
@@ -62,9 +62,16 @@ export default function ProjectDetailPage() {
         return !!t.taskType || !!t.taskDetail;
       });
       const links = matched.reduce((sum, s) => sum + s.links.length, 0);
+      const qty = matched.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
       const points = matched.reduce((sum, s) => sum + s.totalPoints, 0);
-      const progress = t.targetLinks > 0 ? Math.min(100, Math.round((links / t.targetLinks) * 100)) : 0;
-      return { task: t, matched, links, points, progress };
+      // Progress: ưu tiên targetQuantity nếu có số lượng, fallback về link
+      let progress = 0;
+      if (t.targetQuantity && t.targetQuantity > 0) {
+        progress = Math.min(100, Math.round((qty / t.targetQuantity) * 100));
+      } else if (t.targetLinks > 0) {
+        progress = Math.min(100, Math.round((links / t.targetLinks) * 100));
+      }
+      return { task: t, matched, links, qty, points, progress };
     });
   }, [tasks, projectSubs]);
 
@@ -206,7 +213,7 @@ export default function ProjectDetailPage() {
             </div>
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {taskProgress.map(({ task, matched, links, points, progress }) => (
+            {taskProgress.map(({ task, matched, links, qty, points, progress }) => (
               <div key={task.id} style={{
                 border: '1px solid var(--border-light)',
                 borderRadius: 'var(--radius-md)', overflow: 'hidden',
@@ -237,7 +244,13 @@ export default function ProjectDetailPage() {
                     <div style={{ marginTop: '6px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem',
                                     marginBottom: '3px', color: 'var(--text-secondary)' }}>
-                        <span>{links} / {task.targetLinks} link · {points.toFixed(0)}đ</span>
+                        <span>
+                          {task.targetQuantity
+                            ? `${qty} / ${task.targetQuantity} SL`
+                            : `${links} / ${task.targetLinks} link`}
+                          {' '}· {points.toFixed(0)}đ
+                          {task.targetQuantity && links > 0 && ` · ${links} link`}
+                        </span>
                         <span style={{ fontWeight: 700,
                                        color: progress >= 100 ? 'var(--success)' : progress >= 50 ? 'var(--primary-600)' : 'var(--warning)' }}>
                           {progress}%
@@ -420,7 +433,7 @@ function TaskFormModal({ item, projectId, members, onClose, onSave }: {
   onSave: (data: Partial<ProjectTask>) => void;
 }) {
   const [form, setForm] = useState<Partial<ProjectTask>>(item || {
-    projectId, name: '', taskType: '', taskDetail: '', targetLinks: 1, assignee: '', deadline: '', notes: '',
+    projectId, name: '', taskType: '', taskDetail: '', targetLinks: 1, targetQuantity: 0, assignee: '', deadline: '', notes: '',
   });
 
   return (
@@ -456,9 +469,18 @@ function TaskFormModal({ item, projectId, members, onClose, onSave }: {
                   placeholder="VD: SEO, FAQ, Bài AI" />
               </div>
               <div className="form-group">
-                <label className="form-label">Target số link *</label>
-                <input className="form-input" type="number" min="1" value={form.targetLinks ?? 1}
-                  onChange={e => setForm({ ...form, targetLinks: parseInt(e.target.value) || 1 })} />
+                <label className="form-label">Target số link</label>
+                <input className="form-input" type="number" min="0" value={form.targetLinks ?? 1}
+                  onChange={e => setForm({ ...form, targetLinks: parseInt(e.target.value) || 0 })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">
+                  Target số lượng
+                  <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', fontSize: '0.74rem' }}> (tùy chọn)</span>
+                </label>
+                <input className="form-input" type="number" min="0" value={form.targetQuantity ?? 0}
+                  onChange={e => setForm({ ...form, targetQuantity: parseInt(e.target.value) || 0 })}
+                  placeholder="0 = không dùng" />
               </div>
             </div>
             <div className="form-row">
@@ -483,8 +505,8 @@ function TaskFormModal({ item, projectId, members, onClose, onSave }: {
             </div>
             <div style={{ padding: '10px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)',
                           fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-              💡 Submission được match nếu cùng <strong>projectId</strong> + (taskType + taskDetail nếu có) + (assignee nếu có).
-              Member submit có thể chọn task này trực tiếp ở Submit KPI.
+              💡 Tiến độ = link hoặc số lượng submit / target. Nếu có <strong>target số lượng</strong> thì ưu tiên dùng số lượng.
+              Member submit có thể chọn task này và nhập số lượng ở Submit KPI.
             </div>
           </div>
           <div className="modal-footer">
