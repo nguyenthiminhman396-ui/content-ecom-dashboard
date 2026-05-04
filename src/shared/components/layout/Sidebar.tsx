@@ -47,7 +47,10 @@ export default function Sidebar() {
     ? bonusPoints.filter(b => b.status === 'pending').length
     : 0;
   const overdueTodoCount = currentUser
-    ? todos.filter(t => t.ownerName === currentUser.name && !t.completed && t.dueDate && new Date(t.dueDate + 'T23:59:59') < new Date()).length
+    ? todos.filter(t =>
+        (t.ownerName === currentUser.name && !t.completed && t.dueDate && new Date(t.dueDate + 'T23:59:59') < new Date()) ||
+        (t.assigneeName === currentUser.name && t.ownerName !== currentUser.name && !t.completed)
+      ).length
     : 0;
 
   // Lọc menu theo role

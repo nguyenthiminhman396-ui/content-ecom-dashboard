@@ -190,7 +190,7 @@ export default function BonusPointsPage() {
             {isManager
               ? `Cấp bonus trực tiếp hoặc duyệt đề xuất từ Leader. ${pendingCount > 0 ? `🟡 ${pendingCount} đề xuất chờ duyệt.` : ''}`
               : isLeader
-                ? 'Bạn đề xuất bonus cho member trong team — Manager sẽ duyệt. Bonus cho Leader/Manager phải do Manager cấp.'
+                ? 'Đề xuất bonus cho chính mình hoặc member trong team — Manager sẽ duyệt.'
                 : 'Lịch sử điểm thưởng bạn đã nhận.'}
           </p>
         </div>
@@ -436,8 +436,9 @@ export default function BonusPointsPage() {
             ? members.map(m => m.name)
             : (() => {
                 const me = members.find(m => m.name === currentUser.name);
-                if (!me?.teamGroup) return [];
-                return members.filter(m => m.teamGroup === me.teamGroup && m.role === 'Member' && m.name !== currentUser.name).map(m => m.name);
+                if (!me?.teamGroup) return [currentUser.name];
+                // Leader có thể thêm bonus cho chính mình + member trong team
+                return [currentUser.name, ...members.filter(m => m.teamGroup === me.teamGroup && m.name !== currentUser.name).map(m => m.name)];
               })()}
           projects={projects}
           onClose={() => { setShowForm(false); setEditItem(null); }}
@@ -525,9 +526,9 @@ function BonusFormModal({ item, isManager, currentUserName, presetEmployee, pres
           if (!form.employeeName) { toast.error('Chọn nhân viên'); return; }
           if (!form.reason?.trim()) { toast.error('Nhập lý do'); return; }
           if (form.amount === 0) { toast.error('Số điểm phải khác 0'); return; }
-          // Validate: Leader không được đề xuất cho Leader/Manager
-          if (!isManager && targetRole && targetRole !== 'Member') {
-            toast.error('Leader chỉ đề xuất bonus cho Member. Bonus cho Leader/Manager phải do Manager cấp.');
+          // Validate: Leader chỉ đề xuất cho bản thân hoặc member trong team (đã lọc ở eligibleEmployees)
+          if (!isManager && targetRole === 'Manager') {
+            toast.error('Leader không được đề xuất bonus cho Manager.');
             return;
           }
           onSave(form, targetRole);

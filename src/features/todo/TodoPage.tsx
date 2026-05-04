@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useAppStore } from '@/shared/store/appStore';
 import {
-  CheckSquare, Plus, Trash2, X, Save, Calendar, AlertTriangle,
-  ChevronDown, ChevronUp, Clock, Flag
+  CheckSquare, Plus, Trash2, X, Save, AlertTriangle,
+  ChevronDown, ChevronUp, Clock, Flag, Edit3, UserPlus, Bell
 } from 'lucide-react';
 import type { TodoItem, TodoPriority } from '@/shared/types';
 import toast from 'react-hot-toast';
@@ -28,19 +28,42 @@ const PRIORITY_META: Record<TodoPriority, { label: string; color: string; bg: st
 };
 
 export default function TodoPage() {
-  const { currentUser, todos, addTodo, updateTodo, deleteTodo } = useAppStore();
+  const { currentUser, todos, members, addTodo, updateTodo, deleteTodo } = useAppStore();
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<TodoItem | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [filterPriority, setFilterPriority] = useState<TodoPriority | ''>('');
+  // ── Notification popup for assigned tasks ──
+  const [assignedNotifications, setAssignedNotifications] = useState<TodoItem[]>([]);
+  const [showNotifPopup, setShowNotifPopup] = useState(false);
 
-  // Chỉ hiện checklist của mình
+  // Chỉ hiện checklist của mình + được assign cho mình
   const myTodos = useMemo(() => {
     if (!currentUser) return [];
-    let list = todos.filter(t => t.ownerName === currentUser.name);
+    let list = todos.filter(t =>
+      t.ownerName === currentUser.name ||
+      t.assigneeName === currentUser.name
+    );
     if (filterPriority) list = list.filter(t => t.priority === filterPriority);
     return list;
   }, [todos, currentUser, filterPriority]);
+
+  // Tasks assigned to me by others (for notification)
+  const assignedToMe = useMemo(() => {
+    if (!currentUser) return [];
+    return todos.filter(t =>
+      t.assigneeName === currentUser.name &&
+      t.ownerName !== currentUser.name &&
+      !t.completed
+    );
+  }, [todos, currentUser]);
+
+  // Show notification popup when there are newly assigned tasks
+  useEffect(() => {
+    if (assignedToMe.length > 0) {
+      setAssignedNotifications(assignedToMe);
+    }
+  }, [assignedToMe]);
 
   const pending = myTodos.filter(t => !t.completed);
   const completed = myTodos.filter(t => t.completed);
@@ -73,6 +96,15 @@ export default function TodoPage() {
     }
   };
 
+  // Available members for assignment
+  const availableMembers = useMemo(() => {
+    if (!currentUser) return [];
+    return members
+      .filter(m => m.name !== currentUser.name)
+      .map(m => m.name)
+      .sort();
+  }, [members, currentUser]);
+
   if (!currentUser) {
     return <div className="card" style={{ padding: '40px', textAlign: 'center' }}>Cần đăng nhập</div>;
   }
@@ -86,12 +118,31 @@ export default function TodoPage() {
             Checklist công việc
           </h2>
           <p className="page-subtitle">
-            Quản lý công việc cá nhân — nhắc nhở deadline, ưu tiên đầu việc.
+            Quản lý công việc cá nhân — nhắc nhở deadline, ưu tiên đầu việc, assign cho đồng nghiệp.
           </p>
         </div>
-        <button className="btn btn-primary" onClick={() => { setEditItem(null); setShowForm(true); }}>
-          <Plus size={16} /> Thêm việc
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {/* Notification bell for assigned tasks */}
+          {assignedToMe.length > 0 && (
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowNotifPopup(true)}
+              style={{ position: 'relative' }}
+            >
+              <Bell size={16} />
+              <span style={{
+                position: 'absolute', top: -4, right: -4,
+                background: 'var(--danger)', color: '#fff',
+                borderRadius: '50%', width: 18, height: 18,
+                fontSize: '0.68rem', fontWeight: 800,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>{assignedToMe.length}</span>
+            </button>
+          )}
+          <button className="btn btn-primary" onClick={() => { setEditItem(null); setShowForm(true); }}>
+            <Plus size={16} /> Thêm việc
+          </button>
+        </div>
       </div>
 
       {/* Stat cards */}
@@ -161,7 +212,7 @@ export default function TodoPage() {
             </p>
           </div>
         )}
-        {sortedPending.map(t => <TodoCard key={t.id} item={t} onToggle={handleToggle} onEdit={i => { setEditItem(i); setShowForm(true); }} onDelete={handleDelete} />)}
+        {sortedPending.map(t => <TodoCard key={t.id} item={t} currentUserName={currentUser.name} onToggle={handleToggle} onEdit={i => { setEditItem(i); setShowForm(true); }} onDelete={handleDelete} />)}
       </div>
 
       {/* Completed toggle */}
@@ -178,7 +229,7 @@ export default function TodoPage() {
           {showCompleted && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
               {completed.sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? '')).map(t =>
-                <TodoCard key={t.id} item={t} onToggle={handleToggle} onEdit={i => { setEditItem(i); setShowForm(true); }} onDelete={handleDelete} />
+                <TodoCard key={t.id} item={t} currentUserName={currentUser.name} onToggle={handleToggle} onEdit={i => { setEditItem(i); setShowForm(true); }} onDelete={handleDelete} />
               )}
             </div>
           )}
@@ -189,6 +240,7 @@ export default function TodoPage() {
       {showForm && (
         <TodoFormModal
           item={editItem}
+          availableMembers={availableMembers}
           onClose={() => { setShowForm(false); setEditItem(null); }}
           onSave={data => {
             if (editItem) {
@@ -196,19 +248,84 @@ export default function TodoPage() {
               toast.success('Đã cập nhật');
             } else {
               addTodo({ id: genId(), ownerName: currentUser.name, completed: false, createdAt: new Date().toISOString(), ...data } as TodoItem);
-              toast.success('Đã thêm việc mới');
+              if (data.assigneeName) {
+                toast.success(`Đã thêm việc và assign cho ${data.assigneeName}`);
+              } else {
+                toast.success('Đã thêm việc mới');
+              }
             }
             setShowForm(false); setEditItem(null);
           }}
         />
+      )}
+
+      {/* Notification popup for assigned tasks */}
+      {showNotifPopup && assignedNotifications.length > 0 && (
+        <div className="modal-overlay" onClick={() => setShowNotifPopup(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Bell size={18} color="var(--primary-500)" />
+                Công việc được giao ({assignedNotifications.length})
+              </h3>
+              <button className="modal-close" onClick={() => setShowNotifPopup(false)}><X size={16} /></button>
+            </div>
+            <div className="modal-body" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {assignedNotifications.map(t => {
+                  const pm = PRIORITY_META[t.priority];
+                  const overdue = isOverdue(t.dueDate);
+                  return (
+                    <div key={t.id} style={{
+                      padding: '12px 14px',
+                      border: '1px solid var(--border-light)',
+                      borderLeft: `4px solid ${overdue ? 'var(--danger)' : pm.color}`,
+                      borderRadius: 'var(--radius-md)',
+                      background: 'var(--bg-secondary)',
+                    }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.92rem', marginBottom: '4px' }}>{t.title}</div>
+                      {t.description && (
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>{t.description}</div>
+                      )}
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', fontSize: '0.74rem' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>
+                          👤 Giao bởi: <strong>{t.ownerName}</strong>
+                        </span>
+                        <span style={{
+                          padding: '1px 8px', borderRadius: 'var(--radius-full)',
+                          background: pm.bg, color: pm.color, fontWeight: 600,
+                        }}>
+                          {pm.icon} {pm.label}
+                        </span>
+                        {t.dueDate && (
+                          <span style={{
+                            color: overdue ? 'var(--danger)' : 'var(--text-tertiary)',
+                            fontWeight: overdue ? 600 : 400,
+                          }}>
+                            <Clock size={11} style={{ verticalAlign: 'middle' }} />{' '}
+                            {overdue ? '⚠️ Quá hạn: ' : ''}{fmtDate(t.dueDate)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-primary" onClick={() => setShowNotifPopup(false)}>Đã hiểu</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
 // ── Todo Card ────────────────────────────────────────────────────────────────
-function TodoCard({ item, onToggle, onEdit, onDelete }: {
+function TodoCard({ item, currentUserName, onToggle, onEdit, onDelete }: {
   item: TodoItem;
+  currentUserName: string;
   onToggle: (t: TodoItem) => void;
   onEdit: (t: TodoItem) => void;
   onDelete: (t: TodoItem) => void;
@@ -216,6 +333,8 @@ function TodoCard({ item, onToggle, onEdit, onDelete }: {
   const overdue = !item.completed && isOverdue(item.dueDate);
   const dueSoon = !item.completed && isDueSoon(item.dueDate);
   const pm = PRIORITY_META[item.priority];
+  const isAssignedToMe = item.assigneeName === currentUserName && item.ownerName !== currentUserName;
+  const isMyTask = item.ownerName === currentUserName;
 
   return (
     <div className="card" style={{
@@ -259,6 +378,17 @@ function TodoCard({ item, onToggle, onEdit, onDelete }: {
             }}>
               {pm.icon} {pm.label}
             </span>
+            {/* Assignee badge */}
+            {item.assigneeName && (
+              <span style={{
+                fontSize: '0.68rem', padding: '1px 8px', borderRadius: 'var(--radius-full)',
+                background: 'var(--primary-50)', color: 'var(--primary-700)', fontWeight: 600,
+                display: 'inline-flex', alignItems: 'center', gap: '3px',
+              }}>
+                <UserPlus size={10} />
+                {isAssignedToMe ? `Giao bởi ${item.ownerName}` : `→ ${item.assigneeName}`}
+              </span>
+            )}
             {/* Due date */}
             {item.dueDate && (
               <span style={{
@@ -281,13 +411,17 @@ function TodoCard({ item, onToggle, onEdit, onDelete }: {
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+          {/* Only owner or assignee can edit */}
           <button className="btn btn-icon btn-ghost" onClick={() => onEdit(item)} title="Sửa" style={{ padding: 4 }}>
-            <Calendar size={13} />
+            <Edit3 size={13} />
           </button>
-          <button className="btn btn-icon btn-ghost" onClick={() => onDelete(item)}
-            style={{ padding: 4, color: 'var(--danger)' }} title="Xóa">
-            <Trash2 size={13} />
-          </button>
+          {/* Only owner can delete */}
+          {isMyTask && (
+            <button className="btn btn-icon btn-ghost" onClick={() => onDelete(item)}
+              style={{ padding: 4, color: 'var(--danger)' }} title="Xóa">
+              <Trash2 size={13} />
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -295,13 +429,14 @@ function TodoCard({ item, onToggle, onEdit, onDelete }: {
 }
 
 // ── Form Modal ───────────────────────────────────────────────────────────────
-function TodoFormModal({ item, onClose, onSave }: {
+function TodoFormModal({ item, availableMembers, onClose, onSave }: {
   item: TodoItem | null;
+  availableMembers: string[];
   onClose: () => void;
   onSave: (data: Partial<TodoItem>) => void;
 }) {
   const [form, setForm] = useState<Partial<TodoItem>>(item || {
-    title: '', description: '', dueDate: '', priority: 'medium' as TodoPriority,
+    title: '', description: '', dueDate: '', priority: 'medium' as TodoPriority, assigneeName: '',
   });
 
   return (
@@ -343,6 +478,21 @@ function TodoFormModal({ item, onClose, onSave }: {
                   <option value="low">⚪ Thấp</option>
                 </select>
               </div>
+            </div>
+            {/* Assign task */}
+            <div className="form-group">
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <UserPlus size={14} color="var(--primary-500)" />
+                Assign cho (tùy chọn)
+              </label>
+              <select className="form-select" value={form.assigneeName ?? ''}
+                onChange={e => setForm({ ...form, assigneeName: e.target.value || undefined })}>
+                <option value="">— Không assign (chỉ mình thấy) —</option>
+                {availableMembers.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <p style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: 4 }}>
+                💡 Chỉ bạn và người được assign mới thấy task này. Người được assign sẽ nhận thông báo.
+              </p>
             </div>
           </div>
           <div className="modal-footer">

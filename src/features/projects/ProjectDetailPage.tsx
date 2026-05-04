@@ -29,6 +29,7 @@ export default function ProjectDetailPage() {
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
 
   const isManager = currentUser?.role === 'Manager';
+  const isManagerOrLeader = isManager || currentUser?.role === 'Leader';
 
   if (!project) {
     return (
@@ -192,7 +193,7 @@ export default function ProjectDetailPage() {
           <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Target size={16} color="var(--primary-500)" /> Task cứng ({tasks.length})
           </span>
-          {isManager && (
+          {isManagerOrLeader && (
             <button className="btn btn-primary" onClick={() => setTaskForm({ open: true, item: null })}>
               <Plus size={14} /> Thêm task
             </button>
@@ -253,7 +254,7 @@ export default function ProjectDetailPage() {
                     title="Xem submissions">
                     {expandedTask === task.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                   </button>
-                  {isManager && (
+                  {isManagerOrLeader && (
                     <>
                       <button className="btn btn-icon btn-ghost"
                         onClick={() => setTaskForm({ open: true, item: task })}>
@@ -306,7 +307,7 @@ export default function ProjectDetailPage() {
             <Wallet size={16} color="var(--warning)" />
             Chi phí phát sinh ({formatFullCurrency(totalExpense)})
           </span>
-          {isManager && (
+          {isManagerOrLeader && (
             <button className="btn btn-primary" onClick={() => setExpForm({ open: true, item: null })}>
               <Plus size={14} /> Thêm chi phí
             </button>
@@ -328,7 +329,7 @@ export default function ProjectDetailPage() {
                     <th>Ngày</th>
                     <th>Người ghi</th>
                     <th>Ghi chú</th>
-                    {isManager && <th>Thao tác</th>}
+                    {isManagerOrLeader && <th>Thao tác</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -339,7 +340,7 @@ export default function ProjectDetailPage() {
                       <td className="cell-secondary">{e.date}</td>
                       <td className="cell-secondary">{e.createdBy}</td>
                       <td className="cell-secondary">{e.notes}</td>
-                      {isManager && (
+                      {isManagerOrLeader && (
                         <td>
                           <div style={{ display: 'flex', gap: '4px' }}>
                             <button className="btn btn-icon btn-ghost"

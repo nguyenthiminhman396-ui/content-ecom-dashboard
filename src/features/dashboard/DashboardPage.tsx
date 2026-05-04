@@ -38,8 +38,14 @@ function pct(now: number, prev: number): number {
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
-function fmtDate(d: Date): string { return d.toISOString().slice(0, 10); }
+function fmtDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 function startOfMonth(d: Date): Date { return new Date(d.getFullYear(), d.getMonth(), 1); }
+function endOfMonth(d: Date): Date { return new Date(d.getFullYear(), d.getMonth() + 1, 0); }
 
 export default function DashboardPage() {
   const { submissions, projects, scaleConfig, members, currentUser, projectTasks, bonusPoints } = useAppStore();
@@ -48,11 +54,13 @@ export default function DashboardPage() {
   const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const prevMonth = shiftMonth(thisMonth, -1);
 
-  // ── Date range state ─────────────────────────────────────────────────────
+  // ── Date range state — default: full current month ────────────────────────
   const [dateFrom, setDateFrom] = useState<string>(fmtDate(startOfMonth(now)));
-  const [dateTo,   setDateTo]   = useState<string>(fmtDate(now));
+  const [dateTo,   setDateTo]   = useState<string>(fmtDate(endOfMonth(now)));
   const [filterTeam, setFilterTeam] = useState('');
   const [filterTask, setFilterTask] = useState('');
+  // ── Personnel filter (Manager/Leader) ────────────────────────────────────
+  const [filterEmployee, setFilterEmployee] = useState('');
 
   const setRange = (preset: 'today' | '7d' | '30d' | 'thisMonth' | 'prevMonth' | 'all') => {
     const today = new Date();
@@ -65,7 +73,7 @@ export default function DashboardPage() {
       const ago = new Date(today); ago.setDate(today.getDate() - 29);
       setDateFrom(fmtDate(ago)); setDateTo(fmtDate(today));
     } else if (preset === 'thisMonth') {
-      setDateFrom(fmtDate(startOfMonth(today))); setDateTo(fmtDate(today));
+      setDateFrom(fmtDate(startOfMonth(today))); setDateTo(fmtDate(endOfMonth(today)));
     } else if (preset === 'prevMonth') {
       const first = new Date(today.getFullYear(), today.getMonth() - 1, 1);
       const last  = new Date(today.getFullYear(), today.getMonth(), 0);
@@ -78,17 +86,43 @@ export default function DashboardPage() {
   // ── Filter submissions for the user's scope ──
   const scopedSubs = useMemo<KPISubmission[]>(() => {
     if (!currentUser) return [];
-    if (currentUser.role === 'Manager') return submissions;
+    let base: KPISubmission[] = [];
+    if (currentUser.role === 'Manager') {
+      base = submissions;
+    } else if (currentUser.role === 'Leader') {
+      const me = members.find(m => m.name === currentUser.name || m.id === currentUser.id);
+      if (!me?.teamGroup) {
+        base = submissions.filter(s => s.employeeName === currentUser.name);
+      } else {
+        base = submissions.filter(s => {
+          const emp = members.find(mm => mm.name === s.employeeName);
+          return emp?.teamGroup === me.teamGroup || s.employeeName === currentUser.name;
+        });
+      }
+    } else {
+      base = submissions.filter(s => s.employeeName === currentUser.name);
+    }
+    // Apply personnel filter (Manager/Leader only)
+    if (filterEmployee && (currentUser.role === 'Manager' || currentUser.role === 'Leader')) {
+      base = base.filter(s => s.employeeName === filterEmployee);
+    }
+    return base;
+  }, [submissions, currentUser, members, filterEmployee]);
+
+  // ── Available employees for filter (based on scope) ──
+  const availableEmployees = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'Manager') {
+      return Array.from(new Set(submissions.map(s => s.employeeName))).sort();
+    }
     if (currentUser.role === 'Leader') {
       const me = members.find(m => m.name === currentUser.name || m.id === currentUser.id);
-      if (!me?.teamGroup) return submissions.filter(s => s.employeeName === currentUser.name);
-      return submissions.filter(s => {
-        const emp = members.find(mm => mm.name === s.employeeName);
-        return emp?.teamGroup === me.teamGroup || s.employeeName === currentUser.name;
-      });
+      if (!me?.teamGroup) return [currentUser.name];
+      const teamMembers = members.filter(m => m.teamGroup === me.teamGroup).map(m => m.name);
+      return Array.from(new Set([...teamMembers, currentUser.name])).sort();
     }
-    return submissions.filter(s => s.employeeName === currentUser.name);
-  }, [submissions, currentUser, members]);
+    return [];
+  }, [currentUser, members, submissions]);
 
   // ── Range filter ─────────────────────────────────────────────────────────
   const fromMs = dateFrom ? new Date(dateFrom + 'T00:00:00').getTime() : -Infinity;
@@ -157,12 +191,14 @@ export default function DashboardPage() {
     const tNow = {
       links:  thisMonthSubs.reduce((s, x) => s + x.links.length, 0),
       points: thisMonthSubs.reduce((s, x) => s + x.totalPoints, 0) + totalBonusNow,
+      time:   thisMonthSubs.reduce((s, x) => s + (x.timePerLink * x.links.length), 0),
       employees: new Set(thisMonthSubs.map(s => s.employeeName)).size,
       submissions: thisMonthSubs.length,
     };
     const tPrev = {
       links:  prevMonthSubs.reduce((s, x) => s + x.links.length, 0),
       points: prevMonthSubs.reduce((s, x) => s + x.totalPoints, 0) + totalBonusPrev,
+      time:   prevMonthSubs.reduce((s, x) => s + (x.timePerLink * x.links.length), 0),
       employees: new Set(prevMonthSubs.map(s => s.employeeName)).size,
       submissions: prevMonthSubs.length,
     };
@@ -464,23 +500,45 @@ export default function DashboardPage() {
           <button className="btn btn-secondary" onClick={() => setRange('prevMonth')}
             style={{ fontSize: '0.78rem', padding: '4px 10px' }}>Tháng trước</button>
         </div>
+        {/* Personnel filter — Manager/Leader only */}
+        {(currentUser?.role === 'Manager' || currentUser?.role === 'Leader') && availableEmployees.length > 0 && (
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <Users size={14} color="var(--primary-500)" />
+            <select className="form-select" value={filterEmployee}
+              onChange={e => setFilterEmployee(e.target.value)}
+              style={{ width: 'auto', fontSize: '0.82rem', padding: '4px 8px' }}>
+              <option value="">
+                {currentUser?.role === 'Manager' ? 'Tất cả nhân sự' : 'Tất cả team'}
+              </option>
+              {availableEmployees.map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+            {filterEmployee && (
+              <button className="btn btn-ghost" onClick={() => setFilterEmployee('')}
+                style={{ padding: '4px 8px', fontSize: '0.78rem' }}>
+                <X size={12} /> Bỏ lọc
+              </button>
+            )}
+          </div>
+        )}
         <span style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginLeft: 'auto' }}>
           📊 So sánh: <strong>{prevRangeLabel}</strong>
         </span>
       </div>
 
-      {/* Stats cards với so sánh */}
+      {/* Stats cards — hiển thị cho tất cả roles */}
       <div className="stats-grid" style={{ marginBottom: '20px' }}>
-        <CompareCard icon={<Link2 size={18} />} label="Link nộp tháng này"
-          now={stats.now.links} prev={stats.prev.links} color="var(--primary-500)" />
-        <CompareCard icon={<Trophy size={18} />} label="Điểm KPI"
-          now={Math.round(stats.now.points * 10) / 10} prev={Math.round(stats.prev.points * 10) / 10} color="var(--accent-500)" suffix="đ" />
-        <CompareCard icon={<Users size={18} />} label="Nhân viên hoạt động"
-          now={stats.now.employees} prev={stats.prev.employees} color="#7a9af6" />
-        <CompareCard icon={<Target size={18} />} label="Đạt mục tiêu"
+        <CompareCard icon={<Target size={18} />} label="% Target hoàn thành"
           now={Math.round((stats.now.points / Math.max(scaleConfig.memberTargetPoints * Math.max(stats.now.employees, 1), 1)) * 100)}
           prev={Math.round((stats.prev.points / Math.max(scaleConfig.memberTargetPoints * Math.max(stats.prev.employees, 1), 1)) * 100)}
           color="var(--success)" suffix="%" />
+        <CompareCard icon={<Trophy size={18} />} label="Điểm"
+          now={Math.round(stats.now.points * 10) / 10} prev={Math.round(stats.prev.points * 10) / 10} color="var(--accent-500)" suffix="đ" />
+        <CompareCard icon={<Calendar size={18} />} label="Thời gian"
+          now={Math.round(stats.now.time * 10) / 10} prev={Math.round(stats.prev.time * 10) / 10} color="#7a9af6" suffix="h" />
+        <CompareCard icon={<Link2 size={18} />} label="Tổng link"
+          now={stats.now.links} prev={stats.prev.links} color="var(--primary-500)" />
       </div>
 
       {/* Auto evaluation card */}
@@ -507,7 +565,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Charts row */}
+      {/* Charts row + Project progress + Top 5 — chỉ Manager mới thấy */}
+      {currentUser?.role === 'Manager' && (<>
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '16px', marginBottom: '20px' }}>
         {/* Trend */}
         <div className="card" style={{ padding: '18px' }}>
@@ -705,6 +764,7 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+      </>)}
 
       {/* ── Chi tiết đầu việc — so sánh với cùng kỳ T-1 ── */}
       <div className="card" style={{ padding: '18px', marginTop: '16px' }}>

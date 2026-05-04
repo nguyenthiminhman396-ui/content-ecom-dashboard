@@ -442,6 +442,8 @@ export interface TodoItem {
   id: string;
   /** Tên người sở hữu */
   ownerName: string;
+  /** Người được assign (nếu có) — chỉ owner + assignee mới thấy task này */
+  assigneeName?: string;
   /** Tiêu đề */
   title: string;
   /** Mô tả chi tiết */
@@ -525,7 +527,7 @@ export const SHEET_HEADERS = {
   PROJ_TASKS: ['id','projectId','name','taskType','taskDetail','targetLinks','assignee','deadline','notes'],
   BONUS:    ['id','employeeName','amount','reason','projectId','period','awardedAt','awardedBy',
              'status','approvedBy','approvedAt','rejectionNote'],
-  TODOS:    ['id','ownerName','title','description','dueDate','priority','completed','completedAt','createdAt'],
+  TODOS:    ['id','ownerName','assigneeName','title','description','dueDate','priority','completed','completedAt','createdAt'],
 } as const;
 
 // ============================================
