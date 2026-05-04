@@ -524,7 +524,7 @@ export const SHEET_HEADERS = {
   REVIEWS:  ['id','employeeName','period','qualityScore','attitudeScore',
              'timelinessScore','daysOff','allowedDaysOff','notes','reviewedAt','reviewerId'],
   SUBMISSIONS: ['id','employeeName','submittedAt','taskType','taskDetail','siteId','projectId','projectTaskId',
-                'links','teamGroup','timePerLink','pointPerLink','totalPoints','locked','notes'],
+                'links','teamGroup','timePerLink','pointPerLink','totalPoints','locked','notes','hoursWorked','quantity'],
   SCALE:    ['key','pointPerHour','standardHoursPerMonth','memberTargetPoints','leaderProductionWeight',
              'wProductivity','wQuality','wAttitude','wTimeliness','wAttendance','allowedDaysOff','updatedAt'],
   SITES:    ['id','name','urlPattern','description','active','color'],
