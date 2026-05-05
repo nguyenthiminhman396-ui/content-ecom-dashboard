@@ -616,9 +616,51 @@ export default function DashboardPage() {
         const targetPrev = calcTarget(Math.max(stats.prev.employees, 1));
 
         // Leader management time info
-        const isLeaderRole = currentUser?.role === 'Leader';
         const mgmtWeight = 1 - scaleConfig.leaderProductionWeight;
-        const mgmtHours = Math.round(scaleConfig.standardHoursPerMonth * mgmtWeight * 10) / 10;
+        const stdHours = scaleConfig.standardHoursPerMonth;
+        const daysInMonth = 22;
+        const mgmtPerDay = (stdHours * mgmtWeight) / daysInMonth;
+
+        // Xác định xem có đang xem 1 leader cụ thể không
+        const viewingLeader = filterEmployee
+          ? members.find(m => m.name === filterEmployee)?.kpiRole === 'leader'
+          : false;
+        const isLeaderPersonal = currentUser?.role === 'Leader' && !filterEmployee;
+
+        // Tính số ngày làm việc (T2–T6) trong range
+        const calcWorkingDays = () => {
+          if (!dateFrom || !dateTo) return daysInMonth;
+          const from = new Date(dateFrom);
+          const to = new Date(dateTo);
+          let wd = 0;
+          const d = new Date(from);
+          while (d <= to) {
+            const dow = d.getDay();
+            if (dow !== 0 && dow !== 6) wd++;
+            d.setDate(d.getDate() + 1);
+          }
+          return wd;
+        };
+        const workingDays = calcWorkingDays();
+        const mgmtHoursPerLeader = Math.round(workingDays * mgmtPerDay * 10) / 10;
+
+        // Đếm leader trong scope
+        const countLeadersInScope = () => {
+          if (viewingLeader) return 1;
+          if (!isLeaderPersonal) return 0;
+          const me = members.find(m => m.name === currentUser?.name);
+          const myTeam = me?.teamGroup;
+          if (!myTeam) return 1;
+          return members.filter(m => m.teamGroup === myTeam && m.kpiRole === 'leader').length;
+        };
+
+        const showMgmt = viewingLeader || isLeaderPersonal;
+        const leaderCount = countLeadersInScope();
+        const totalMgmtHours = Math.round(mgmtHoursPerLeader * leaderCount * 10) / 10;
+
+        const timeNow = Math.round((stats.now.time + (showMgmt ? totalMgmtHours : 0)) * 10) / 10;
+        const timePrev = Math.round((stats.prev.time + (showMgmt ? totalMgmtHours : 0)) * 10) / 10;
+        const productionTimeNow = Math.round(stats.now.time * 10) / 10;
 
         return (
           <>
@@ -629,28 +671,49 @@ export default function DashboardPage() {
                 color="var(--success)" suffix="%" />
               <CompareCard icon={<Trophy size={18} />} label="Điểm"
                 now={Math.round(stats.now.points * 10) / 10} prev={Math.round(stats.prev.points * 10) / 10} color="var(--accent-500)" suffix="đ" />
-              <CompareCard icon={<Calendar size={18} />} label="Thời gian sản xuất"
-                now={Math.round(stats.now.time * 10) / 10} prev={Math.round(stats.prev.time * 10) / 10} color="#7a9af6" suffix="h" />
+              <CompareCard icon={<Calendar size={18} />} label="Thời gian làm việc"
+                now={timeNow} prev={timePrev} color="#7a9af6" suffix="h" />
               <CompareCard icon={<Link2 size={18} />} label="Tổng link"
                 now={stats.now.links} prev={stats.prev.links} color="var(--primary-500)" />
             </div>
 
-            {/* Leader: card bổ sung thời gian quản lý */}
-            {isLeaderRole && !filterEmployee && (
+            {/* Leader: breakdown thời gian */}
+            {showMgmt && (
               <div className="card" style={{ 
                 padding: '14px 18px', marginBottom: '20px',
                 background: 'linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%)',
                 border: '1px solid #C7D2FE',
-                display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <ShieldCheck size={18} color="#4F46E5" />
-                  <span style={{ fontWeight: 700, fontSize: '0.92rem', color: '#312E81' }}>Hệ số Leader</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                  <ShieldCheck size={16} color="#4F46E5" />
+                  <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#312E81' }}>Phân bổ thời gian Leader</span>
+                  <span style={{ fontSize: '0.7rem', color: '#6366F1', marginLeft: 'auto' }}>{workingDays} ngày làm việc trong kỳ</span>
                 </div>
-                <div style={{ display: 'flex', gap: '16px', fontSize: '0.82rem', color: '#3730A3' }}>
-                  <span>📊 Sản xuất: <strong>{Math.round(scaleConfig.leaderProductionWeight * 100)}%</strong> ({Math.round(scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight)}đ target)</span>
-                  <span>📋 Quản lý: <strong>{Math.round(mgmtWeight * 100)}%</strong> (~{mgmtHours}h/tháng)</span>
-                  <span>⏱️ Tổng: <strong>{scaleConfig.standardHoursPerMonth}h/tháng</strong></span>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
+                  <div style={{
+                    padding: '10px 14px', borderRadius: 'var(--radius-md)',
+                    background: 'rgba(255,255,255,0.7)', border: '1px solid #C7D2FE',
+                  }}>
+                    <div style={{ fontSize: '0.7rem', color: '#6366F1', fontWeight: 600, marginBottom: '4px' }}>📊 Sản xuất ({Math.round(scaleConfig.leaderProductionWeight * 100)}%)</div>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#312E81' }}>{productionTimeNow}h</div>
+                    <div style={{ fontSize: '0.68rem', color: '#6366F1' }}>Target: {Math.round(scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight)}đ</div>
+                  </div>
+                  <div style={{
+                    padding: '10px 14px', borderRadius: 'var(--radius-md)',
+                    background: 'rgba(255,255,255,0.7)', border: '1px solid #C7D2FE',
+                  }}>
+                    <div style={{ fontSize: '0.7rem', color: '#6366F1', fontWeight: 600, marginBottom: '4px' }}>📋 Quản lý ({Math.round(mgmtWeight * 100)}%)</div>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#312E81' }}>{totalMgmtHours}h</div>
+                    <div style={{ fontSize: '0.68rem', color: '#6366F1' }}>Tự động tính theo ngày làm việc</div>
+                  </div>
+                  <div style={{
+                    padding: '10px 14px', borderRadius: 'var(--radius-md)',
+                    background: 'rgba(255,255,255,0.7)', border: '1px solid #C7D2FE',
+                  }}>
+                    <div style={{ fontSize: '0.7rem', color: '#6366F1', fontWeight: 600, marginBottom: '4px' }}>⏱️ Tổng thời gian</div>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#312E81' }}>{timeNow}h</div>
+                    <div style={{ fontSize: '0.68rem', color: '#6366F1' }}>Chuẩn: {stdHours}h/tháng</div>
+                  </div>
                 </div>
               </div>
             )}
