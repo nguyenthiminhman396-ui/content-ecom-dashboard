@@ -571,6 +571,12 @@ export async function syncFromSheets(): Promise<void> {
 
     // Persist về local sau khi load
     saveLS(LS_SCALE, data.scaleConfig);
+
+    // ── Migration: leaderProductionWeight 0.40 → 0.60 ──
+    if (data.scaleConfig.leaderProductionWeight <= 0.40) {
+      const migratedConfig = { ...data.scaleConfig, leaderProductionWeight: 0.60 };
+      store.setScaleConfig(migratedConfig);
+    }
     if (data.submissions.length) saveLS(LS_SUBMISSIONS, data.submissions);
     if (mergedTodos.length) saveLS(LS_TODOS, mergedTodos);
     // Persist thêm các entity lấy từ Sheet
