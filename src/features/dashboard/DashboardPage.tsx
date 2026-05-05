@@ -211,22 +211,26 @@ export default function DashboardPage() {
 
   // ── Top-level stats ──
   const stats = useMemo(() => {
+    const pph = scaleConfig.pointPerHour || 1.5;
     const tNow = {
       links:  thisMonthSubs.reduce((s, x) => s + x.links.length, 0),
       points: thisMonthSubs.reduce((s, x) => s + x.totalPoints, 0) + totalBonusNow,
-      time:   thisMonthSubs.reduce((s, x) => s + (x.timePerLink * x.links.length), 0),
+      time:   0, // sẽ tính bên dưới
       employees: new Set(thisMonthSubs.map(s => s.employeeName)).size,
       submissions: thisMonthSubs.length,
     };
+    // Thời gian = Điểm tổng (KPI + bonus) / hệ số pointPerHour
+    tNow.time = tNow.points / pph;
     const tPrev = {
       links:  prevMonthSubs.reduce((s, x) => s + x.links.length, 0),
       points: prevMonthSubs.reduce((s, x) => s + x.totalPoints, 0) + totalBonusPrev,
-      time:   prevMonthSubs.reduce((s, x) => s + (x.timePerLink * x.links.length), 0),
+      time:   0,
       employees: new Set(prevMonthSubs.map(s => s.employeeName)).size,
       submissions: prevMonthSubs.length,
     };
+    tPrev.time = tPrev.points / pph;
     return { now: tNow, prev: tPrev, bonusNow: totalBonusNow, bonusPrev: totalBonusPrev };
-  }, [thisMonthSubs, prevMonthSubs, totalBonusNow, totalBonusPrev]);
+  }, [thisMonthSubs, prevMonthSubs, totalBonusNow, totalBonusPrev, scaleConfig.pointPerHour]);
 
   // ── Doughnut: tỉ trọng 3 nhóm ──
   const teamData = useMemo(() => {
@@ -618,8 +622,9 @@ export default function DashboardPage() {
         // Leader management time info
         const mgmtWeight = 1 - scaleConfig.leaderProductionWeight;
         const stdHours = scaleConfig.standardHoursPerMonth;
-        const daysInMonth = 22;
+        const daysInMonth = scaleConfig.workingDaysPerMonth || 24.5;
         const mgmtPerDay = (stdHours * mgmtWeight) / daysInMonth;
+        const pph = scaleConfig.pointPerHour || 1.5;
 
         // Xác định xem có đang xem 1 leader cụ thể không
         const viewingLeader = filterEmployee
@@ -644,17 +649,19 @@ export default function DashboardPage() {
         const workingDays = calcWorkingDays();
         const mgmtHoursPerLeader = Math.round(workingDays * mgmtPerDay * 10) / 10;
 
-
         const showMgmt = viewingLeader || isLeaderPersonal;
-        // Thời gian sản xuất riêng của leader (không cộng member)
-        const leaderName = filterEmployee || currentUser?.name || '';
-        const leaderProductionNow = Math.round(
-          thisMonthSubs.filter(s => s.employeeName === leaderName)
-            .reduce((sum, s) => sum + (s.timePerLink * s.links.length), 0) * 10
-        ) / 10;
 
-        // Card "Thời gian làm việc" = team total (stats.now.time) cho overview chung
-        // Card breakdown = chỉ leader cá nhân
+        // Tính điểm riêng leader (KPI + bonus) → thời gian = điểm / pointPerHour
+        const leaderName = filterEmployee || currentUser?.name || '';
+        const leaderKpiPoints = thisMonthSubs
+          .filter(s => s.employeeName === leaderName)
+          .reduce((sum, s) => sum + s.totalPoints, 0);
+        const leaderBonusPoints = bonusInRange
+          .filter(b => b.employeeName === leaderName)
+          .reduce((sum, b) => sum + b.amount, 0);
+        const leaderTotalPoints = leaderKpiPoints + leaderBonusPoints;
+        const leaderProductionNow = Math.round((leaderTotalPoints / pph) * 10) / 10;
+
         const leaderTotalNow = Math.round((leaderProductionNow + (showMgmt ? mgmtHoursPerLeader : 0)) * 10) / 10;
 
         return (
@@ -691,7 +698,9 @@ export default function DashboardPage() {
                   }}>
                     <div style={{ fontSize: '0.7rem', color: '#6366F1', fontWeight: 600, marginBottom: '4px' }}>📊 Sản xuất ({Math.round(scaleConfig.leaderProductionWeight * 100)}%)</div>
                     <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#312E81' }}>{leaderProductionNow}h</div>
-                    <div style={{ fontSize: '0.68rem', color: '#6366F1' }}>Target: {Math.round(scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight)}đ</div>
+                    <div style={{ fontSize: '0.68rem', color: '#6366F1' }}>
+                      {Math.round(leaderKpiPoints * 10) / 10}đ KPI{leaderBonusPoints ? ` + ${Math.round(leaderBonusPoints * 10) / 10}đ bonus` : ''} = {Math.round(leaderTotalPoints * 10) / 10}đ ÷ {pph}
+                    </div>
                   </div>
                   <div style={{
                     padding: '10px 14px', borderRadius: 'var(--radius-md)',
@@ -699,7 +708,7 @@ export default function DashboardPage() {
                   }}>
                     <div style={{ fontSize: '0.7rem', color: '#6366F1', fontWeight: 600, marginBottom: '4px' }}>📋 Quản lý ({Math.round(mgmtWeight * 100)}%)</div>
                     <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#312E81' }}>{mgmtHoursPerLeader}h</div>
-                    <div style={{ fontSize: '0.68rem', color: '#6366F1' }}>Tự động tính theo ngày làm việc</div>
+                    <div style={{ fontSize: '0.68rem', color: '#6366F1' }}>{workingDays} ngày × {Math.round(mgmtPerDay * 10) / 10}h/ngày</div>
                   </div>
                   <div style={{
                     padding: '10px 14px', borderRadius: 'var(--radius-md)',
@@ -707,7 +716,7 @@ export default function DashboardPage() {
                   }}>
                     <div style={{ fontSize: '0.7rem', color: '#6366F1', fontWeight: 600, marginBottom: '4px' }}>⏱️ Tổng thời gian</div>
                     <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#312E81' }}>{leaderTotalNow}h</div>
-                    <div style={{ fontSize: '0.68rem', color: '#6366F1' }}>Chuẩn: {stdHours}h/tháng</div>
+                    <div style={{ fontSize: '0.68rem', color: '#6366F1' }}>Chuẩn: {stdHours}h/tháng ({daysInMonth} ngày)</div>
                   </div>
                 </div>
               </div>

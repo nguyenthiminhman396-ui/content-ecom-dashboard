@@ -66,11 +66,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   submissions: loadLS<KPISubmission[]>(LS_SUBMISSIONS, []),
   scaleConfig: (() => {
     const cfg = loadLS<KPIScaleConfig>(LS_SCALE, DEFAULT_KPI_SCALE_CONFIG);
-    // Migration: force 0.60 nếu còn giá trị cũ
-    if (cfg.leaderProductionWeight <= 0.40) {
-      cfg.leaderProductionWeight = 0.60;
-      saveLS(LS_SCALE, cfg);
-    }
+    let dirty = false;
+    // Migration: leader weight 0.40 → 0.60
+    if (cfg.leaderProductionWeight <= 0.40) { cfg.leaderProductionWeight = 0.60; dirty = true; }
+    // Migration: 22 ngày/176h → 24.5 ngày/196h
+    if (cfg.standardHoursPerMonth <= 176) { cfg.standardHoursPerMonth = 196; dirty = true; }
+    if (!cfg.workingDaysPerMonth || cfg.workingDaysPerMonth <= 22) { cfg.workingDaysPerMonth = 24.5; dirty = true; }
+    if (cfg.memberTargetPoints <= 264) { cfg.memberTargetPoints = 294; dirty = true; }
+    if (dirty) saveLS(LS_SCALE, cfg);
     return cfg;
   })(),
   sites:        loadLS<Site[]>(LS_SITES, defaultSites),
@@ -580,10 +583,15 @@ export async function syncFromSheets(): Promise<void> {
     // Persist về local sau khi load
     saveLS(LS_SCALE, data.scaleConfig);
 
-    // ── Migration: leaderProductionWeight 0.40 → 0.60 ──
-    if (data.scaleConfig.leaderProductionWeight <= 0.40) {
-      const migratedConfig = { ...data.scaleConfig, leaderProductionWeight: 0.60 };
-      store.setScaleConfig(migratedConfig);
+    // ── Migration: cập nhật cấu hình cũ ──
+    const sc = { ...data.scaleConfig };
+    let needsMigrate = false;
+    if (sc.leaderProductionWeight <= 0.40) { sc.leaderProductionWeight = 0.60; needsMigrate = true; }
+    if (sc.standardHoursPerMonth <= 176) { sc.standardHoursPerMonth = 196; needsMigrate = true; }
+    if (!sc.workingDaysPerMonth || sc.workingDaysPerMonth <= 22) { sc.workingDaysPerMonth = 24.5; needsMigrate = true; }
+    if (sc.memberTargetPoints <= 264) { sc.memberTargetPoints = 294; needsMigrate = true; }
+    if (needsMigrate) {
+      store.setScaleConfig(sc);
     }
     if (data.submissions.length) saveLS(LS_SUBMISSIONS, data.submissions);
     if (mergedTodos.length) saveLS(LS_TODOS, mergedTodos);

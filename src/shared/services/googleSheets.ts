@@ -754,6 +754,7 @@ class GoogleSheetsService {
         attendance:   num(r[9]) || DEFAULT_KPI_SCALE_CONFIG.weights.attendance,
       },
       allowedDaysOff:         num(r[10]) || DEFAULT_KPI_SCALE_CONFIG.allowedDaysOff,
+      workingDaysPerMonth:    num(r[12]) || DEFAULT_KPI_SCALE_CONFIG.workingDaysPerMonth,
     };
   }
 
@@ -771,6 +772,7 @@ class GoogleSheetsService {
       String(cfg.weights.attendance),
       String(cfg.allowedDaysOff),
       new Date().toISOString(),
+      String(cfg.workingDaysPerMonth ?? DEFAULT_KPI_SCALE_CONFIG.workingDaysPerMonth),
     ];
     // Header on row 1, current value on row 2 — write a fixed range
     const headerRow = Array.from(SHEET_HEADERS.SCALE);

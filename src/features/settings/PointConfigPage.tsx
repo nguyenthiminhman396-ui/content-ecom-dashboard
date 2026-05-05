@@ -164,6 +164,7 @@ export default function PointConfigPage() {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px' }}>
           <ScaleStat label="Hệ số quy đổi" value={`${scaleConfig.pointPerHour}đ/giờ`} />
+          <ScaleStat label="Ngày làm việc/tháng" value={`${scaleConfig.workingDaysPerMonth ?? 24.5} ngày`} />
           <ScaleStat label="Giờ chuẩn/tháng" value={`${scaleConfig.standardHoursPerMonth}h`} />
           <ScaleStat label="Target Member" value={`${scaleConfig.memberTargetPoints}đ`} />
           <ScaleStat label="Leader sản xuất" value={`${Math.round(scaleConfig.leaderProductionWeight*100)}%`} />
@@ -393,6 +394,18 @@ function ScaleConfigModal({ config, onClose, onSave }: {
                   onChange={e => setForm({ ...form, pointPerHour: parseFloat(e.target.value) || 0 })} />
                 <p style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
                   1 giờ làm việc = {form.pointPerHour} điểm
+                </p>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Ngày làm việc/tháng *</label>
+                <input className="form-input" type="number" step="0.5" min="1" max="31"
+                  value={form.workingDaysPerMonth ?? 24.5}
+                  onChange={e => {
+                    const days = parseFloat(e.target.value) || 24.5;
+                    setForm({ ...form, workingDaysPerMonth: days, standardHoursPerMonth: Math.round(days * 8) });
+                  }} />
+                <p style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+                  {form.workingDaysPerMonth ?? 24.5} ngày × 8h = {Math.round((form.workingDaysPerMonth ?? 24.5) * 8)}h/tháng
                 </p>
               </div>
               <div className="form-group">

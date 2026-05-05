@@ -225,17 +225,17 @@ export const PERFORMANCE_WEIGHTS = {
   attendance: 0.10,    // Ngày nghỉ (auto tính)
 } as const;
 
-/** Cấu hình KPI mặc định — Từ KPI cũ (208h = 312đ), 1h làm việc = 1.5 điểm.
- *  Đây là "hard fallback" — thực tế Manager có thể chỉnh trong Settings → KPIScaleConfig. */
 export const KPI_CONFIG = {
-  /** Giờ chuẩn/tháng theo Luật LĐ VN (8h × 22 ngày) */
-  standardHoursPerMonth: 176,
-  /** Target điểm/tháng cho Member (176h × 1.5 = 264 điểm) */
-  memberTargetPoints: 264,
-  /** Leader: 60% sản xuất, 40% quản lý → target sản xuất = 264 × 0.6 = 158.4 */
+  /** Giờ chuẩn/tháng (8h × 24.5 ngày) */
+  standardHoursPerMonth: 196,
+  /** Số ngày làm việc chuẩn/tháng */
+  workingDaysPerMonth: 24.5,
+  /** Target điểm/tháng cho Member (196h × 1.5 = 294 điểm) */
+  memberTargetPoints: 294,
+  /** Leader: 60% sản xuất, 40% quản lý → target sản xuất = 294 × 0.6 = 176.4 */
   leaderProductionWeight: 0.60,
   leaderManagementWeight: 0.40,
-  leaderProductionTarget: 158.4,
+  leaderProductionTarget: 176.4,
   /** Hệ số quy đổi: 1 giờ làm việc = pointPerHour điểm */
   pointPerHour: 1.5,
 } as const;
@@ -245,11 +245,13 @@ export const KPI_CONFIG = {
 export interface KPIScaleConfig {
   /** Hệ số quy đổi: 1 giờ làm việc = pointPerHour điểm (mặc định 1.5) */
   pointPerHour: number;
-  /** Giờ chuẩn/tháng (mặc định 176 = 8h × 22 ngày) */
+  /** Giờ chuẩn/tháng (mặc định 196 = 8h × 24.5 ngày) */
   standardHoursPerMonth: number;
+  /** Số ngày làm việc chuẩn/tháng (mặc định 24.5) */
+  workingDaysPerMonth: number;
   /** Target điểm/tháng cho Member (mặc định = pointPerHour × standardHoursPerMonth) */
   memberTargetPoints: number;
-  /** Leader: % sản xuất (0-1, mặc định 0.4) */
+  /** Leader: % sản xuất (0-1, mặc định 0.6) */
   leaderProductionWeight: number;
   /** Trọng số 5 chiều performance (cộng lại = 1.0) */
   weights: {
@@ -265,8 +267,9 @@ export interface KPIScaleConfig {
 
 export const DEFAULT_KPI_SCALE_CONFIG: KPIScaleConfig = {
   pointPerHour: 1.5,
-  standardHoursPerMonth: 176,
-  memberTargetPoints: 264,
+  standardHoursPerMonth: 196,
+  workingDaysPerMonth: 24.5,
+  memberTargetPoints: 294,
   leaderProductionWeight: 0.60,
   weights: {
     productivity: 0.40,
@@ -532,7 +535,7 @@ export const SHEET_HEADERS = {
   SUBMISSIONS: ['id','employeeName','submittedAt','taskType','taskDetail','siteId','projectId','projectTaskId',
                 'links','teamGroup','timePerLink','pointPerLink','totalPoints','locked','notes','hoursWorked','quantity'],
   SCALE:    ['key','pointPerHour','standardHoursPerMonth','memberTargetPoints','leaderProductionWeight',
-             'wProductivity','wQuality','wAttitude','wTimeliness','wAttendance','allowedDaysOff','updatedAt'],
+             'wProductivity','wQuality','wAttitude','wTimeliness','wAttendance','allowedDaysOff','updatedAt','workingDaysPerMonth'],
   SITES:    ['id','name','urlPattern','description','active','color'],
   PROJ_TASKS: ['id','projectId','name','trackingMode','taskType','taskDetail','targetLinks','targetQuantity','assignees','deadline','notes'],
   BONUS:    ['id','employeeName','amount','reason','projectId','period','awardedAt','awardedBy',
