@@ -94,13 +94,13 @@ export default function KPITargetsPage() {
   }, [periodTargets, submissions, period]);
 
   // Tổng theo đầu việc (cross-team)
-  // Rule: Có KPI tổng (Manager set) → lấy KPI tổng. Không có → cộng cá nhân.
-  // Actual: luôn lấy 1 lần từ team (vì filter không lọc employeeName → mọi row cùng team+taskType đều ra cùng actual)
+  // Rule: Có KPI tổng → đó là target chính thức (không cộng thêm cá nhân).
+  //        Không có KPI tổng → fallback cộng cá nhân.
   const taskTypeSummary = useMemo(() => {
     const grouped: Record<string, Record<string, {
       teamTarget: number;
       individualTarget: number;
-      actual: number; // actual chung (lấy từ bất kỳ row nào, vì đều giống nhau)
+      actual: number;
     }>> = {};
 
     targetsWithActual.forEach(({ target, actualLinks }) => {
@@ -115,12 +115,14 @@ export default function KPITargetsPage() {
       } else {
         grouped[taskKey][team].teamTarget += target.targetLinks;
       }
-      // Actual: giữ giá trị lớn nhất (vì mọi row cùng team+taskType cho cùng actual)
       grouped[taskKey][team].actual = Math.max(grouped[taskKey][team].actual, actualLinks);
     });
 
     return Object.entries(grouped)
       .map(([taskType, teams]) => {
+        // Kiểm tra: đầu việc này CÓ KPI tổng nào không?
+        const hasAnyTeamTarget = Object.values(teams).some(d => d.teamTarget > 0);
+
         let totalTarget = 0;
         let totalActual = 0;
         const teamList: string[] = [];
@@ -128,15 +130,23 @@ export default function KPITargetsPage() {
 
         for (const [team, d] of Object.entries(teams)) {
           teamList.push(team);
-          // Có KPI tổng → lấy KPI tổng; không có → cộng cá nhân
-          const t = d.teamTarget > 0 ? d.teamTarget : d.individualTarget;
+          let t: number;
+          if (hasAnyTeamTarget) {
+            // Có KPI tổng → chỉ lấy KPI tổng, bỏ qua cá nhân (đã nằm trong tổng)
+            t = d.teamTarget;
+          } else {
+            // Không có KPI tổng nào → cộng cá nhân
+            t = d.individualTarget;
+          }
           const a = d.actual;
           totalTarget += t;
           totalActual += a;
-          perTeam.push({
-            team, target: t, actual: a,
-            progress: t > 0 ? Math.round((a / t) * 100) : 0,
-          });
+          if (t > 0) {
+            perTeam.push({
+              team, target: t, actual: a,
+              progress: t > 0 ? Math.round((a / t) * 100) : 0,
+            });
+          }
         }
         perTeam.sort((a, b) => b.target - a.target);
 
@@ -149,6 +159,7 @@ export default function KPITargetsPage() {
           perTeam,
         };
       })
+      .filter(x => x.target > 0)
       .sort((a, b) => b.target - a.target);
   }, [targetsWithActual]);
 
