@@ -193,18 +193,41 @@ export default function DashboardPage() {
 
   const bonusInRange = useMemo(() => {
     if (!dateFrom && !dateTo) return scopedBonus;
+    // Filter theo period (YYYY-MM) — bonus thuộc tháng nào thì tính cho tháng đó
+    const fromDate = dateFrom ? new Date(dateFrom) : null;
+    const toDate = dateTo ? new Date(dateTo) : null;
     return scopedBonus.filter(b => {
-      const t = new Date(b.awardedAt).getTime();
-      return !isNaN(t) && t >= fromMs && t <= toMs;
+      if (!b.period) {
+        // Fallback: nếu không có period, dùng awardedAt
+        const t = new Date(b.awardedAt).getTime();
+        return !isNaN(t) && t >= fromMs && t <= toMs;
+      }
+      // period = 'YYYY-MM', so sánh tháng nằm trong range
+      const [y, m] = b.period.split('-').map(Number);
+      if (!y || !m) return false;
+      const periodStart = new Date(y, m - 1, 1);
+      const periodEnd = new Date(y, m, 0); // last day of month
+      // Period tháng phải overlap với range
+      return (!fromDate || periodEnd >= fromDate) && (!toDate || periodStart <= toDate);
     });
   }, [scopedBonus, dateFrom, dateTo, fromMs, toMs]);
+
   const bonusInPrevRange = useMemo(() => {
     if (!dateFrom && !dateTo) return [];
+    const fromDate = prevDateFrom ? new Date(prevDateFrom) : null;
+    const toDate = prevDateTo ? new Date(prevDateTo) : null;
     return scopedBonus.filter(b => {
-      const t = new Date(b.awardedAt).getTime();
-      return !isNaN(t) && t >= prevFromMs && t <= prevToMs;
+      if (!b.period) {
+        const t = new Date(b.awardedAt).getTime();
+        return !isNaN(t) && t >= prevFromMs && t <= prevToMs;
+      }
+      const [y, m] = b.period.split('-').map(Number);
+      if (!y || !m) return false;
+      const periodStart = new Date(y, m - 1, 1);
+      const periodEnd = new Date(y, m, 0);
+      return (!fromDate || periodEnd >= fromDate) && (!toDate || periodStart <= toDate);
     });
-  }, [scopedBonus, dateFrom, dateTo, prevFromMs, prevToMs]);
+  }, [scopedBonus, dateFrom, dateTo, prevDateFrom, prevDateTo, prevFromMs, prevToMs]);
 
   const totalBonusNow  = bonusInRange.reduce((s, b) => s + b.amount, 0);
   const totalBonusPrev = bonusInPrevRange.reduce((s, b) => s + b.amount, 0);
