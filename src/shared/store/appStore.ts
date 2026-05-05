@@ -64,7 +64,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   taskPointRules: loadLS(LS_TASK_PT_RULES, defaultTaskPointRules),
   performanceReviews: loadLS(LS_PERF_REVIEWS, []),
   submissions: loadLS<KPISubmission[]>(LS_SUBMISSIONS, []),
-  scaleConfig: loadLS<KPIScaleConfig>(LS_SCALE, DEFAULT_KPI_SCALE_CONFIG),
+  scaleConfig: (() => {
+    const cfg = loadLS<KPIScaleConfig>(LS_SCALE, DEFAULT_KPI_SCALE_CONFIG);
+    // Migration: force 0.60 nếu còn giá trị cũ
+    if (cfg.leaderProductionWeight <= 0.40) {
+      cfg.leaderProductionWeight = 0.60;
+      saveLS(LS_SCALE, cfg);
+    }
+    return cfg;
+  })(),
   sites:        loadLS<Site[]>(LS_SITES, defaultSites),
   projectTasks: loadLS<ProjectTask[]>(LS_PROJ_TASKS, []),
   bonusPoints:  loadLS<BonusPoint[]>(LS_BONUS, []),
