@@ -92,37 +92,25 @@ export default function KPITargetsPage() {
     });
   }, [periodTargets, submissions, period]);
 
-  // Tổng theo team
-  const teamSummary = useMemo(() => {
-    const m: Record<string, { target: number; actual: number }> = {};
+  // Tổng theo đầu việc (cross-team) — mỗi block = 1 đầu việc
+  const taskTypeSummary = useMemo(() => {
+    const m: Record<string, { target: number; actual: number; teams: Set<string> }> = {};
     targetsWithActual.forEach(({ target, actualLinks }) => {
-      if (!m[target.teamGroup]) m[target.teamGroup] = { target: 0, actual: 0 };
-      m[target.teamGroup].target += target.targetLinks;
-      m[target.teamGroup].actual += actualLinks;
+      const key = target.taskType || '(Tất cả đầu việc)';
+      if (!m[key]) m[key] = { target: 0, actual: 0, teams: new Set() };
+      m[key].target += target.targetLinks;
+      m[key].actual += actualLinks;
+      m[key].teams.add(target.teamGroup);
     });
-    return m;
-  }, [targetsWithActual]);
-
-  // Breakdown đầu việc theo từng team — hiển thị trong card
-  const teamTaskBreakdown = useMemo(() => {
-    const m: Record<string, { taskType: string; target: number; actual: number }[]> = {};
-    targetsWithActual.forEach(({ target, actualLinks }) => {
-      const team = target.teamGroup;
-      if (!m[team]) m[team] = [];
-      const key = target.taskType || '(Tổng)';
-      const existing = m[team].find(x => x.taskType === key);
-      if (existing) {
-        existing.target += target.targetLinks;
-        existing.actual += actualLinks;
-      } else {
-        m[team].push({ taskType: key, target: target.targetLinks, actual: actualLinks });
-      }
-    });
-    // Sort by target desc
-    for (const team of Object.keys(m)) {
-      m[team].sort((a, b) => b.target - a.target);
-    }
-    return m;
+    return Object.entries(m)
+      .map(([taskType, data]) => ({
+        taskType,
+        target: data.target,
+        actual: data.actual,
+        teams: Array.from(data.teams),
+        progress: data.target > 0 ? Math.round((data.actual / data.target) * 100) : 0,
+      }))
+      .sort((a, b) => b.target - a.target);
   }, [targetsWithActual]);
 
   const handleDelete = (t: MonthlyKPITarget) => {
@@ -213,61 +201,45 @@ export default function KPITargetsPage() {
         </span>
       </div>
 
-      {/* Team summary + breakdown đầu việc inline */}
-      {Object.keys(teamSummary).length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
-          {TEAM_GROUPS.map(team => {
-            const s = teamSummary[team] ?? { target: 0, actual: 0 };
-            const pct = s.target > 0 ? Math.round((s.actual / s.target) * 100) : 0;
-            const color = TEAM_COLORS[team];
-            const breakdown = teamTaskBreakdown[team] ?? [];
+      {/* Summary theo đầu việc (cross-team) */}
+      {taskTypeSummary.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(taskTypeSummary.length, 3)}, 1fr)`, gap: '12px', marginBottom: '20px' }}>
+          {taskTypeSummary.map(({ taskType, target, actual, teams, progress }) => {
+            // Dùng màu team đầu tiên, hoặc fallback
+            const mainColor = TEAM_COLORS[teams[0]] ?? '#3B82F6';
             return (
-              <div key={team} className="card" style={{
-                padding: '16px', borderLeft: `4px solid ${color}`,
+              <div key={taskType} className="card" style={{
+                padding: '16px', borderLeft: `4px solid ${mainColor}`,
               }}>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>{team}</div>
-                <div style={{ fontWeight: 800, fontSize: '1.4rem', color, marginTop: 4 }}>
-                  {s.actual.toLocaleString()} / {s.target.toLocaleString()} link
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                  <span>{taskType}</span>
+                </div>
+                <div style={{ fontWeight: 800, fontSize: '1.4rem', color: mainColor, marginTop: 4 }}>
+                  {actual.toLocaleString()} / {target.toLocaleString()} link
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem',
                               color: 'var(--text-tertiary)', marginTop: 4 }}>
                   <span>Tiến độ</span>
-                  <strong style={{ color: pct >= 100 ? 'var(--success)' : pct >= 70 ? color : 'var(--warning)' }}>
-                    {pct}%
+                  <strong style={{ color: progress >= 100 ? 'var(--success)' : progress >= 70 ? mainColor : 'var(--warning)' }}>
+                    {progress}%
                   </strong>
                 </div>
                 <div style={{ height: 5, background: 'var(--bg-secondary)', borderRadius: 3, marginTop: 4 }}>
-                  <div style={{ height: '100%', borderRadius: 3, background: color,
-                                width: `${Math.min(100, pct)}%` }} />
+                  <div style={{ height: '100%', borderRadius: 3, background: mainColor,
+                                width: `${Math.min(100, progress)}%` }} />
                 </div>
 
-                {/* Mini breakdown đầu việc */}
-                {breakdown.length > 0 && (
-                  <div style={{ marginTop: '10px', borderTop: '1px solid var(--border-light)', paddingTop: '8px' }}>
-                    {breakdown.map(b => {
-                      const bPct = b.target > 0 ? Math.round((b.actual / b.target) * 100) : 0;
-                      return (
-                        <div key={b.taskType} style={{ marginBottom: '6px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                            <span style={{ fontWeight: 600, maxWidth: '55%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {b.taskType}
-                            </span>
-                            <span>
-                              <strong style={{ color: 'var(--primary-600)' }}>{b.actual.toLocaleString()}</strong>
-                              <span style={{ color: 'var(--text-tertiary)' }}> / {b.target.toLocaleString()}</span>
-                              <strong style={{ marginLeft: 6,
-                                color: bPct >= 100 ? 'var(--success)' : bPct >= 50 ? color : 'var(--warning)'
-                              }}>{bPct}%</strong>
-                            </span>
-                          </div>
-                          <div style={{ height: 3, background: 'var(--bg-secondary)', borderRadius: 2, marginTop: 2 }}>
-                            <div style={{ height: '100%', borderRadius: 2,
-                              background: bPct >= 100 ? 'var(--success)' : bPct >= 50 ? color : 'var(--warning)',
-                              width: `${Math.min(100, bPct)}%` }} />
-                          </div>
-                        </div>
-                      );
-                    })}
+                {/* Team badges */}
+                {teams.length > 0 && (
+                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '8px' }}>
+                    {teams.map(t => (
+                      <span key={t} style={{
+                        background: `${TEAM_COLORS[t] ?? '#94A3B8'}15`,
+                        color: TEAM_COLORS[t] ?? '#94A3B8',
+                        padding: '1px 6px', borderRadius: 'var(--radius-full)',
+                        fontSize: '0.68rem', fontWeight: 600,
+                      }}>{t}</span>
+                    ))}
                   </div>
                 )}
               </div>
