@@ -33,9 +33,10 @@ export default function DailyWorkPage() {
     return me?.teamGroup ?? null;
   }, [currentUser, members]);
 
-  // Lọc team groups theo role
+  // Lọc team groups theo role (bỏ qua 'Tất cả team' ảo)
   const visibleTeams = useMemo(() => {
-    if (isManager) return TEAM_GROUPS;
+    const realTeams = TEAM_GROUPS.filter(t => t !== 'Tất cả team');
+    if (isManager) return realTeams;
     if (isLeader && myTeamGroup) return [myTeamGroup]; // Leader chỉ thấy team mình
     
     // Member: Thấy team chính + các team khác mà mình có đi hỗ trợ (có nộp link)
@@ -43,7 +44,7 @@ export default function DailyWorkPage() {
       const mySubs = submissions.filter(s => s.employeeName === currentUser?.name);
       const teamsWithSubs = new Set(mySubs.map(s => s.teamGroup));
       if (myTeamGroup) teamsWithSubs.add(myTeamGroup);
-      return TEAM_GROUPS.filter(t => teamsWithSubs.has(t));
+      return realTeams.filter(t => teamsWithSubs.has(t));
     }
     
     return []; // Fallback
@@ -359,7 +360,7 @@ export default function DailyWorkPage() {
       {/* 3 nhóm cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '14px' }}>
         {teamStats.map(s => {
-          const meta = TEAM_META[s.team];
+          const meta = TEAM_META[s.team] || { color: '#94A3B8', bg: '#f1f5f9', icon: Users };
           const Icon = meta.icon;
           const isExpanded = expanded.has(s.team);
           const status = s.target === 0
