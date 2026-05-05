@@ -1,16 +1,47 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAppStore } from '@/shared/store/appStore';
-import { Bell, RefreshCw, LogOut, ChevronDown, User as UserIcon, ShieldCheck } from 'lucide-react';
+import { Bell, RefreshCw, LogOut, ChevronDown, User as UserIcon, ShieldCheck, X, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+function fmtDate(d?: string) {
+  if (!d) return '';
+  const [y, m, day] = d.split('-');
+  return `${day}/${m}/${y}`;
+}
+
+const PRIORITY_META = {
+  high:   { label: 'Cao',     color: '#DC2626', bg: '#FEE2E2', icon: '🔴' },
+  medium: { label: 'Vừa',     color: '#D97706', bg: '#FEF3C7', icon: '🟡' },
+  low:    { label: 'Thấp',    color: '#059669', bg: '#D1FAE5', icon: '⚪' },
+};
+
+function isOverdue(dueDate?: string) {
+  if (!dueDate) return false;
+  return new Date(dueDate + 'T23:59:59') < new Date();
+}
 
 interface HeaderProps {
   title: string;
 }
 
 export default function Header({ title }: HeaderProps) {
-  const { sidebarCollapsed, isSyncing, currentUser, setCurrentUser, contents } = useAppStore();
-  const pendingCount = contents.filter(c => c.status === 'Chờ duyệt').length;
+  const { sidebarCollapsed, isSyncing, currentUser, setCurrentUser, contents, todos, updateTodo } = useAppStore();
+  const pendingCount = (currentUser?.role === 'Manager' || currentUser?.role === 'Leader') 
+    ? contents.filter(c => c.status === 'Chờ duyệt').length : 0;
+  
+  const assignedToMe = useMemo(() => {
+    if (!currentUser) return [];
+    return todos.filter(t =>
+      t.assigneeName === currentUser.name &&
+      t.ownerName !== currentUser.name &&
+      !t.acknowledged
+    );
+  }, [todos, currentUser]);
+
+  const totalNoti = pendingCount + assignedToMe.length;
+
   const [open, setOpen] = useState(false);
+  const [showNotifPopup, setShowNotifPopup] = useState(false);
 
   const getInitials = (name: string) => {
     return name.split(' ').slice(-2).map(w => w[0]).join('').toUpperCase();
@@ -44,9 +75,9 @@ export default function Header({ title }: HeaderProps) {
           )}
         </div>
 
-        <button className="notification-btn" title="Thông báo">
+        <button className="notification-btn" title="Thông báo" onClick={() => setShowNotifPopup(true)}>
           <Bell size={18} />
-          {pendingCount > 0 && <span className="badge">{pendingCount}</span>}
+          {totalNoti > 0 && <span className="badge">{totalNoti}</span>}
         </button>
 
         <div style={{ position: 'relative' }}>
@@ -110,6 +141,84 @@ export default function Header({ title }: HeaderProps) {
           )}
         </div>
       </div>
+
+      {/* Thông báo Popup */}
+      {showNotifPopup && (
+        <div className="modal-overlay" onClick={() => setShowNotifPopup(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Bell size={18} color="var(--primary-500)" />
+                Thông báo ({totalNoti})
+              </h3>
+              <button className="modal-close" onClick={() => setShowNotifPopup(false)}><X size={16} /></button>
+            </div>
+            <div className="modal-body" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {pendingCount > 0 && (
+                  <div style={{
+                    padding: '12px 14px', border: '1px solid var(--warning)',
+                    borderLeft: `4px solid var(--warning)`, borderRadius: 'var(--radius-md)',
+                    background: 'var(--bg-secondary)',
+                  }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.92rem', marginBottom: '4px' }}>Sản phẩm chờ duyệt</div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>Có {pendingCount} sản phẩm đang chờ duyệt. Vui lòng kiểm tra trang Sản phẩm.</div>
+                  </div>
+                )}
+                {totalNoti === 0 && (
+                   <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-tertiary)' }}>Bạn không có thông báo mới.</div>
+                )}
+                {assignedToMe.map(t => {
+                  const pm = PRIORITY_META[t.priority];
+                  const overdue = isOverdue(t.dueDate);
+                  return (
+                    <div key={t.id} style={{
+                      padding: '12px 14px',
+                      border: '1px solid var(--border-light)',
+                      borderLeft: `4px solid ${overdue ? 'var(--danger)' : pm.color}`,
+                      borderRadius: 'var(--radius-md)',
+                      background: 'var(--bg-secondary)',
+                    }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.92rem', marginBottom: '4px' }}>{t.title}</div>
+                      {t.description && (
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>{t.description}</div>
+                      )}
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', fontSize: '0.74rem' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>
+                          👤 Giao bởi: <strong>{t.ownerName}</strong>
+                        </span>
+                        <span style={{
+                          padding: '1px 8px', borderRadius: 'var(--radius-full)',
+                          background: pm.bg, color: pm.color, fontWeight: 600,
+                        }}>
+                          {pm.icon} {pm.label}
+                        </span>
+                        {t.dueDate && (
+                          <span style={{
+                            color: overdue ? 'var(--danger)' : 'var(--text-tertiary)',
+                            fontWeight: overdue ? 600 : 400,
+                          }}>
+                            <Clock size={11} style={{ verticalAlign: 'middle' }} />{' '}
+                            {overdue ? '⚠️ Quá hạn: ' : ''}{fmtDate(t.dueDate)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-primary" onClick={() => {
+                assignedToMe.forEach(t => {
+                  if (!t.acknowledged) updateTodo(t.id, { acknowledged: true });
+                });
+                setShowNotifPopup(false);
+              }}>Đã hiểu</button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

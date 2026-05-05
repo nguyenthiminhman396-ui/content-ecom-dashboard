@@ -1,8 +1,8 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { useAppStore } from '@/shared/store/appStore';
 import {
   CheckSquare, Plus, Trash2, X, Save, AlertTriangle,
-  ChevronDown, ChevronUp, Clock, Flag, Edit3, UserPlus, Bell
+  ChevronDown, ChevronUp, Clock, Flag, Edit3, UserPlus
 } from 'lucide-react';
 import type { TodoItem, TodoPriority } from '@/shared/types';
 import toast from 'react-hot-toast';
@@ -33,10 +33,6 @@ export default function TodoPage() {
   const [editItem, setEditItem] = useState<TodoItem | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [filterPriority, setFilterPriority] = useState<TodoPriority | ''>('');
-  // ── Notification popup for assigned tasks ──
-  const [assignedNotifications, setAssignedNotifications] = useState<TodoItem[]>([]);
-  const [showNotifPopup, setShowNotifPopup] = useState(false);
-
   // Chỉ hiện checklist của mình + được assign cho mình
   const myTodos = useMemo(() => {
     if (!currentUser) return [];
@@ -47,23 +43,6 @@ export default function TodoPage() {
     if (filterPriority) list = list.filter(t => t.priority === filterPriority);
     return list;
   }, [todos, currentUser, filterPriority]);
-
-  // Tasks assigned to me by others (for notification)
-  const assignedToMe = useMemo(() => {
-    if (!currentUser) return [];
-    return todos.filter(t =>
-      t.assigneeName === currentUser.name &&
-      t.ownerName !== currentUser.name &&
-      !t.acknowledged
-    );
-  }, [todos, currentUser]);
-
-  // Show notification popup when there are newly assigned tasks
-  useEffect(() => {
-    if (assignedToMe.length > 0) {
-      setAssignedNotifications(assignedToMe);
-    }
-  }, [assignedToMe]);
 
   const pending = myTodos.filter(t => !t.completed);
   const completed = myTodos.filter(t => t.completed);
@@ -122,23 +101,7 @@ export default function TodoPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          {/* Notification bell for assigned tasks */}
-          {assignedToMe.length > 0 && (
-            <button
-              className="btn btn-secondary"
-              onClick={() => setShowNotifPopup(true)}
-              style={{ position: 'relative' }}
-            >
-              <Bell size={16} />
-              <span style={{
-                position: 'absolute', top: -4, right: -4,
-                background: 'var(--danger)', color: '#fff',
-                borderRadius: '50%', width: 18, height: 18,
-                fontSize: '0.68rem', fontWeight: 800,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>{assignedToMe.length}</span>
-            </button>
-          )}
+          {/* Notification bell removed - moved to Header */}
           <button className="btn btn-primary" onClick={() => { setEditItem(null); setShowForm(true); }}>
             <Plus size={16} /> Thêm việc
           </button>
@@ -259,70 +222,7 @@ export default function TodoPage() {
         />
       )}
 
-      {/* Notification popup for assigned tasks */}
-      {showNotifPopup && assignedNotifications.length > 0 && (
-        <div className="modal-overlay" onClick={() => setShowNotifPopup(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
-            <div className="modal-header">
-              <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Bell size={18} color="var(--primary-500)" />
-                Công việc được giao ({assignedNotifications.length})
-              </h3>
-              <button className="modal-close" onClick={() => setShowNotifPopup(false)}><X size={16} /></button>
-            </div>
-            <div className="modal-body" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {assignedNotifications.map(t => {
-                  const pm = PRIORITY_META[t.priority];
-                  const overdue = isOverdue(t.dueDate);
-                  return (
-                    <div key={t.id} style={{
-                      padding: '12px 14px',
-                      border: '1px solid var(--border-light)',
-                      borderLeft: `4px solid ${overdue ? 'var(--danger)' : pm.color}`,
-                      borderRadius: 'var(--radius-md)',
-                      background: 'var(--bg-secondary)',
-                    }}>
-                      <div style={{ fontWeight: 700, fontSize: '0.92rem', marginBottom: '4px' }}>{t.title}</div>
-                      {t.description && (
-                        <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>{t.description}</div>
-                      )}
-                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', fontSize: '0.74rem' }}>
-                        <span style={{ color: 'var(--text-secondary)' }}>
-                          👤 Giao bởi: <strong>{t.ownerName}</strong>
-                        </span>
-                        <span style={{
-                          padding: '1px 8px', borderRadius: 'var(--radius-full)',
-                          background: pm.bg, color: pm.color, fontWeight: 600,
-                        }}>
-                          {pm.icon} {pm.label}
-                        </span>
-                        {t.dueDate && (
-                          <span style={{
-                            color: overdue ? 'var(--danger)' : 'var(--text-tertiary)',
-                            fontWeight: overdue ? 600 : 400,
-                          }}>
-                            <Clock size={11} style={{ verticalAlign: 'middle' }} />{' '}
-                            {overdue ? '⚠️ Quá hạn: ' : ''}{fmtDate(t.dueDate)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-primary" onClick={() => {
-                assignedNotifications.forEach(t => {
-                  if (!t.acknowledged) updateTodo(t.id, { acknowledged: true });
-                });
-                setShowNotifPopup(false);
-              }}>Đã hiểu</button>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }
