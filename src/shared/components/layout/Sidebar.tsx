@@ -50,10 +50,8 @@ export default function Sidebar() {
   const overdueTodoCount = currentUser
     ? todos.filter(t => {
         const isMine = t.ownerName === currentUser.name || t.assigneeName === currentUser.name;
-        if (!isMine) return false;
-        const isOverdue = !t.completed && t.dueDate && new Date(t.dueDate + 'T23:59:59') < new Date();
-        const isUnacknowledged = t.assigneeName === currentUser.name && t.ownerName !== currentUser.name && !t.acknowledged;
-        return isOverdue || isUnacknowledged;
+        if (!isMine || t.completed || !t.dueDate) return false;
+        return new Date(t.dueDate + 'T23:59:59') < new Date();
       }).length
     : 0;
 

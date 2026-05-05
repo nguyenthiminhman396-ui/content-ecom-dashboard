@@ -1015,27 +1015,25 @@ class GoogleSheetsService {
   // ── Todo CRUD for Google Sheets ────────────────────────────────────────────
   todoToRow(t: TodoItem): string[] {
     return [
-      t.id, t.ownerName, t.assigneeName ?? '', t.title,
+      t.id, t.ownerName, t.title,
       t.description ?? '', t.dueDate ?? '',
       t.priority, String(t.completed),
-      t.completedAt ?? '', t.createdAt, String(!!t.acknowledged),
+      t.completedAt ?? '', t.createdAt,
     ];
   }
 
   parseTodos(rows: string[][]): TodoItem[] {
     if (rows.length < 2) return [];
     return rows.slice(1).filter(r => r[0]).map(r => ({
-      id:           r[0],
-      ownerName:    r[1] ?? '',
-      assigneeName: r[2] ?? '',
-      title:        r[3] ?? '',
-      description:  r[4] || undefined,
-      dueDate:      r[5] || undefined,
-      priority:     (r[6] || 'medium') as TodoPriority,
-      completed:    r[7] === 'true',
-      completedAt:  r[8] || undefined,
-      createdAt:    r[9] || new Date().toISOString(),
-      acknowledged: r[10] === 'true',
+      id:          r[0],
+      ownerName:   r[1] ?? '',
+      title:       r[2] ?? '',
+      description: r[3] || undefined,
+      dueDate:     r[4] || undefined,
+      priority:    (r[5] || 'medium') as TodoPriority,
+      completed:   r[6] === 'true',
+      completedAt: r[7] || undefined,
+      createdAt:   r[8] || new Date().toISOString(),
     }));
   }
 

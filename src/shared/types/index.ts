@@ -537,7 +537,7 @@ export const SHEET_HEADERS = {
   PROJ_TASKS: ['id','projectId','name','trackingMode','taskType','taskDetail','targetLinks','targetQuantity','assignees','deadline','notes'],
   BONUS:    ['id','employeeName','amount','reason','projectId','period','awardedAt','awardedBy',
              'status','approvedBy','approvedAt','rejectionNote'],
-  TODOS:    ['id','ownerName','assigneeName','title','description','dueDate','priority','completed','completedAt','createdAt','acknowledged'],
+  TODOS:    ['id','ownerName','assigneeName','title','description','dueDate','priority','completed','completedAt','createdAt'],
 } as const;
 
 // ============================================
