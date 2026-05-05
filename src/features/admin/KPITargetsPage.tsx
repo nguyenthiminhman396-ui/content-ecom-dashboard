@@ -93,35 +93,63 @@ export default function KPITargetsPage() {
     });
   }, [periodTargets, submissions, period]);
 
-  // Tổng theo đầu việc (cross-team) — mỗi block = 1 đầu việc + chi tiết từng team
+  // Tổng theo đầu việc (cross-team) — không tính trùng Tổng nhóm + cá nhân
   const taskTypeSummary = useMemo(() => {
-    const m: Record<string, {
-      target: number; actual: number; teams: Set<string>;
-      perTeam: Record<string, { target: number; actual: number }>;
-    }> = {};
+    // Bước 1: Gom theo team + taskType, tách "Tổng nhóm" vs "Cá nhân"
+    const grouped: Record<string, Record<string, {
+      teamTarget: number; teamActual: number;
+      individualTarget: number; individualActual: number;
+    }>> = {};
+
     targetsWithActual.forEach(({ target, actualLinks }) => {
-      const key = target.taskType || '(Tất cả đầu việc)';
-      if (!m[key]) m[key] = { target: 0, actual: 0, teams: new Set(), perTeam: {} };
-      m[key].target += target.targetLinks;
-      m[key].actual += actualLinks;
-      m[key].teams.add(target.teamGroup);
-      // Per-team breakdown
-      if (!m[key].perTeam[target.teamGroup]) m[key].perTeam[target.teamGroup] = { target: 0, actual: 0 };
-      m[key].perTeam[target.teamGroup].target += target.targetLinks;
-      m[key].perTeam[target.teamGroup].actual += actualLinks;
+      const taskKey = target.taskType || '(Tất cả đầu việc)';
+      const team = target.teamGroup;
+      if (!grouped[taskKey]) grouped[taskKey] = {};
+      if (!grouped[taskKey][team]) grouped[taskKey][team] = {
+        teamTarget: 0, teamActual: 0, individualTarget: 0, individualActual: 0
+      };
+      if (target.employeeName) {
+        // Target cá nhân
+        grouped[taskKey][team].individualTarget += target.targetLinks;
+        grouped[taskKey][team].individualActual += actualLinks;
+      } else {
+        // Target tổng nhóm
+        grouped[taskKey][team].teamTarget += target.targetLinks;
+        grouped[taskKey][team].teamActual += actualLinks;
+      }
     });
-    return Object.entries(m)
-      .map(([taskType, data]) => ({
-        taskType,
-        target: data.target,
-        actual: data.actual,
-        teams: Array.from(data.teams),
-        progress: data.target > 0 ? Math.round((data.actual / data.target) * 100) : 0,
-        perTeam: Object.entries(data.perTeam)
-          .map(([team, d]) => ({ team, target: d.target, actual: d.actual,
-            progress: d.target > 0 ? Math.round((d.actual / d.target) * 100) : 0 }))
-          .sort((a, b) => b.target - a.target),
-      }))
+
+    // Bước 2: Cho mỗi team+taskType → chọn cá nhân (ưu tiên), fallback tổng nhóm
+    return Object.entries(grouped)
+      .map(([taskType, teams]) => {
+        let totalTarget = 0;
+        let totalActual = 0;
+        const teamList: string[] = [];
+        const perTeam: { team: string; target: number; actual: number; progress: number }[] = [];
+
+        for (const [team, d] of Object.entries(teams)) {
+          teamList.push(team);
+          // Ưu tiên cá nhân, nếu chưa phân thì lấy tổng nhóm
+          const t = d.individualTarget > 0 ? d.individualTarget : d.teamTarget;
+          const a = d.individualTarget > 0 ? d.individualActual : d.teamActual;
+          totalTarget += t;
+          totalActual += a;
+          perTeam.push({
+            team, target: t, actual: a,
+            progress: t > 0 ? Math.round((a / t) * 100) : 0,
+          });
+        }
+        perTeam.sort((a, b) => b.target - a.target);
+
+        return {
+          taskType,
+          target: totalTarget,
+          actual: totalActual,
+          teams: teamList,
+          progress: totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : 0,
+          perTeam,
+        };
+      })
       .sort((a, b) => b.target - a.target);
   }, [targetsWithActual]);
 
