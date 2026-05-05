@@ -88,10 +88,163 @@ export default function Header({ title }: HeaderProps) {
           )}
         </div>
 
-        <button className="notification-btn" title="Thông báo" onClick={() => setShowNotifPopup(true)}>
-          <Bell size={18} />
-          {totalNoti > 0 && <span className="badge">{totalNoti}</span>}
-        </button>
+        <div style={{ position: 'relative' }}>
+          <button className="notification-btn" title="Thông báo" onClick={() => setShowNotifPopup(p => !p)}>
+            <Bell size={18} />
+            {totalNoti > 0 && <span className="badge">{totalNoti}</span>}
+          </button>
+
+          {/* ── Notification Dropdown ──────────────────────────────── */}
+          {showNotifPopup && (
+            <>
+              {/* Backdrop ẩn để bấm ra ngoài đóng popup */}
+              <div onClick={() => setShowNotifPopup(false)}
+                style={{ position: 'fixed', inset: 0, zIndex: 90 }} />
+
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 100,
+                width: '380px', maxHeight: '480px',
+                background: 'var(--bg-card)', border: '1px solid var(--border-light)',
+                borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-lg)',
+                display: 'flex', flexDirection: 'column',
+                overflow: 'hidden',
+              }}>
+                {/* Header */}
+                <div style={{
+                  padding: '12px 16px', borderBottom: '1px solid var(--border-light)',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Bell size={15} color="var(--primary-500)" />
+                    Thông báo {totalNoti > 0 && <span style={{
+                      fontSize: '0.68rem', background: 'var(--danger)', color: '#fff',
+                      borderRadius: '50%', width: 18, height: 18,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800,
+                    }}>{totalNoti}</span>}
+                  </span>
+                  <button onClick={() => setShowNotifPopup(false)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: 'var(--text-tertiary)' }}>
+                    <X size={14} />
+                  </button>
+                </div>
+
+                {/* Body */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px' }}>
+                  {totalNoti === 0 && (
+                    <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                      <CheckCircle size={30} style={{ opacity: 0.3, marginBottom: 6 }} />
+                      <div style={{ fontSize: '0.85rem' }}>Không có thông báo mới</div>
+                    </div>
+                  )}
+
+                  {/* ── Nhóm 1: Được phân công ──────────────── */}
+                  {assignedToMe.length > 0 && (
+                    <div style={{ marginBottom: '12px' }}>
+                      <div style={{
+                        fontSize: '0.7rem', fontWeight: 700, color: 'var(--primary-600)',
+                        textTransform: 'uppercase', letterSpacing: '0.04em',
+                        marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '5px',
+                      }}>
+                        <UserIcon size={11} /> Được phân công ({assignedToMe.length})
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {assignedToMe.map(t => {
+                          const overdue = isOverdue(t.dueDate);
+                          return (
+                            <div key={t.id} style={{
+                              padding: '8px 10px',
+                              borderLeft: '3px solid var(--primary-500)',
+                              borderRadius: 'var(--radius-sm)',
+                              background: 'var(--bg-secondary)',
+                            }}>
+                              <div style={{ fontWeight: 700, fontSize: '0.82rem', marginBottom: '2px' }}>{t.title}</div>
+                              {t.description && (
+                                <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginBottom: '3px',
+                                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.description}</div>
+                              )}
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '0.68rem', color: 'var(--text-tertiary)' }}>
+                                <span>👤 {t.ownerName}</span>
+                                {t.dueDate && (
+                                  <span style={{ color: overdue ? 'var(--danger)' : undefined, fontWeight: overdue ? 600 : 400 }}>
+                                    <Clock size={10} style={{ verticalAlign: 'middle' }} /> {overdue ? '⚠️ ' : ''}{fmtDate(t.dueDate)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Nhóm 2: Nhắc nhở deadline ─────────────── */}
+                  {deadlineReminders.length > 0 && (
+                    <div>
+                      <div style={{
+                        fontSize: '0.7rem', fontWeight: 700, color: 'var(--warning)',
+                        textTransform: 'uppercase', letterSpacing: '0.04em',
+                        marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '5px',
+                      }}>
+                        <AlertTriangle size={11} /> Nhắc nhở deadline ({deadlineReminders.length})
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {deadlineReminders.map(t => {
+                          const overdue = isOverdue(t.dueDate);
+                          const borderColor = overdue ? 'var(--danger)' : 'var(--warning)';
+                          return (
+                            <div key={t.id} style={{
+                              padding: '8px 10px',
+                              borderLeft: `3px solid ${borderColor}`,
+                              borderRadius: 'var(--radius-sm)',
+                              background: 'var(--bg-secondary)',
+                            }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ fontWeight: 700, fontSize: '0.82rem' }}>{t.title}</div>
+                                <span style={{
+                                  fontSize: '0.64rem', fontWeight: 700, padding: '1px 6px',
+                                  borderRadius: 'var(--radius-full)',
+                                  background: overdue ? '#FEE2E2' : '#FEF3C7',
+                                  color: overdue ? '#DC2626' : '#D97706',
+                                  whiteSpace: 'nowrap',
+                                }}>
+                                  {overdue ? 'Quá hạn' : 'Sắp hạn'}
+                                </span>
+                              </div>
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '0.68rem', marginTop: '3px', color: 'var(--text-tertiary)' }}>
+                                <span style={{ color: overdue ? 'var(--danger)' : undefined, fontWeight: 600 }}>
+                                  <Clock size={10} style={{ verticalAlign: 'middle' }} /> {fmtDate(t.dueDate)}
+                                </span>
+                                {t.assigneeName && t.ownerName !== currentUser?.name && (
+                                  <span>👤 {t.ownerName}</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                {assignedToMe.length > 0 && (
+                  <div style={{
+                    padding: '10px 12px', borderTop: '1px solid var(--border-light)',
+                    display: 'flex', justifyContent: 'flex-end',
+                  }}>
+                    <button className="btn btn-primary" style={{ fontSize: '0.82rem', padding: '6px 14px' }} onClick={() => {
+                      assignedToMe.forEach(t => {
+                        if (!t.acknowledged) updateTodo(t.id, { acknowledged: true });
+                      });
+                      setShowNotifPopup(false);
+                      toast.success(`Đã xác nhận ${assignedToMe.length} công việc`);
+                    }}>✅ Đã hiểu ({assignedToMe.length})</button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
 
         <div style={{ position: 'relative' }}>
           <button
@@ -154,143 +307,6 @@ export default function Header({ title }: HeaderProps) {
           )}
         </div>
       </div>
-
-      {/* ── Notification Popup ───────────────────────────────────────── */}
-      {showNotifPopup && (
-        <div className="modal-overlay" onClick={() => setShowNotifPopup(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '540px' }}>
-            <div className="modal-header">
-              <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Bell size={18} color="var(--primary-500)" />
-                Thông báo {totalNoti > 0 && `(${totalNoti})`}
-              </h3>
-              <button className="modal-close" onClick={() => setShowNotifPopup(false)}><X size={16} /></button>
-            </div>
-            <div className="modal-body" style={{ maxHeight: '460px', overflowY: 'auto' }}>
-              {totalNoti === 0 && (
-                <div style={{ padding: '30px 20px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
-                  <CheckCircle size={36} style={{ opacity: 0.3, marginBottom: 8 }} />
-                  <div>Bạn không có thông báo mới.</div>
-                </div>
-              )}
-
-              {/* ── Nhóm 1: Được phân công ──────────────────────────── */}
-              {assignedToMe.length > 0 && (
-                <div style={{ marginBottom: '16px' }}>
-                  <div style={{
-                    fontSize: '0.74rem', fontWeight: 700, color: 'var(--primary-600)',
-                    textTransform: 'uppercase', letterSpacing: '0.05em',
-                    marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px',
-                  }}>
-                    <UserIcon size={13} /> Được phân công ({assignedToMe.length})
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {assignedToMe.map(t => {
-                      const overdue = isOverdue(t.dueDate);
-                      return (
-                        <div key={t.id} style={{
-                          padding: '10px 12px',
-                          border: '1px solid var(--border-light)',
-                          borderLeft: `4px solid var(--primary-500)`,
-                          borderRadius: 'var(--radius-md)',
-                          background: 'var(--bg-secondary)',
-                        }}>
-                          <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: '3px' }}>{t.title}</div>
-                          {t.description && (
-                            <div style={{ fontSize: '0.76rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>{t.description}</div>
-                          )}
-                          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', fontSize: '0.72rem' }}>
-                            <span style={{ color: 'var(--text-secondary)' }}>
-                              👤 Giao bởi: <strong>{t.ownerName}</strong>
-                            </span>
-                            {t.dueDate && (
-                              <span style={{
-                                color: overdue ? 'var(--danger)' : 'var(--text-tertiary)',
-                                fontWeight: overdue ? 600 : 400,
-                              }}>
-                                <Clock size={11} style={{ verticalAlign: 'middle' }} />{' '}
-                                {overdue ? '⚠️ Quá hạn: ' : '📅 '}{fmtDate(t.dueDate)}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* ── Nhóm 2: Nhắc nhở deadline ──────────────────────── */}
-              {deadlineReminders.length > 0 && (
-                <div>
-                  <div style={{
-                    fontSize: '0.74rem', fontWeight: 700, color: 'var(--warning)',
-                    textTransform: 'uppercase', letterSpacing: '0.05em',
-                    marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px',
-                  }}>
-                    <AlertTriangle size={13} /> Nhắc nhở deadline ({deadlineReminders.length})
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {deadlineReminders.map(t => {
-                      const overdue = isOverdue(t.dueDate);
-                      const dueSoon = isDueSoon(t.dueDate);
-                      const borderColor = overdue ? 'var(--danger)' : 'var(--warning)';
-                      return (
-                        <div key={t.id} style={{
-                          padding: '10px 12px',
-                          border: '1px solid var(--border-light)',
-                          borderLeft: `4px solid ${borderColor}`,
-                          borderRadius: 'var(--radius-md)',
-                          background: 'var(--bg-secondary)',
-                        }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>{t.title}</div>
-                            <span style={{
-                              fontSize: '0.68rem', fontWeight: 700, padding: '1px 8px',
-                              borderRadius: 'var(--radius-full)',
-                              background: overdue ? '#FEE2E2' : '#FEF3C7',
-                              color: overdue ? '#DC2626' : '#D97706',
-                              whiteSpace: 'nowrap', marginLeft: '8px',
-                            }}>
-                              {overdue ? '⚠️ Quá hạn' : dueSoon ? '⏰ Sắp hạn' : ''}
-                            </span>
-                          </div>
-                          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', fontSize: '0.72rem', marginTop: '4px' }}>
-                            <span style={{ color: overdue ? 'var(--danger)' : 'var(--text-tertiary)', fontWeight: 600 }}>
-                              <Clock size={11} style={{ verticalAlign: 'middle' }} />{' '}
-                              Hạn: {fmtDate(t.dueDate)}
-                            </span>
-                            {t.assigneeName && t.ownerName !== currentUser?.name && (
-                              <span style={{ color: 'var(--text-tertiary)' }}>
-                                👤 Giao bởi: {t.ownerName}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="modal-footer" style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              {assignedToMe.length > 0 && (
-                <button className="btn btn-primary" onClick={() => {
-                  assignedToMe.forEach(t => {
-                    if (!t.acknowledged) updateTodo(t.id, { acknowledged: true });
-                  });
-                  setShowNotifPopup(false);
-                  toast.success(`Đã xác nhận ${assignedToMe.length} công việc`);
-                }}>✅ Đã hiểu ({assignedToMe.length})</button>
-              )}
-              {assignedToMe.length === 0 && (
-                <button className="btn btn-secondary" onClick={() => setShowNotifPopup(false)}>Đóng</button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </header>
   );
 }
