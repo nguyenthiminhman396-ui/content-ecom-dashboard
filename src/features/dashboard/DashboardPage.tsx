@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useAppStore } from '@/shared/store/appStore';
 import {
   TrendingUp, TrendingDown, Minus, Trophy, Link2, Users,
-  FolderKanban, Sparkles, Target, Calendar, X, BarChart3 as BarChart3Icon, Download
+  FolderKanban, Sparkles, Target, Calendar, X, BarChart3 as BarChart3Icon, Download, ShieldCheck
 } from 'lucide-react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement,
@@ -479,12 +479,25 @@ export default function DashboardPage() {
           text: `Số nhân viên hoạt động ${empPct >= 0 ? 'tăng' : 'giảm'} ${Math.abs(empPct)}% (${stats.now.employees} vs ${stats.prev.employees}).`,
         });
       }
-      // Target
-      const target = scaleConfig.memberTargetPoints * Math.max(stats.now.employees, 1);
+      // Target — tính đúng hệ số leader
+      const empCount = Math.max(stats.now.employees, 1);
+      let target = scaleConfig.memberTargetPoints * empCount;
+      if (currentUser?.role === 'Leader' && !filterEmployee) {
+        const me = members.find(m => m.name === currentUser.name);
+        const myTeam = me?.teamGroup;
+        const teamMembers = myTeam ? members.filter(m => m.teamGroup === myTeam) : [];
+        const leaderCount = teamMembers.filter(m => m.kpiRole === 'leader').length;
+        const memberCount = empCount - leaderCount;
+        target = (memberCount * scaleConfig.memberTargetPoints) + 
+                 (leaderCount * scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight);
+      }
+      const leaderTarget = Math.round(scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight);
       const achievement = (stats.now.points / target) * 100;
       lines.push({
         tone: achievement >= 90 ? 'good' : achievement >= 70 ? 'neutral' : 'bad',
-        text: `Đạt ${achievement.toFixed(0)}% mục tiêu tháng (target/người ${scaleConfig.memberTargetPoints}đ).`,
+        text: currentUser?.role === 'Leader'
+          ? `Đạt ${achievement.toFixed(0)}% mục tiêu sản xuất (Leader target: ${leaderTarget}đ, hệ số ${Math.round(scaleConfig.leaderProductionWeight*100)}%).`
+          : `Đạt ${achievement.toFixed(0)}% mục tiêu tháng (target/người ${scaleConfig.memberTargetPoints}đ).`,
       });
       // Bonus
       if (stats.bonusNow !== 0) {
@@ -576,18 +589,74 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats cards — hiển thị cho tất cả roles */}
-      <div className="stats-grid" style={{ marginBottom: '20px' }}>
-        <CompareCard icon={<Target size={18} />} label="% Target hoàn thành"
-          now={Math.round((stats.now.points / Math.max(scaleConfig.memberTargetPoints * Math.max(stats.now.employees, 1), 1)) * 100)}
-          prev={Math.round((stats.prev.points / Math.max(scaleConfig.memberTargetPoints * Math.max(stats.prev.employees, 1), 1)) * 100)}
-          color="var(--success)" suffix="%" />
-        <CompareCard icon={<Trophy size={18} />} label="Điểm"
-          now={Math.round(stats.now.points * 10) / 10} prev={Math.round(stats.prev.points * 10) / 10} color="var(--accent-500)" suffix="đ" />
-        <CompareCard icon={<Calendar size={18} />} label="Thời gian"
-          now={Math.round(stats.now.time * 10) / 10} prev={Math.round(stats.prev.time * 10) / 10} color="#7a9af6" suffix="h" />
-        <CompareCard icon={<Link2 size={18} />} label="Tổng link"
-          now={stats.now.links} prev={stats.prev.links} color="var(--primary-500)" />
-      </div>
+      {(() => {
+        // Tính target có tính đến hệ số Leader
+        const calcTarget = (empCount: number) => {
+          if (!currentUser) return scaleConfig.memberTargetPoints;
+          const isLeaderSelf = currentUser.role === 'Leader' && !filterEmployee;
+          const isFilteredLeader = filterEmployee && members.find(m => m.name === filterEmployee)?.kpiRole === 'leader';
+          
+          if (isLeaderSelf) {
+            // Leader xem team: mỗi member = full target, leader bản thân = 60%
+            const me = members.find(m => m.name === currentUser.name);
+            const myTeam = me?.teamGroup;
+            const teamMembers = myTeam ? members.filter(m => m.teamGroup === myTeam) : [];
+            const leaderCount = teamMembers.filter(m => m.kpiRole === 'leader').length;
+            const memberCount = empCount - leaderCount;
+            return (memberCount * scaleConfig.memberTargetPoints) + 
+                   (leaderCount * scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight);
+          }
+          if (isFilteredLeader) {
+            return scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight;
+          }
+          return scaleConfig.memberTargetPoints * empCount;
+        };
+
+        const targetNow  = calcTarget(Math.max(stats.now.employees, 1));
+        const targetPrev = calcTarget(Math.max(stats.prev.employees, 1));
+
+        // Leader management time info
+        const isLeaderRole = currentUser?.role === 'Leader';
+        const mgmtWeight = 1 - scaleConfig.leaderProductionWeight;
+        const mgmtHours = Math.round(scaleConfig.standardHoursPerMonth * mgmtWeight * 10) / 10;
+
+        return (
+          <>
+            <div className="stats-grid" style={{ marginBottom: '20px' }}>
+              <CompareCard icon={<Target size={18} />} label="% Target sản xuất"
+                now={Math.round((stats.now.points / Math.max(targetNow, 1)) * 100)}
+                prev={Math.round((stats.prev.points / Math.max(targetPrev, 1)) * 100)}
+                color="var(--success)" suffix="%" />
+              <CompareCard icon={<Trophy size={18} />} label="Điểm"
+                now={Math.round(stats.now.points * 10) / 10} prev={Math.round(stats.prev.points * 10) / 10} color="var(--accent-500)" suffix="đ" />
+              <CompareCard icon={<Calendar size={18} />} label="Thời gian sản xuất"
+                now={Math.round(stats.now.time * 10) / 10} prev={Math.round(stats.prev.time * 10) / 10} color="#7a9af6" suffix="h" />
+              <CompareCard icon={<Link2 size={18} />} label="Tổng link"
+                now={stats.now.links} prev={stats.prev.links} color="var(--primary-500)" />
+            </div>
+
+            {/* Leader: card bổ sung thời gian quản lý */}
+            {isLeaderRole && !filterEmployee && (
+              <div className="card" style={{ 
+                padding: '14px 18px', marginBottom: '20px',
+                background: 'linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%)',
+                border: '1px solid #C7D2FE',
+                display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <ShieldCheck size={18} color="#4F46E5" />
+                  <span style={{ fontWeight: 700, fontSize: '0.92rem', color: '#312E81' }}>Hệ số Leader</span>
+                </div>
+                <div style={{ display: 'flex', gap: '16px', fontSize: '0.82rem', color: '#3730A3' }}>
+                  <span>📊 Sản xuất: <strong>{Math.round(scaleConfig.leaderProductionWeight * 100)}%</strong> ({Math.round(scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight)}đ target)</span>
+                  <span>📋 Quản lý: <strong>{Math.round(mgmtWeight * 100)}%</strong> (~{mgmtHours}h/tháng)</span>
+                  <span>⏱️ Tổng: <strong>{scaleConfig.standardHoursPerMonth}h/tháng</strong></span>
+                </div>
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* Auto evaluation card */}
       <div className="card" style={{ padding: '18px', marginBottom: '20px',

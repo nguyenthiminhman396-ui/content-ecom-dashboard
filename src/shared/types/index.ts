@@ -232,10 +232,10 @@ export const KPI_CONFIG = {
   standardHoursPerMonth: 176,
   /** Target điểm/tháng cho Member (176h × 1.5 = 264 điểm) */
   memberTargetPoints: 264,
-  /** Leader: 40% sản xuất, 60% quản lý → target sản xuất = 264 × 0.4 = 105.6 */
-  leaderProductionWeight: 0.40,
-  leaderManagementWeight: 0.60,
-  leaderProductionTarget: 105.6,
+  /** Leader: 60% sản xuất, 40% quản lý → target sản xuất = 264 × 0.6 = 158.4 */
+  leaderProductionWeight: 0.60,
+  leaderManagementWeight: 0.40,
+  leaderProductionTarget: 158.4,
   /** Hệ số quy đổi: 1 giờ làm việc = pointPerHour điểm */
   pointPerHour: 1.5,
 } as const;
@@ -267,7 +267,7 @@ export const DEFAULT_KPI_SCALE_CONFIG: KPIScaleConfig = {
   pointPerHour: 1.5,
   standardHoursPerMonth: 176,
   memberTargetPoints: 264,
-  leaderProductionWeight: 0.40,
+  leaderProductionWeight: 0.60,
   weights: {
     productivity: 0.40,
     quality:      0.20,
