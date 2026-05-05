@@ -632,19 +632,16 @@ export default function DashboardPage() {
           : false;
         const isLeaderPersonal = currentUser?.role === 'Leader' && !filterEmployee;
 
-        // Tính số ngày làm việc (T2–T6) trong range
+        // Số ngày làm việc: lấy từ config, prorate cho range ngắn hơn 1 tháng
         const calcWorkingDays = () => {
-          if (!dateFrom || !dateTo) return daysInMonth;
+          if (!dateFrom || !dateTo) return daysInMonth; // full month = config
           const from = new Date(dateFrom);
           const to = new Date(dateTo);
-          let wd = 0;
-          const d = new Date(from);
-          while (d <= to) {
-            const dow = d.getDay();
-            if (dow !== 0 && dow !== 6) wd++;
-            d.setDate(d.getDate() + 1);
-          }
-          return wd;
+          const calendarDaysInRange = Math.max(1, Math.ceil((to.getTime() - from.getTime()) / 86400000) + 1);
+          // Lấy số ngày trong tháng (calendar) để tính tỉ lệ
+          const monthDays = new Date(from.getFullYear(), from.getMonth() + 1, 0).getDate();
+          // Prorate: config days × (range / month)
+          return Math.round(daysInMonth * (calendarDaysInRange / monthDays) * 10) / 10;
         };
         const workingDays = calcWorkingDays();
         const mgmtHoursPerLeader = Math.round(workingDays * mgmtPerDay * 10) / 10;
