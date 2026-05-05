@@ -20,7 +20,7 @@ export default function ProjectDetailPage() {
   const {
     projects, clients, members, expenses, submissions, projectTasks,
     addProjectTask, updateProjectTask, deleteProjectTask,
-    addExpense, updateExpense, deleteExpense, currentUser,
+    addExpense, updateExpense, deleteExpense, currentUser, addTodo,
   } = useAppStore();
 
   const project = projects.find(p => p.id === id);
@@ -30,6 +30,25 @@ export default function ProjectDetailPage() {
 
   const isManager = currentUser?.role === 'Manager';
   const isManagerOrLeader = isManager || currentUser?.role === 'Leader';
+
+  // Tạo thông báo (todo) cho assignees khi phân công
+  const notifyAssignees = (taskName: string, assignees: string[], deadline?: string) => {
+    if (!currentUser || !project) return;
+    assignees.forEach(name => {
+      if (name === currentUser.name) return; // không tự thông báo
+      addTodo({
+        id: `todo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`,
+        ownerName: name,
+        assigneeName: name,
+        title: `📌 Được phân công: ${taskName}`,
+        description: `Bạn được phân công task "${taskName}" trong dự án "${project.name}" bởi ${currentUser.name}.`,
+        dueDate: deadline || '',
+        priority: 'medium',
+        completed: false,
+        createdAt: new Date().toISOString(),
+      });
+    });
+  };
 
   if (!project) {
     return (
@@ -58,7 +77,7 @@ export default function ProjectDetailPage() {
         // Match theo taskType + taskDetail
         if (t.taskType && s.taskType !== t.taskType) return false;
         if (t.taskDetail && s.taskDetail !== t.taskDetail) return false;
-        if (t.assignee && s.employeeName !== t.assignee) return false;
+        if (t.assignees && t.assignees.length > 0 && !t.assignees.includes(s.employeeName)) return false;
         return !!t.taskType || !!t.taskDetail;
       });
       const links = matched.reduce((sum, s) => sum + s.links.length, 0);
@@ -231,9 +250,9 @@ export default function ProjectDetailPage() {
                         <span style={{ fontSize: '0.72rem', background: 'var(--accent-100)', color: 'var(--primary-700)',
                                        padding: '1px 8px', borderRadius: 4 }}>{task.taskDetail}</span>
                       )}
-                      {task.assignee && (
+                      {task.assignees && task.assignees.length > 0 && (
                         <span style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>
-                          👤 {task.assignee}
+                          👤 {task.assignees.join(', ')}
                         </span>
                       )}
                       {task.deadline && (
@@ -391,12 +410,25 @@ export default function ProjectDetailPage() {
           members={members.map(m => m.name)}
           onClose={() => setTaskForm({ open: false, item: null })}
           onSave={(data) => {
+            const newAssignees = data.assignees ?? [];
             if (taskForm.item) {
+              const oldAssignees = taskForm.item.assignees ?? [];
+              const added = newAssignees.filter(n => !oldAssignees.includes(n));
               updateProjectTask(taskForm.item.id, data);
-              toast.success('Đã cập nhật task');
+              if (added.length > 0) {
+                notifyAssignees(data.name || taskForm.item.name, added, data.deadline);
+                toast.success(`Đã cập nhật task — thông báo ${added.length} người`);
+              } else {
+                toast.success('Đã cập nhật task');
+              }
             } else {
               addProjectTask({ id: generateId(), projectId: project.id, name: '', targetLinks: 0, ...data } as ProjectTask);
-              toast.success('Đã thêm task');
+              if (newAssignees.length > 0) {
+                notifyAssignees(data.name || '', newAssignees, data.deadline);
+                toast.success(`Đã thêm task — thông báo ${newAssignees.length} người`);
+              } else {
+                toast.success('Đã thêm task');
+              }
             }
             setTaskForm({ open: false, item: null });
           }}
@@ -435,7 +467,7 @@ function TaskFormModal({ item, projectId, members, onClose, onSave }: {
 }) {
   const [form, setForm] = useState<Partial<ProjectTask>>(item || {
     projectId, name: '', trackingMode: 'link', taskType: '', taskDetail: '',
-    targetLinks: 1, targetQuantity: 0, assignee: '', deadline: '', notes: '',
+    targetLinks: 1, targetQuantity: 0, assignees: [] as string[], deadline: '', notes: '',
   });
 
   const mode = form.trackingMode || 'link';
@@ -526,12 +558,31 @@ function TaskFormModal({ item, projectId, members, onClose, onSave }: {
 
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Assignee (tùy chọn)</label>
-                <select className="form-select" value={form.assignee ?? ''}
-                  onChange={e => setForm({ ...form, assignee: e.target.value })}>
-                  <option value="">— Bất kỳ ai</option>
-                  {members.map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
+                <label className="form-label">Phân công cho</label>
+                <div style={{ maxHeight: '140px', overflowY: 'auto', border: '1px solid var(--border-light)',
+                              borderRadius: 'var(--radius-sm)', padding: '6px' }}>
+                  {members.map(n => {
+                    const checked = (form.assignees ?? []).includes(n);
+                    return (
+                      <label key={n} style={{ display: 'flex', alignItems: 'center', gap: '6px',
+                                               padding: '4px 6px', borderRadius: 4, cursor: 'pointer',
+                                               fontSize: '0.84rem',
+                                               background: checked ? 'var(--primary-50)' : 'transparent' }}>
+                        <input type="checkbox" checked={checked}
+                          onChange={() => {
+                            const curr = form.assignees ?? [];
+                            setForm({ ...form, assignees: checked ? curr.filter(x => x !== n) : [...curr, n] });
+                          }} />
+                        {n}
+                      </label>
+                    );
+                  })}
+                </div>
+                {(form.assignees ?? []).length > 0 && (
+                  <p style={{ fontSize: '0.74rem', color: 'var(--primary-600)', marginTop: 4 }}>
+                    Đã chọn: {(form.assignees ?? []).join(', ')}
+                  </p>
+                )}
               </div>
               <div className="form-group">
                 <label className="form-label">Deadline</label>

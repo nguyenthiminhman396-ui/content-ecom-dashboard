@@ -103,6 +103,27 @@ export default function KPITargetsPage() {
     return m;
   }, [targetsWithActual]);
 
+  // Tổng theo đầu việc (cross-team) — gộp tất cả team theo taskType
+  const taskTypeSummary = useMemo(() => {
+    const m: Record<string, { target: number; actual: number; teams: Set<string> }> = {};
+    targetsWithActual.forEach(({ target, actualLinks }) => {
+      const key = target.taskType || '(Tất cả đầu việc)';
+      if (!m[key]) m[key] = { target: 0, actual: 0, teams: new Set() };
+      m[key].target += target.targetLinks;
+      m[key].actual += actualLinks;
+      m[key].teams.add(target.teamGroup);
+    });
+    return Object.entries(m)
+      .map(([taskType, data]) => ({
+        taskType,
+        target: data.target,
+        actual: data.actual,
+        teams: Array.from(data.teams),
+        progress: data.target > 0 ? Math.round((data.actual / data.target) * 100) : 0,
+      }))
+      .sort((a, b) => b.target - a.target);
+  }, [targetsWithActual]);
+
   const handleDelete = (t: MonthlyKPITarget) => {
     if (!canEdit) return;
     // Leader chỉ xóa được target cá nhân (có employeeName) của team mình
@@ -220,6 +241,95 @@ export default function KPITargetsPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Tổng theo đầu việc (cross-team) */}
+      {taskTypeSummary.length > 1 && (
+        <div className="card" style={{ marginBottom: '16px' }}>
+          <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Target size={16} color="var(--accent-600)" />
+              Tổng theo đầu việc (gộp 3 nhóm)
+            </span>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>
+              Tracking tiến độ cross-team
+            </span>
+          </div>
+          <div className="data-table-wrapper" style={{ border: 'none', boxShadow: 'none' }}>
+            <table className="data-table" style={{ marginBottom: 0 }}>
+              <thead>
+                <tr>
+                  <th>Đầu việc</th>
+                  <th>Nhóm tham gia</th>
+                  <th style={{ textAlign: 'center' }}>Target tổng</th>
+                  <th style={{ textAlign: 'center' }}>Đã đạt</th>
+                  <th style={{ width: 200 }}>Tiến độ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {taskTypeSummary.map(({ taskType, target, actual, teams, progress }) => (
+                  <tr key={taskType}>
+                    <td style={{ fontWeight: 700 }}>{taskType}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                        {teams.map(t => (
+                          <span key={t} style={{
+                            background: `${TEAM_COLORS[t] ?? '#94A3B8'}15`,
+                            color: TEAM_COLORS[t] ?? '#94A3B8',
+                            padding: '1px 6px', borderRadius: 'var(--radius-full)',
+                            fontSize: '0.72rem', fontWeight: 600,
+                          }}>{t}</span>
+                        ))}
+                      </div>
+                    </td>
+                    <td style={{ textAlign: 'center', fontWeight: 700 }}>{target.toLocaleString()}</td>
+                    <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--primary-600)' }}>
+                      {actual.toLocaleString()}
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ flex: 1, height: 6, background: 'var(--bg-secondary)', borderRadius: 3 }}>
+                          <div style={{ height: '100%', borderRadius: 3,
+                                        background: progress >= 100 ? 'var(--success)' : progress >= 70 ? 'var(--primary-500)' : 'var(--warning)',
+                                        width: `${Math.min(100, progress)}%` }} />
+                        </div>
+                        <span style={{ fontWeight: 700, fontSize: '0.82rem',
+                                       color: progress >= 100 ? 'var(--success)' : progress >= 70 ? 'var(--primary-500)' : 'var(--warning)',
+                                       minWidth: 38, textAlign: 'right' }}>
+                          {progress}%
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ fontWeight: 700 }}>
+                  <td>Tổng tất cả</td>
+                  <td></td>
+                  <td style={{ textAlign: 'center' }}>
+                    {taskTypeSummary.reduce((s, x) => s + x.target, 0).toLocaleString()}
+                  </td>
+                  <td style={{ textAlign: 'center', color: 'var(--primary-600)' }}>
+                    {taskTypeSummary.reduce((s, x) => s + x.actual, 0).toLocaleString()}
+                  </td>
+                  <td>
+                    {(() => {
+                      const t = taskTypeSummary.reduce((s, x) => s + x.target, 0);
+                      const a = taskTypeSummary.reduce((s, x) => s + x.actual, 0);
+                      const p = t > 0 ? Math.round((a / t) * 100) : 0;
+                      return (
+                        <span style={{ fontWeight: 700, color: p >= 100 ? 'var(--success)' : p >= 50 ? 'var(--primary-500)' : 'var(--warning)' }}>
+                          {p}%
+                        </span>
+                      );
+                    })()}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
       )}
 

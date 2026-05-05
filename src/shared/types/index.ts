@@ -72,8 +72,8 @@ export interface ProjectTask {
   targetLinks: number;
   /** Target số lượng — dùng khi trackingMode = 'quantity' */
   targetQuantity?: number;
-  /** Assignee tùy chọn — match với employeeName */
-  assignee?: string;
+  /** Assignees — nhiều người được phân công */
+  assignees?: string[];
   deadline?: string;
   notes?: string;
 }
@@ -532,7 +532,7 @@ export const SHEET_HEADERS = {
   SCALE:    ['key','pointPerHour','standardHoursPerMonth','memberTargetPoints','leaderProductionWeight',
              'wProductivity','wQuality','wAttitude','wTimeliness','wAttendance','allowedDaysOff','updatedAt'],
   SITES:    ['id','name','urlPattern','description','active','color'],
-  PROJ_TASKS: ['id','projectId','name','trackingMode','taskType','taskDetail','targetLinks','targetQuantity','assignee','deadline','notes'],
+  PROJ_TASKS: ['id','projectId','name','trackingMode','taskType','taskDetail','targetLinks','targetQuantity','assignees','deadline','notes'],
   BONUS:    ['id','employeeName','amount','reason','projectId','period','awardedAt','awardedBy',
              'status','approvedBy','approvedAt','rejectionNote'],
   TODOS:    ['id','ownerName','assigneeName','title','description','dueDate','priority','completed','completedAt','createdAt'],

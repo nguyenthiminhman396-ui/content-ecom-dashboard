@@ -477,13 +477,13 @@ export default function PerformancePage() {
                             if (!t.deadline) return false;
                             const dl = new Date(t.deadline).getTime();
                             if (isNaN(dl) || dl < monthStart || dl > monthEnd) return false;
-                            if (t.assignee && !teamMemberNames.includes(t.assignee)) return false;
+                            if (t.assignees && t.assignees.length > 0 && !t.assignees.some(a => teamMemberNames.includes(a))) return false;
                             const matched = submissions.filter(s => {
                               if (s.projectTaskId === t.id) return true;
                               if (s.projectTaskId) return false;
                               if (t.taskType && s.taskType !== t.taskType) return false;
                               if (t.taskDetail && s.taskDetail !== t.taskDetail) return false;
-                              if (t.assignee && s.employeeName !== t.assignee) return false;
+                              if (t.assignees && t.assignees.length > 0 && !t.assignees.includes(s.employeeName)) return false;
                               return !!t.taskType || !!t.taskDetail;
                             });
                             const totalLinks = matched.reduce((sum, s) => sum + s.links.length, 0);
@@ -530,7 +530,7 @@ export default function PerformancePage() {
                                         <div>
                                           <strong>{t.name}</strong>
                                           <span style={{ marginLeft: 6, color: 'var(--text-tertiary)', fontSize: '0.74rem' }}>
-                                            {t.assignee ?? 'Bất kỳ'} · DL {t.deadline}
+                                            {t.assignees?.join(', ') ?? 'Bất kỳ'} · DL {t.deadline}
                                           </span>
                                         </div>
                                         <span style={{ color: 'var(--danger)', fontSize: '0.74rem' }}>

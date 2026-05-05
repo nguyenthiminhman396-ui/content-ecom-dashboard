@@ -94,8 +94,8 @@ export function computeLeadershipMetrics(
     if (!t.deadline) return false;
     const dl = new Date(t.deadline).getTime();
     if (isNaN(dl) || dl < monthStart || dl > monthEnd) return false;
-    // Filter task thuộc team: assignee match, hoặc submissions liên quan đều của team
-    if (t.assignee && !teamMemberNames.includes(t.assignee)) return false;
+    // Filter task thuộc team: assignees match, hoặc submissions liên quan đều của team
+    if (t.assignees && t.assignees.length > 0 && !t.assignees.some(a => teamMemberNames.includes(a))) return false;
     return true;
   });
 
@@ -107,7 +107,7 @@ export function computeLeadershipMetrics(
       if (s.projectTaskId) return false;
       if (t.taskType && s.taskType !== t.taskType) return false;
       if (t.taskDetail && s.taskDetail !== t.taskDetail) return false;
-      if (t.assignee && s.employeeName !== t.assignee) return false;
+      if (t.assignees && t.assignees.length > 0 && !t.assignees.includes(s.employeeName)) return false;
       return !!t.taskType || !!t.taskDetail;
     });
     const totalLinks = matched.reduce((sum, s) => sum + s.links.length, 0);

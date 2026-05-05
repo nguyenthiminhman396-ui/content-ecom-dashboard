@@ -297,7 +297,7 @@ export default function DashboardPage() {
             if (s.projectTaskId) return false;
             if (t.taskType && s.taskType !== t.taskType) return false;
             if (t.taskDetail && s.taskDetail !== t.taskDetail) return false;
-            if (t.assignee && s.employeeName !== t.assignee) return false;
+            if (t.assignees && t.assignees.length > 0 && !t.assignees.includes(s.employeeName)) return false;
             return !!t.taskType || !!t.taskDetail;
           });
           const linkCount = matched.reduce((sum, s) => sum + s.links.length, 0);
