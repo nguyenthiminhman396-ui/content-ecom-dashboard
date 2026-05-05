@@ -93,12 +93,14 @@ export default function KPITargetsPage() {
     });
   }, [periodTargets, submissions, period]);
 
-  // Tổng theo đầu việc (cross-team) — không tính trùng Tổng nhóm + cá nhân
+  // Tổng theo đầu việc (cross-team)
+  // Rule: Có KPI tổng (Manager set) → lấy KPI tổng. Không có → cộng cá nhân.
+  // Actual: luôn lấy 1 lần từ team (vì filter không lọc employeeName → mọi row cùng team+taskType đều ra cùng actual)
   const taskTypeSummary = useMemo(() => {
-    // Bước 1: Gom theo team + taskType, tách "Tổng nhóm" vs "Cá nhân"
     const grouped: Record<string, Record<string, {
-      teamTarget: number; teamActual: number;
-      individualTarget: number; individualActual: number;
+      teamTarget: number;
+      individualTarget: number;
+      actual: number; // actual chung (lấy từ bất kỳ row nào, vì đều giống nhau)
     }>> = {};
 
     targetsWithActual.forEach(({ target, actualLinks }) => {
@@ -106,20 +108,17 @@ export default function KPITargetsPage() {
       const team = target.teamGroup;
       if (!grouped[taskKey]) grouped[taskKey] = {};
       if (!grouped[taskKey][team]) grouped[taskKey][team] = {
-        teamTarget: 0, teamActual: 0, individualTarget: 0, individualActual: 0
+        teamTarget: 0, individualTarget: 0, actual: 0
       };
       if (target.employeeName) {
-        // Target cá nhân
         grouped[taskKey][team].individualTarget += target.targetLinks;
-        grouped[taskKey][team].individualActual += actualLinks;
       } else {
-        // Target tổng nhóm
         grouped[taskKey][team].teamTarget += target.targetLinks;
-        grouped[taskKey][team].teamActual += actualLinks;
       }
+      // Actual: giữ giá trị lớn nhất (vì mọi row cùng team+taskType cho cùng actual)
+      grouped[taskKey][team].actual = Math.max(grouped[taskKey][team].actual, actualLinks);
     });
 
-    // Bước 2: Cho mỗi team+taskType → chọn cá nhân (ưu tiên), fallback tổng nhóm
     return Object.entries(grouped)
       .map(([taskType, teams]) => {
         let totalTarget = 0;
@@ -129,9 +128,9 @@ export default function KPITargetsPage() {
 
         for (const [team, d] of Object.entries(teams)) {
           teamList.push(team);
-          // Có KPI tổng → lấy tổng nhóm; không có → cộng cá nhân
+          // Có KPI tổng → lấy KPI tổng; không có → cộng cá nhân
           const t = d.teamTarget > 0 ? d.teamTarget : d.individualTarget;
-          const a = d.teamTarget > 0 ? d.teamActual : d.individualActual;
+          const a = d.actual;
           totalTarget += t;
           totalActual += a;
           perTeam.push({
