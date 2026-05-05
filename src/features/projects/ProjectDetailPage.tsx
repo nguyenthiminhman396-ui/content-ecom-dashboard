@@ -66,7 +66,13 @@ export default function ProjectDetailPage() {
   const leader = members.find(m => m.id === project.leader);
   const projectExpenses = expenses.filter(e => e.projectId === project.id);
   const projectSubs = submissions.filter(s => s.projectId === project.id);
-  const tasks = projectTasks.filter(t => t.projectId === project.id);
+  const tasks = projectTasks.filter(t => {
+    if (t.projectId !== project.id) return false;
+    if (!isManagerOrLeader && currentUser) {
+      return t.assignees?.includes(currentUser.name);
+    }
+    return true;
+  });
 
   // ── Tính số link + quantity đã hoàn thành cho mỗi task ────────────────
   const taskProgress = useMemo(() => {
