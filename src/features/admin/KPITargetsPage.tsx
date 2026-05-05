@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useAppStore } from '@/shared/store/appStore';
 import { defaultTaskCategories, TEAM_GROUPS } from '@/shared/data/mockData';
 import {
-  Target, Plus, Edit3, Trash2, X, Save, Calendar, Copy
+  Target, Plus, Edit3, Trash2, X, Save, Calendar, Copy, ChevronDown, ChevronUp
 } from 'lucide-react';
 import type { MonthlyKPITarget, TeamGroup } from '@/shared/types';
 import toast from 'react-hot-toast';
@@ -39,6 +39,7 @@ export default function KPITargetsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<MonthlyKPITarget | null>(null);
   const [memberFormMode, setMemberFormMode] = useState(false); // true = form phân KPI cá nhân
+  const [expandedTaskType, setExpandedTaskType] = useState<string | null>(null);
 
   const isManager = currentUser?.role === 'Manager';
   const isLeader  = currentUser?.role === 'Leader';
@@ -92,15 +93,22 @@ export default function KPITargetsPage() {
     });
   }, [periodTargets, submissions, period]);
 
-  // Tổng theo đầu việc (cross-team) — mỗi block = 1 đầu việc
+  // Tổng theo đầu việc (cross-team) — mỗi block = 1 đầu việc + chi tiết từng team
   const taskTypeSummary = useMemo(() => {
-    const m: Record<string, { target: number; actual: number; teams: Set<string> }> = {};
+    const m: Record<string, {
+      target: number; actual: number; teams: Set<string>;
+      perTeam: Record<string, { target: number; actual: number }>;
+    }> = {};
     targetsWithActual.forEach(({ target, actualLinks }) => {
       const key = target.taskType || '(Tất cả đầu việc)';
-      if (!m[key]) m[key] = { target: 0, actual: 0, teams: new Set() };
+      if (!m[key]) m[key] = { target: 0, actual: 0, teams: new Set(), perTeam: {} };
       m[key].target += target.targetLinks;
       m[key].actual += actualLinks;
       m[key].teams.add(target.teamGroup);
+      // Per-team breakdown
+      if (!m[key].perTeam[target.teamGroup]) m[key].perTeam[target.teamGroup] = { target: 0, actual: 0 };
+      m[key].perTeam[target.teamGroup].target += target.targetLinks;
+      m[key].perTeam[target.teamGroup].actual += actualLinks;
     });
     return Object.entries(m)
       .map(([taskType, data]) => ({
@@ -109,6 +117,10 @@ export default function KPITargetsPage() {
         actual: data.actual,
         teams: Array.from(data.teams),
         progress: data.target > 0 ? Math.round((data.actual / data.target) * 100) : 0,
+        perTeam: Object.entries(data.perTeam)
+          .map(([team, d]) => ({ team, target: d.target, actual: d.actual,
+            progress: d.target > 0 ? Math.round((d.actual / d.target) * 100) : 0 }))
+          .sort((a, b) => b.target - a.target),
       }))
       .sort((a, b) => b.target - a.target);
   }, [targetsWithActual]);
@@ -204,16 +216,14 @@ export default function KPITargetsPage() {
       {/* Summary theo đầu việc (cross-team) */}
       {taskTypeSummary.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(taskTypeSummary.length, 3)}, 1fr)`, gap: '12px', marginBottom: '20px' }}>
-          {taskTypeSummary.map(({ taskType, target, actual, teams, progress }) => {
-            // Dùng màu team đầu tiên, hoặc fallback
+          {taskTypeSummary.map(({ taskType, target, actual, teams, progress, perTeam }) => {
             const mainColor = TEAM_COLORS[teams[0]] ?? '#3B82F6';
+            const isExpanded = expandedTaskType === taskType;
             return (
               <div key={taskType} className="card" style={{
                 padding: '16px', borderLeft: `4px solid ${mainColor}`,
               }}>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                  <span>{taskType}</span>
-                </div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>{taskType}</div>
                 <div style={{ fontWeight: 800, fontSize: '1.4rem', color: mainColor, marginTop: 4 }}>
                   {actual.toLocaleString()} / {target.toLocaleString()} link
                 </div>
@@ -229,18 +239,44 @@ export default function KPITargetsPage() {
                                 width: `${Math.min(100, progress)}%` }} />
                 </div>
 
-                {/* Team badges */}
-                {teams.length > 0 && (
-                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '8px' }}>
-                    {teams.map(t => (
-                      <span key={t} style={{
-                        background: `${TEAM_COLORS[t] ?? '#94A3B8'}15`,
-                        color: TEAM_COLORS[t] ?? '#94A3B8',
-                        padding: '1px 6px', borderRadius: 'var(--radius-full)',
-                        fontSize: '0.68rem', fontWeight: 600,
-                      }}>{t}</span>
-                    ))}
-                  </div>
+                {/* Toggle per-team dropdown */}
+                {perTeam.length > 0 && (
+                  <>
+                    <button onClick={() => setExpandedTaskType(isExpanded ? null : taskType)}
+                      style={{ marginTop: '8px', background: 'none', border: 'none', cursor: 'pointer',
+                               display: 'flex', alignItems: 'center', gap: '4px', width: '100%',
+                               padding: '4px 0', fontSize: '0.74rem', color: 'var(--primary-600)', fontWeight: 600 }}>
+                      {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                      Chi tiết {perTeam.length} nhóm
+                    </button>
+
+                    {isExpanded && (
+                      <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {perTeam.map(pt => {
+                          const teamColor = TEAM_COLORS[pt.team] ?? '#94A3B8';
+                          return (
+                            <div key={pt.team} style={{ padding: '8px 10px', background: 'var(--bg-secondary)',
+                                                        borderRadius: 'var(--radius-sm)', borderLeft: `3px solid ${teamColor}` }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontWeight: 600, fontSize: '0.78rem', color: teamColor }}>{pt.team}</span>
+                                <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+                                  <strong>{pt.actual.toLocaleString()}</strong>
+                                  <span style={{ color: 'var(--text-tertiary)' }}> / {pt.target.toLocaleString()}</span>
+                                  <strong style={{ marginLeft: 6,
+                                    color: pt.progress >= 100 ? 'var(--success)' : pt.progress >= 50 ? teamColor : 'var(--warning)'
+                                  }}>{pt.progress}%</strong>
+                                </span>
+                              </div>
+                              <div style={{ height: 3, background: 'var(--bg-card)', borderRadius: 2, marginTop: 4 }}>
+                                <div style={{ height: '100%', borderRadius: 2, background: teamColor,
+                                              width: `${Math.min(100, pt.progress)}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             );
