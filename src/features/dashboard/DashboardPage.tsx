@@ -644,23 +644,18 @@ export default function DashboardPage() {
         const workingDays = calcWorkingDays();
         const mgmtHoursPerLeader = Math.round(workingDays * mgmtPerDay * 10) / 10;
 
-        // Đếm leader trong scope
-        const countLeadersInScope = () => {
-          if (viewingLeader) return 1;
-          if (!isLeaderPersonal) return 0;
-          const me = members.find(m => m.name === currentUser?.name);
-          const myTeam = me?.teamGroup;
-          if (!myTeam) return 1;
-          return members.filter(m => m.teamGroup === myTeam && m.kpiRole === 'leader').length;
-        };
 
         const showMgmt = viewingLeader || isLeaderPersonal;
-        const leaderCount = countLeadersInScope();
-        const totalMgmtHours = Math.round(mgmtHoursPerLeader * leaderCount * 10) / 10;
+        // Thời gian sản xuất riêng của leader (không cộng member)
+        const leaderName = filterEmployee || currentUser?.name || '';
+        const leaderProductionNow = Math.round(
+          thisMonthSubs.filter(s => s.employeeName === leaderName)
+            .reduce((sum, s) => sum + (s.timePerLink * s.links.length), 0) * 10
+        ) / 10;
 
-        const timeNow = Math.round((stats.now.time + (showMgmt ? totalMgmtHours : 0)) * 10) / 10;
-        const timePrev = Math.round((stats.prev.time + (showMgmt ? totalMgmtHours : 0)) * 10) / 10;
-        const productionTimeNow = Math.round(stats.now.time * 10) / 10;
+        // Card "Thời gian làm việc" = team total (stats.now.time) cho overview chung
+        // Card breakdown = chỉ leader cá nhân
+        const leaderTotalNow = Math.round((leaderProductionNow + (showMgmt ? mgmtHoursPerLeader : 0)) * 10) / 10;
 
         return (
           <>
@@ -672,7 +667,7 @@ export default function DashboardPage() {
               <CompareCard icon={<Trophy size={18} />} label="Điểm"
                 now={Math.round(stats.now.points * 10) / 10} prev={Math.round(stats.prev.points * 10) / 10} color="var(--accent-500)" suffix="đ" />
               <CompareCard icon={<Calendar size={18} />} label="Thời gian làm việc"
-                now={timeNow} prev={timePrev} color="#7a9af6" suffix="h" />
+                now={Math.round(stats.now.time * 10) / 10} prev={Math.round(stats.prev.time * 10) / 10} color="#7a9af6" suffix="h" />
               <CompareCard icon={<Link2 size={18} />} label="Tổng link"
                 now={stats.now.links} prev={stats.prev.links} color="var(--primary-500)" />
             </div>
@@ -695,7 +690,7 @@ export default function DashboardPage() {
                     background: 'rgba(255,255,255,0.7)', border: '1px solid #C7D2FE',
                   }}>
                     <div style={{ fontSize: '0.7rem', color: '#6366F1', fontWeight: 600, marginBottom: '4px' }}>📊 Sản xuất ({Math.round(scaleConfig.leaderProductionWeight * 100)}%)</div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#312E81' }}>{productionTimeNow}h</div>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#312E81' }}>{leaderProductionNow}h</div>
                     <div style={{ fontSize: '0.68rem', color: '#6366F1' }}>Target: {Math.round(scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight)}đ</div>
                   </div>
                   <div style={{
@@ -703,7 +698,7 @@ export default function DashboardPage() {
                     background: 'rgba(255,255,255,0.7)', border: '1px solid #C7D2FE',
                   }}>
                     <div style={{ fontSize: '0.7rem', color: '#6366F1', fontWeight: 600, marginBottom: '4px' }}>📋 Quản lý ({Math.round(mgmtWeight * 100)}%)</div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#312E81' }}>{totalMgmtHours}h</div>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#312E81' }}>{mgmtHoursPerLeader}h</div>
                     <div style={{ fontSize: '0.68rem', color: '#6366F1' }}>Tự động tính theo ngày làm việc</div>
                   </div>
                   <div style={{
@@ -711,7 +706,7 @@ export default function DashboardPage() {
                     background: 'rgba(255,255,255,0.7)', border: '1px solid #C7D2FE',
                   }}>
                     <div style={{ fontSize: '0.7rem', color: '#6366F1', fontWeight: 600, marginBottom: '4px' }}>⏱️ Tổng thời gian</div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#312E81' }}>{timeNow}h</div>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#312E81' }}>{leaderTotalNow}h</div>
                     <div style={{ fontSize: '0.68rem', color: '#6366F1' }}>Chuẩn: {stdHours}h/tháng</div>
                   </div>
                 </div>
