@@ -80,6 +80,8 @@ export default function KPITargetsPage() {
         if (s.teamGroup !== t.teamGroup) return false;
         if (t.siteId && s.siteId !== t.siteId) return false;
         if (t.taskType && s.taskType !== t.taskType) return false;
+        // Target cá nhân → chỉ đếm submissions của người đó
+        if (t.employeeName && s.employeeName !== t.employeeName) return false;
         return true;
       });
       const actualLinks = actualSubs.reduce((sum, s) => sum + s.links.length, 0);
@@ -100,7 +102,8 @@ export default function KPITargetsPage() {
     const grouped: Record<string, Record<string, {
       teamTarget: number;
       individualTarget: number;
-      actual: number;
+      teamActual: number;      // Actual từ Tổng nhóm (= tổng team)
+      individualActual: number; // Cộng actual cá nhân
     }>> = {};
 
     targetsWithActual.forEach(({ target, actualLinks }) => {
@@ -108,14 +111,15 @@ export default function KPITargetsPage() {
       const team = target.teamGroup;
       if (!grouped[taskKey]) grouped[taskKey] = {};
       if (!grouped[taskKey][team]) grouped[taskKey][team] = {
-        teamTarget: 0, individualTarget: 0, actual: 0
+        teamTarget: 0, individualTarget: 0, teamActual: 0, individualActual: 0
       };
       if (target.employeeName) {
         grouped[taskKey][team].individualTarget += target.targetLinks;
+        grouped[taskKey][team].individualActual += actualLinks; // Giờ đúng per-person
       } else {
         grouped[taskKey][team].teamTarget += target.targetLinks;
+        grouped[taskKey][team].teamActual = actualLinks; // Tổng nhóm = team total
       }
-      grouped[taskKey][team].actual = Math.max(grouped[taskKey][team].actual, actualLinks);
     });
 
     return Object.entries(grouped)
@@ -132,19 +136,18 @@ export default function KPITargetsPage() {
           teamList.push(team);
           let t: number;
           if (hasAnyTeamTarget) {
-            // Có KPI tổng → lấy KPI tổng; team không có tổng → dùng cá nhân để tham chiếu
             t = d.teamTarget > 0 ? d.teamTarget : d.individualTarget;
           } else {
             t = d.individualTarget;
           }
-          const a = d.actual;
-          // Target block: chỉ cộng KPI tổng (hoặc fallback toàn bộ nếu không có tổng nào)
+          // Actual: dùng giá trị lớn hơn giữa tổng nhóm và cộng cá nhân
+          const a = Math.max(d.teamActual, d.individualActual);
           if (hasAnyTeamTarget) {
-            totalTarget += d.teamTarget; // Chỉ cộng KPI tổng vào block
+            totalTarget += d.teamTarget;
           } else {
             totalTarget += t;
           }
-          totalActual += a; // Actual luôn cộng từ tất cả team
+          totalActual += a;
           perTeam.push({
             team, target: t, actual: a,
             progress: t > 0 ? Math.round((a / t) * 100) : 0,
