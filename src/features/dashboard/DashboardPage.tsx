@@ -684,6 +684,16 @@ export default function DashboardPage() {
 
         const leaderTotalNow = Math.round((leaderProductionNow + (showMgmt ? mgmtHoursPerLeader : 0)) * 10) / 10;
 
+        // Prev period cho so sánh
+        const leaderKpiPointsPrev = prevMonthSubs
+          .filter(s => s.employeeName === leaderName)
+          .reduce((sum, s) => sum + s.totalPoints, 0);
+        const leaderBonusPointsPrev = bonusInPrevRange
+          .filter(b => b.employeeName === leaderName)
+          .reduce((sum, b) => sum + b.amount, 0);
+        const leaderProductionPrev = Math.round(((leaderKpiPointsPrev + leaderBonusPointsPrev) / pph) * 10) / 10;
+        const leaderTotalPrev = Math.round((leaderProductionPrev + (showMgmt ? mgmtHoursPerLeader : 0)) * 10) / 10;
+
         return (
           <>
             <div className="stats-grid" style={{ marginBottom: '20px' }}>
@@ -694,7 +704,9 @@ export default function DashboardPage() {
               <CompareCard icon={<Trophy size={18} />} label="Điểm"
                 now={Math.round(stats.now.points * 10) / 10} prev={Math.round(stats.prev.points * 10) / 10} color="var(--accent-500)" suffix="đ" />
               <CompareCard icon={<Calendar size={18} />} label="Thời gian làm việc"
-                now={Math.round(stats.now.time * 10) / 10} prev={Math.round(stats.prev.time * 10) / 10} color="#7a9af6" suffix="h" />
+                now={showMgmt ? leaderTotalNow : Math.round(stats.now.time * 10) / 10}
+                prev={showMgmt ? leaderTotalPrev : Math.round(stats.prev.time * 10) / 10}
+                color="#7a9af6" suffix="h" />
               <CompareCard icon={<Link2 size={18} />} label="Tổng link"
                 now={stats.now.links} prev={stats.prev.links} color="var(--primary-500)" />
             </div>
