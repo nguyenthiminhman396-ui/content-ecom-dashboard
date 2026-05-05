@@ -31,6 +31,7 @@ const TEAM_COLORS: Record<string, string> = {
   'Bài viết': '#1D9E75',
   'Sản phẩm': '#8B5CF6',
   'Multimedia - Tin nhanh': '#F59E0B',
+  'Tất cả team': '#64748B',
 };
 
 export default function KPITargetsPage() {
@@ -130,13 +131,24 @@ export default function KPITargetsPage() {
         let totalTarget = 0;
         let totalActual = 0;
         const teamList: string[] = [];
-        const perTeam: { team: string; target: number; actual: number; progress: number }[] = [];
+        const perTeam: { team: string; displayName: string; target: number; actual: number; progress: number }[] = [];
+
+        const numTeams = Object.keys(teams).length;
 
         for (const [team, d] of Object.entries(teams)) {
           teamList.push(team);
           let t: number;
+          let displayName = team;
           if (hasAnyTeamTarget) {
-            t = d.teamTarget > 0 ? d.teamTarget : d.individualTarget;
+            if (d.teamTarget > 0) {
+              t = d.teamTarget;
+              // Nếu là chủ quản (có target) và có team khác hỗ trợ (numTeams > 1) -> Thêm dấu +
+              if (numTeams > 1 && team !== 'Tất cả team') {
+                displayName = `${team} +`;
+              }
+            } else {
+              t = d.individualTarget;
+            }
           } else {
             t = d.individualTarget;
           }
@@ -149,7 +161,7 @@ export default function KPITargetsPage() {
           }
           totalActual += a;
           perTeam.push({
-            team, target: t, actual: a,
+            team, displayName, target: t, actual: a,
             progress: t > 0 ? Math.round((a / t) * 100) : 0,
           });
         }
@@ -301,7 +313,7 @@ export default function KPITargetsPage() {
                             <div key={pt.team} style={{ padding: '8px 10px', background: 'var(--bg-secondary)',
                                                         borderRadius: 'var(--radius-sm)', borderLeft: `3px solid ${teamColor}` }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontWeight: 600, fontSize: '0.78rem', color: teamColor }}>{pt.team}</span>
+                                <span style={{ fontWeight: 600, fontSize: '0.78rem', color: teamColor }}>{pt.displayName}</span>
                                 <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
                                   <strong>{pt.actual.toLocaleString()}</strong>
                                   <span style={{ color: 'var(--text-tertiary)' }}> / {pt.target.toLocaleString()}</span>
@@ -363,7 +375,10 @@ export default function KPITargetsPage() {
                         <span style={{
                           background: `${color}15`, color, padding: '2px 8px',
                           borderRadius: 'var(--radius-full)', fontSize: '0.78rem', fontWeight: 600,
-                        }}>{target.teamGroup}</span>
+                        }}>
+                          {target.teamGroup || 'Tổng nhóm'}
+                          {!target.employeeName && taskTypeSummary.find(s => s.taskType === target.taskType)?.perTeam.some(pt => pt.team !== target.teamGroup) && target.teamGroup !== 'Tất cả team' ? ' +' : ''}
+                        </span>
                       </td>
                       <td className="cell-secondary">
                         {target.employeeName

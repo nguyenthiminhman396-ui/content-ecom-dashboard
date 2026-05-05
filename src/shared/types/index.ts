@@ -80,7 +80,7 @@ export interface ProjectTask {
 
 export type KpiRole = 'leader' | 'member';
 /** 3 nhóm phân loại KPI sau khi submit */
-export type TeamGroup = 'Bài viết' | 'Sản phẩm' | 'Multimedia - Tin nhanh' | '';
+export type TeamGroup = 'Bài viết' | 'Sản phẩm' | 'Multimedia - Tin nhanh' | 'Tất cả team' | '';
 
 export interface Member {
   id: string;

@@ -104,8 +104,8 @@ export const defaultTaskCategories: TaskCategory[] = [
   },
 ];
 
-// 3 nhóm tổng — Manager xem theo nhóm này
-export const TEAM_GROUPS = ['Bài viết', 'Sản phẩm', 'Multimedia - Tin nhanh'] as const;
+// 3 nhóm tổng — Manager xem theo nhóm này, cộng thêm 'Tất cả team' cho mục tiêu chung
+export const TEAM_GROUPS = ['Bài viết', 'Sản phẩm', 'Multimedia - Tin nhanh', 'Tất cả team'] as const;
 
 // ============================================
 // Bảng điểm quy đổi mặc định — trích từ cột "Điểm point mới" trong Sheet.
