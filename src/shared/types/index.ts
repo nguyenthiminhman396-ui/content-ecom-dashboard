@@ -462,6 +462,8 @@ export interface TodoItem {
   priority: TodoPriority;
   /** Đã hoàn thành */
   completed: boolean;
+  /** Xác nhận đã đọc notification (dành cho assignees) */
+  acknowledged?: boolean;
   /** Ngày hoàn thành */
   completedAt?: string;
   /** Ngày tạo */

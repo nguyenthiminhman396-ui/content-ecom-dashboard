@@ -22,7 +22,7 @@ const navItems: NavItem[] = [
   { path: '/submit-kpi',     icon: ClipboardList,  label: 'Submit KPI',          section: 'Tổng quan', allowedRoles: ['Manager', 'Leader', 'Member'] },
   { path: '/my-submissions', icon: History,        label: 'KPI đã submit',       section: 'Tổng quan', allowedRoles: ['Manager', 'Leader', 'Member'] },
   { path: '/daily-work',     icon: Trophy,         label: 'Công việc hằng ngày', section: 'Tổng quan' },
-  { path: '/todo',            icon: CheckSquare,    label: 'Checklist',           section: 'Tổng quan' },
+  { path: '/todo',            icon: CheckSquare,    label: 'To-do list',           section: 'Tổng quan' },
   // ── Quản lý ──
   { path: '/projects',      icon: FolderKanban,    label: 'Dự án',               section: 'Quản lý' },
   { path: '/expenses',      icon: Wallet,          label: 'Chi phí',             section: 'Quản lý', allowedRoles: ['Manager', 'Leader'] },
@@ -48,10 +48,13 @@ export default function Sidebar() {
     ? bonusPoints.filter(b => b.status === 'pending').length
     : 0;
   const overdueTodoCount = currentUser
-    ? todos.filter(t =>
-        (t.ownerName === currentUser.name && !t.completed && t.dueDate && new Date(t.dueDate + 'T23:59:59') < new Date()) ||
-        (t.assigneeName === currentUser.name && t.ownerName !== currentUser.name && !t.completed)
-      ).length
+    ? todos.filter(t => {
+        const isMine = t.ownerName === currentUser.name || t.assigneeName === currentUser.name;
+        if (!isMine) return false;
+        const isOverdue = !t.completed && t.dueDate && new Date(t.dueDate + 'T23:59:59') < new Date();
+        const isUnacknowledged = t.assigneeName === currentUser.name && t.ownerName !== currentUser.name && !t.acknowledged;
+        return isOverdue || isUnacknowledged;
+      }).length
     : 0;
 
   // Lọc menu theo role

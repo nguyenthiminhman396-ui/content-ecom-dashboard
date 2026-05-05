@@ -54,7 +54,7 @@ export default function TodoPage() {
     return todos.filter(t =>
       t.assigneeName === currentUser.name &&
       t.ownerName !== currentUser.name &&
-      !t.completed
+      !t.acknowledged
     );
   }, [todos, currentUser]);
 
@@ -115,7 +115,7 @@ export default function TodoPage() {
         <div>
           <h2 className="page-title">
             <CheckSquare size={20} style={{ color: 'var(--primary-500)' }} />
-            Checklist công việc
+            To-do list công việc
           </h2>
           <p className="page-subtitle">
             Quản lý công việc cá nhân — nhắc nhở deadline, ưu tiên đầu việc, assign cho đồng nghiệp.
@@ -208,7 +208,7 @@ export default function TodoPage() {
             <CheckSquare size={40} style={{ color: 'var(--text-tertiary)', opacity: 0.4, marginBottom: 8 }} />
             <h3 style={{ fontWeight: 700, marginBottom: 6 }}>Không có việc cần làm 🎉</h3>
             <p style={{ color: 'var(--text-tertiary)', fontSize: '0.85rem' }}>
-              Bấm "Thêm việc" để tạo checklist.
+              Bấm "Thêm việc" để tạo to-do list.
             </p>
           </div>
         )}
@@ -313,7 +313,12 @@ export default function TodoPage() {
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-primary" onClick={() => setShowNotifPopup(false)}>Đã hiểu</button>
+              <button className="btn btn-primary" onClick={() => {
+                assignedNotifications.forEach(t => {
+                  if (!t.acknowledged) updateTodo(t.id, { acknowledged: true });
+                });
+                setShowNotifPopup(false);
+              }}>Đã hiểu</button>
             </div>
           </div>
         </div>
