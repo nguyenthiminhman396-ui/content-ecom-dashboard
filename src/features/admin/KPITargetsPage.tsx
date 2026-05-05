@@ -132,21 +132,23 @@ export default function KPITargetsPage() {
           teamList.push(team);
           let t: number;
           if (hasAnyTeamTarget) {
-            // Có KPI tổng → chỉ lấy KPI tổng, bỏ qua cá nhân (đã nằm trong tổng)
-            t = d.teamTarget;
+            // Có KPI tổng → lấy KPI tổng; team không có tổng → dùng cá nhân để tham chiếu
+            t = d.teamTarget > 0 ? d.teamTarget : d.individualTarget;
           } else {
-            // Không có KPI tổng nào → cộng cá nhân
             t = d.individualTarget;
           }
           const a = d.actual;
-          totalTarget += t;
-          totalActual += a;
-          if (t > 0) {
-            perTeam.push({
-              team, target: t, actual: a,
-              progress: t > 0 ? Math.round((a / t) * 100) : 0,
-            });
+          // Target block: chỉ cộng KPI tổng (hoặc fallback toàn bộ nếu không có tổng nào)
+          if (hasAnyTeamTarget) {
+            totalTarget += d.teamTarget; // Chỉ cộng KPI tổng vào block
+          } else {
+            totalTarget += t;
           }
+          totalActual += a; // Actual luôn cộng từ tất cả team
+          perTeam.push({
+            team, target: t, actual: a,
+            progress: t > 0 ? Math.round((a / t) * 100) : 0,
+          });
         }
         perTeam.sort((a, b) => b.target - a.target);
 
