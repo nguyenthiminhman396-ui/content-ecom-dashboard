@@ -13,7 +13,7 @@ const projectTypes: ProjectType[] = ['Campaign', 'Series', 'Client'];
 const projectStatuses: ProjectStatus[] = ['Đang chạy', 'Hoàn thành', 'Tạm dừng', 'Hủy'];
 
 export default function Projects() {
-  const { projects, contents, clients, expenses, members, addProject, updateProject, deleteProject, currentUser } = useAppStore();
+  const { projects, contents, clients, expenses, members, addProject, updateProject, deleteProject, currentUser, addTodo } = useAppStore();
   const canManage = currentUser?.role === 'Manager' || currentUser?.role === 'Leader';
   const navigate = useNavigate();
   const [view, setView] = useState<'card' | 'list'>('card');
@@ -259,6 +259,19 @@ export default function Projects() {
           item={editItem}
           onClose={() => { setShowForm(false); setEditItem(null); }}
           onSave={(data) => {
+            let leaderChanged = false;
+            let leaderName = '';
+            
+            if (data.leader) {
+              const newLeader = members.find(m => m.id === data.leader);
+              leaderName = newLeader?.name || '';
+              if (!editItem) {
+                leaderChanged = true;
+              } else if (editItem.leader !== data.leader) {
+                leaderChanged = true;
+              }
+            }
+
             if (editItem) {
               updateProject(editItem.id, data);
               toast.success('Đã cập nhật dự án');
@@ -267,6 +280,22 @@ export default function Projects() {
               addProject({ ...data, id: newId } as Project);
               toast.success('Đã thêm dự án mới');
             }
+
+            // Gửi thông báo nếu thay đổi leader / có leader mới (và người đó không phải mình tự phân công mình)
+            if (leaderChanged && leaderName && currentUser && leaderName !== currentUser.name) {
+              addTodo({
+                id: `todo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`,
+                ownerName: currentUser.name,
+                assigneeName: leaderName,
+                title: `🚀 Được phân công làm Leader dự án`,
+                description: `Bạn được chọn làm Leader cho dự án "${data.name}".`,
+                dueDate: data.deadline || '',
+                priority: 'high',
+                completed: false,
+                createdAt: new Date().toISOString(),
+              });
+            }
+
             setShowForm(false);
             setEditItem(null);
           }}

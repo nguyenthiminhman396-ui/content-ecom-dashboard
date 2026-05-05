@@ -38,10 +38,10 @@ export default function ProjectDetailPage() {
       if (name === currentUser.name) return; // không tự thông báo
       addTodo({
         id: `todo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`,
-        ownerName: name,
+        ownerName: currentUser.name,
         assigneeName: name,
-        title: `📌 Được phân công: ${taskName}`,
-        description: `Bạn được phân công task "${taskName}" trong dự án "${project.name}" bởi ${currentUser.name}.`,
+        title: `📌 Được phân công task: ${taskName}`,
+        description: `Bạn được phân công task "${taskName}" trong dự án "${project.name}".`,
         dueDate: deadline || '',
         priority: 'medium',
         completed: false,
