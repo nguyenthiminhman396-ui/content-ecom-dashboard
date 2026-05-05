@@ -129,9 +129,9 @@ export default function KPITargetsPage() {
 
         for (const [team, d] of Object.entries(teams)) {
           teamList.push(team);
-          // Ưu tiên cá nhân, nếu chưa phân thì lấy tổng nhóm
-          const t = d.individualTarget > 0 ? d.individualTarget : d.teamTarget;
-          const a = d.individualTarget > 0 ? d.individualActual : d.teamActual;
+          // Có KPI tổng → lấy tổng nhóm; không có → cộng cá nhân
+          const t = d.teamTarget > 0 ? d.teamTarget : d.individualTarget;
+          const a = d.teamTarget > 0 ? d.teamActual : d.individualActual;
           totalTarget += t;
           totalActual += a;
           perTeam.push({
