@@ -144,27 +144,20 @@ export default function KPITargetsPage() {
 
         for (const [team, d] of Object.entries(teams)) {
           teamList.push(team);
-          let t: number;
-          if (hasAnyTeamTarget) {
-            if (d.teamTarget > 0) {
-              t = d.teamTarget;
-            } else {
-              t = d.individualTarget;
-            }
-          } else {
-            t = d.individualTarget;
-          }
-          // Actual: dùng giá trị lớn hơn giữa tổng nhóm và cộng cá nhân
-          const a = Math.max(d.teamActual, d.individualActual);
+
+          // Top-level total card metrics
           if (hasAnyTeamTarget) {
             totalTarget += d.teamTarget;
           } else {
-            totalTarget += t;
+            totalTarget += d.individualTarget;
           }
+          const a = Math.max(d.teamActual, d.individualActual);
           totalActual += a;
+
+          // Dropdown details (always use individual target/actual set by Leads/Members)
           perTeam.push({
-            team, displayName: team, target: t, actual: a,
-            progress: t > 0 ? Math.round((a / t) * 100) : 0,
+            team, displayName: team, target: d.individualTarget, actual: d.individualActual,
+            progress: d.individualTarget > 0 ? Math.round((d.individualActual / d.individualTarget) * 100) : 0,
           });
         }
         perTeam.sort((a, b) => b.target - a.target);
