@@ -20,7 +20,7 @@ export default function ProjectDetailPage() {
   const {
     projects, clients, members, expenses, submissions, projectTasks,
     addProjectTask, updateProjectTask, deleteProjectTask,
-    addExpense, updateExpense, deleteExpense, currentUser, addTodo,
+    addExpense, updateExpense, deleteExpense, currentUser, addTodo, todos,
   } = useAppStore();
 
   const project = projects.find(p => p.id === id);
@@ -421,9 +421,26 @@ export default function ProjectDetailPage() {
               const oldAssignees = taskForm.item.assignees ?? [];
               const added = newAssignees.filter(n => !oldAssignees.includes(n));
               updateProjectTask(taskForm.item.id, data);
+              // Notify người mới thêm
               if (added.length > 0) {
                 notifyAssignees(data.name || taskForm.item.name, added, data.deadline);
-                toast.success(`Đã cập nhật task — thông báo ${added.length} người`);
+              }
+              // Bù noti cho người đã có nhưng chưa có todo (do code cũ skip)
+              const taskName = data.name || taskForm.item.name;
+              const existing = newAssignees.filter(n => !added.includes(n));
+              const missingNoti = existing.filter(n => {
+                return !todos.some(t =>
+                  t.assigneeName === n &&
+                  t.title.includes(taskName) &&
+                  !t.completed
+                );
+              });
+              if (missingNoti.length > 0) {
+                notifyAssignees(taskName, missingNoti, data.deadline);
+              }
+              const totalNotified = added.length + missingNoti.length;
+              if (totalNotified > 0) {
+                toast.success(`Đã cập nhật task — thông báo ${totalNotified} người`);
               } else {
                 toast.success('Đã cập nhật task');
               }
