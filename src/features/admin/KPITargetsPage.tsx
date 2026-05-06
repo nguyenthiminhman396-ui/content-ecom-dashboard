@@ -145,7 +145,6 @@ export default function KPITargetsPage() {
         for (const [team, d] of Object.entries(teams)) {
           teamList.push(team);
           let t: number;
-          let displayName = team;
           if (hasAnyTeamTarget) {
             if (d.teamTarget > 0) {
               t = d.teamTarget;
@@ -164,7 +163,7 @@ export default function KPITargetsPage() {
           }
           totalActual += a;
           perTeam.push({
-            team, displayName, target: t, actual: a,
+            team, displayName: team, target: t, actual: a,
             progress: t > 0 ? Math.round((a / t) * 100) : 0,
           });
         }
@@ -380,6 +379,7 @@ export default function KPITargetsPage() {
                           borderRadius: 'var(--radius-full)', fontSize: '0.78rem', fontWeight: 600,
                         }}>
                           {target.teamGroup || 'Tổng nhóm'}
+                          {!target.employeeName && taskTypeSummary.find(s => s.taskType === target.taskType)?.perTeam.some(pt => pt.team !== target.teamGroup) && target.teamGroup !== 'Tất cả team' ? ' +' : ''}
                         </span>
                       </td>
                       <td className="cell-secondary">
