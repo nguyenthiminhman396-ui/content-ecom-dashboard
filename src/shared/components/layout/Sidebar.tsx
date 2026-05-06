@@ -33,7 +33,7 @@ const navItems: NavItem[] = [
   { path: '/reports',       icon: BarChart3,       label: 'Báo cáo tuần',        section: 'Quản lý', allowedRoles: ['Manager'] },
   // ── Hệ thống ──
   { path: '/members',       icon: Users,           label: 'Thành viên',          section: 'Hệ thống', allowedRoles: ['Manager'] },
-  { path: '/kpi-targets',   icon: Target,          label: 'KPI Target / Tháng',  section: 'Hệ thống', allowedRoles: ['Manager', 'Leader'] },
+  { path: '/kpi-targets',   icon: Target,          label: 'KPI Target / Tháng',  section: 'Hệ thống', allowedRoles: ['Manager', 'Leader', 'Member'] },
   { path: '/point-config',  icon: Calculator,      label: 'Cấu hình Điểm',       section: 'Hệ thống', allowedRoles: ['Manager'] },
   { path: '/import-data',   icon: Database,        label: 'Import dữ liệu cũ',   section: 'Hệ thống', allowedRoles: ['Manager'] },
   { path: '/settings',      icon: Settings,        label: 'Cài đặt',             section: 'Hệ thống', allowedRoles: ['Manager'] },

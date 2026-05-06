@@ -44,6 +44,7 @@ export default function KPITargetsPage() {
 
   const isManager = currentUser?.role === 'Manager';
   const isLeader  = currentUser?.role === 'Leader';
+  const isMember  = !isManager && !isLeader;
   const canEdit   = isManager || isLeader;
 
   // Team của Leader
@@ -75,7 +76,11 @@ export default function KPITargetsPage() {
 
   // Tính actual cho mỗi target
   const targetsWithActual = useMemo(() => {
-    return periodTargets.map(t => {
+    // Member chỉ thấy target cá nhân của mình
+    const filtered = isMember
+      ? periodTargets.filter(t => t.employeeName === currentUser?.name)
+      : periodTargets;
+    return filtered.map(t => {
       const actualSubs = submissions.filter(s => {
         if (!s.submittedAt.startsWith(period)) return false;
         if (s.teamGroup !== t.teamGroup) return false;
@@ -94,7 +99,7 @@ export default function KPITargetsPage() {
       if ((a.target.siteId ?? '') !== (b.target.siteId ?? '')) return (a.target.siteId ?? '').localeCompare(b.target.siteId ?? '');
       return (a.target.taskType ?? '').localeCompare(b.target.taskType ?? '');
     });
-  }, [periodTargets, submissions, period]);
+  }, [periodTargets, submissions, period, isMember, currentUser]);
 
   // Tổng theo đầu việc (cross-team)
   // Rule: Có KPI tổng → đó là target chính thức (không cộng thêm cá nhân).
@@ -229,7 +234,7 @@ export default function KPITargetsPage() {
               ? 'Manager set target tổng nhóm. Leader phân KPI cá nhân cho từng member.'
               : isLeader
                 ? `Phân KPI cá nhân cho từng thành viên nhóm ${myTeamGroup || ''}.`
-                : ''}
+                : `KPI cá nhân của bạn — ${currentUser?.name || ''}`}
           </p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -362,7 +367,7 @@ export default function KPITargetsPage() {
                   <th style={{ textAlign: 'center' }}>Đã đạt</th>
                   <th style={{ textAlign: 'center', width: 200 }}>Tiến độ</th>
                   <th>Ghi chú</th>
-                  {isManager && <th>Thao tác</th>}
+                  {canEdit && <th>Thao tác</th>}
                 </tr>
               </thead>
               <tbody>
@@ -426,18 +431,22 @@ export default function KPITargetsPage() {
                           </div>
                         </td>
                       )}
-                      {isLeader && target.employeeName && target.teamGroup === myTeamGroup && (
+                      {isLeader && (
                         <td>
-                          <div style={{ display: 'flex', gap: '4px' }}>
-                            <button className="btn btn-icon btn-ghost"
-                              onClick={() => { setEditItem(target); setMemberFormMode(true); setShowForm(true); }}>
-                              <Edit3 size={13} />
-                            </button>
-                            <button className="btn btn-icon btn-ghost" style={{ color: 'var(--danger)' }}
-                              onClick={() => handleDelete(target)}>
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
+                          {(target.employeeName && target.teamGroup === myTeamGroup) ? (
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                              <button className="btn btn-icon btn-ghost"
+                                onClick={() => { setEditItem(target); setMemberFormMode(true); setShowForm(true); }}>
+                                <Edit3 size={13} />
+                              </button>
+                              <button className="btn btn-icon btn-ghost" style={{ color: 'var(--danger)' }}
+                                onClick={() => handleDelete(target)}>
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>—</span>
+                          )}
                         </td>
                       )}
                     </tr>
