@@ -33,13 +33,14 @@ export default function TodoPage() {
   const [editItem, setEditItem] = useState<TodoItem | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [filterPriority, setFilterPriority] = useState<TodoPriority | ''>('');
-  // Chỉ hiện checklist của mình + được assign cho mình
+  // Chỉ hiện: (1) todo mình tạo cho mình (không assign hoặc tự assign), (2) todo được giao cho mình
   const myTodos = useMemo(() => {
     if (!currentUser) return [];
-    let list = todos.filter(t =>
-      t.ownerName === currentUser.name ||
-      t.assigneeName === currentUser.name
-    );
+    let list = todos.filter(t => {
+      const isMyOwn = t.ownerName === currentUser.name && (!t.assigneeName || t.assigneeName === currentUser.name);
+      const isAssignedToMe = t.assigneeName === currentUser.name && t.ownerName !== currentUser.name;
+      return isMyOwn || isAssignedToMe;
+    });
     if (filterPriority) list = list.filter(t => t.priority === filterPriority);
     return list;
   }, [todos, currentUser, filterPriority]);

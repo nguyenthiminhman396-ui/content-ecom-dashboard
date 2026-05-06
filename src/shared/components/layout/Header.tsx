@@ -42,12 +42,14 @@ export default function Header({ title }: HeaderProps) {
 
   const unreadAssigned = allAssigned.filter(t => !t.acknowledged);
 
-  // ── 2) Nhắc nhở deadline ─────────────────────────────────────
+  // ── 2) Nhắc nhở deadline — chỉ cho người thực hiện, không cho người assign ──
   const deadlineReminders = useMemo(() => {
     if (!currentUser) return [];
     return todos.filter(t => {
-      const isMine = t.ownerName === currentUser.name || t.assigneeName === currentUser.name;
-      if (!isMine || t.completed || !t.dueDate) return false;
+      // Chỉ hiển thị cho: (1) việc mình tạo cho chính mình, (2) việc được giao cho mình
+      const isMyOwn = t.ownerName === currentUser.name && (!t.assigneeName || t.assigneeName === currentUser.name);
+      const isAssignedToMe = t.assigneeName === currentUser.name && t.ownerName !== currentUser.name;
+      if ((!isMyOwn && !isAssignedToMe) || t.completed || !t.dueDate) return false;
       return isOverdue(t.dueDate) || isDueSoon(t.dueDate);
     });
   }, [todos, currentUser]);

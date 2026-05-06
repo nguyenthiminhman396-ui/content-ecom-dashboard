@@ -49,8 +49,9 @@ export default function Sidebar() {
     : 0;
   const overdueTodoCount = currentUser
     ? todos.filter(t => {
-        const isMine = t.ownerName === currentUser.name || t.assigneeName === currentUser.name;
-        if (!isMine || t.completed || !t.dueDate) return false;
+        const isMyOwn = t.ownerName === currentUser.name && (!t.assigneeName || t.assigneeName === currentUser.name);
+        const isAssignedToMe = t.assigneeName === currentUser.name && t.ownerName !== currentUser.name;
+        if ((!isMyOwn && !isAssignedToMe) || t.completed || !t.dueDate) return false;
         return new Date(t.dueDate + 'T23:59:59') < new Date();
       }).length
     : 0;
