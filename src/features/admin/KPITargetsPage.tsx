@@ -142,8 +142,6 @@ export default function KPITargetsPage() {
         const teamList: string[] = [];
         const perTeam: { team: string; displayName: string; target: number; actual: number; progress: number }[] = [];
 
-        const numTeams = Object.keys(teams).length;
-
         for (const [team, d] of Object.entries(teams)) {
           teamList.push(team);
           let t: number;
@@ -151,10 +149,6 @@ export default function KPITargetsPage() {
           if (hasAnyTeamTarget) {
             if (d.teamTarget > 0) {
               t = d.teamTarget;
-              // Nếu là chủ quản (có target) và có team khác hỗ trợ (numTeams > 1) -> Thêm dấu +
-              if (numTeams > 1 && team !== 'Tất cả team') {
-                displayName = `${team} +`;
-              }
             } else {
               t = d.individualTarget;
             }
@@ -386,7 +380,6 @@ export default function KPITargetsPage() {
                           borderRadius: 'var(--radius-full)', fontSize: '0.78rem', fontWeight: 600,
                         }}>
                           {target.teamGroup || 'Tổng nhóm'}
-                          {!target.employeeName && taskTypeSummary.find(s => s.taskType === target.taskType)?.perTeam.some(pt => pt.team !== target.teamGroup) && target.teamGroup !== 'Tất cả team' ? ' +' : ''}
                         </span>
                       </td>
                       <td className="cell-secondary">
