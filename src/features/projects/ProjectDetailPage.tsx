@@ -35,7 +35,7 @@ export default function ProjectDetailPage() {
   const notifyAssignees = (taskName: string, assignees: string[], deadline?: string) => {
     if (!currentUser || !project) return;
     assignees.forEach(name => {
-      if (name === currentUser.name) return; // không tự thông báo
+      // Tạo todo cho tất cả assignees, kể cả tự assign
       addTodo({
         id: `todo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`,
         ownerName: currentUser.name,

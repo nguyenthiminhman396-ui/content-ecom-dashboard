@@ -281,8 +281,8 @@ export default function Projects() {
               toast.success('Đã thêm dự án mới');
             }
 
-            // Gửi thông báo nếu thay đổi leader / có leader mới (và người đó không phải mình tự phân công mình)
-            if (leaderChanged && leaderName && currentUser && leaderName !== currentUser.name) {
+            // Gửi thông báo nếu thay đổi leader / có leader mới (kể cả tự assign)
+            if (leaderChanged && leaderName && currentUser) {
               addTodo({
                 id: `todo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`,
                 ownerName: currentUser.name,
