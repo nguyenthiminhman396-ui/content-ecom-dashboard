@@ -553,7 +553,7 @@ function RuleFormModal({ item, knownLabels, onClose, onSave }: {
                 <input
                   className="form-input"
                   type="number"
-                  step="0.05"
+                  step="any"
                   min="0"
                   value={form.timePerLink ?? 0.5}
                   onChange={e => {
@@ -567,7 +567,7 @@ function RuleFormModal({ item, knownLabels, onClose, onSave }: {
                 <input
                   className="form-input"
                   type="number"
-                  step="0.05"
+                  step="any"
                   min="0"
                   value={form.pointPerLink ?? 0.75}
                   onChange={e => setForm({ ...form, pointPerLink: parseFloat(e.target.value) || 0 })}
