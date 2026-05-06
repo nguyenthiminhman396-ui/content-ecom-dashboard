@@ -3,7 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import BottomTabBar from './BottomTabBar';
 import Header from './Header';
-import { useAppStore, syncFromSheets, syncKPIFromSheets } from '@/shared/store/appStore';
+import { useAppStore, syncFromSheets, syncKPIFromSheets, initPostgresSync } from '@/shared/store/appStore';
 import { Toaster } from 'react-hot-toast';
 import toast from 'react-hot-toast';
 
@@ -21,6 +21,11 @@ export default function AppLayout() {
   const { sidebarCollapsed, isConnected } = useAppStore();
   const location = useLocation();
   const title = pageTitles[location.pathname] || 'Dashboard';
+
+  useEffect(() => {
+    // Load data từ Vercel Postgres
+    initPostgresSync();
+  }, []);
 
   useEffect(() => {
     if (!isConnected) return;
