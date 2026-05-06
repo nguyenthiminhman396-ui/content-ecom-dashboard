@@ -96,7 +96,7 @@ export default function KPITargetsPage() {
       });
       const actualLinks = actualSubs.reduce((sum, s) => sum + s.links.length, 0);
       const progress = t.targetLinks > 0 ? Math.round((actualLinks / t.targetLinks) * 100) : 0;
-      return { target: t, actualLinks, progress, actualSubs: actualSubs.length };
+      return { target: t, actualLinks, progress, actualSubsCount: actualSubs.length, matchedSubmissions: actualSubs };
     }).sort((a, b) => {
       // Sort by teamGroup → siteId → taskType
       if (a.target.teamGroup !== b.target.teamGroup) return a.target.teamGroup.localeCompare(b.target.teamGroup);
@@ -109,36 +109,43 @@ export default function KPITargetsPage() {
   // Rule: Có KPI tổng → đó là target chính thức (không cộng thêm cá nhân).
   //        Không có KPI tổng → fallback cộng cá nhân.
   const taskTypeSummary = useMemo(() => {
-    const grouped: Record<string, Record<string, {
-      teamTarget: number;
-      individualTarget: number;
-      teamActual: number;      // Actual từ Tổng nhóm (= tổng team)
-      individualActual: number; // Cộng actual cá nhân
-    }>> = {};
+    const grouped: Record<string, {
+      teams: Record<string, {
+        teamTarget: number;
+        individualTarget: number;
+        teamActual: number;      // Actual từ Tổng nhóm (= tổng team)
+        individualActual: number; // Cộng actual cá nhân
+      }>;
+      matchedSubs: Map<string, any>; // Lưu submission ID -> submission để đếm unique tổng
+    }> = {};
 
-    targetsWithActual.forEach(({ target, actualLinks }) => {
+    targetsWithActual.forEach(({ target, actualLinks, matchedSubmissions }) => {
       const taskKey = target.taskType || '(Tất cả đầu việc)';
       const team = target.teamGroup;
-      if (!grouped[taskKey]) grouped[taskKey] = {};
-      if (!grouped[taskKey][team]) grouped[taskKey][team] = {
+      if (!grouped[taskKey]) grouped[taskKey] = { teams: {}, matchedSubs: new Map() };
+      if (!grouped[taskKey].teams[team]) grouped[taskKey].teams[team] = {
         teamTarget: 0, individualTarget: 0, teamActual: 0, individualActual: 0
       };
       if (target.employeeName) {
-        grouped[taskKey][team].individualTarget += target.targetLinks;
-        grouped[taskKey][team].individualActual += actualLinks; // Giờ đúng per-person
+        grouped[taskKey].teams[team].individualTarget += target.targetLinks;
+        grouped[taskKey].teams[team].individualActual += actualLinks; // Giờ đúng per-person
       } else {
-        grouped[taskKey][team].teamTarget += target.targetLinks;
-        grouped[taskKey][team].teamActual = actualLinks; // Tổng nhóm = team total
+        grouped[taskKey].teams[team].teamTarget += target.targetLinks;
+        grouped[taskKey].teams[team].teamActual = actualLinks; // Tổng nhóm = team total
       }
+      // Góp chung submission vào tổng của taskType này
+      matchedSubmissions.forEach(s => grouped[taskKey].matchedSubs.set(s.id, s));
     });
 
     return Object.entries(grouped)
-      .map(([taskType, teams]) => {
+      .map(([taskType, data]) => {
+        const teams = data.teams;
         // Kiểm tra: đầu việc này CÓ KPI tổng nào không?
         const hasAnyTeamTarget = Object.values(teams).some(d => d.teamTarget > 0);
 
         let totalTarget = 0;
-        let totalActual = 0;
+        // Tổng actual chính xác = đếm số link từ tất cả unique submissions của nhóm này
+        let totalActual = Array.from(data.matchedSubs.values()).reduce((sum, s) => sum + s.links.length, 0);
         const teamList: string[] = [];
         const perTeam: { team: string; displayName: string; target: number; actual: number; progress: number }[] = [];
 
@@ -151,8 +158,6 @@ export default function KPITargetsPage() {
           } else {
             totalTarget += d.individualTarget;
           }
-          const a = Math.max(d.teamActual, d.individualActual);
-          totalActual += a;
 
           // Dropdown details (always use individual target/actual set by Leads/Members)
           perTeam.push({
