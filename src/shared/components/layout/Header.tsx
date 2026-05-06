@@ -30,12 +30,11 @@ interface HeaderProps {
 export default function Header({ title }: HeaderProps) {
   const { sidebarCollapsed, isSyncing, currentUser, setCurrentUser, todos, updateTodo } = useAppStore();
 
-  // ── 1) Tất cả task được giao bởi người khác (cả đã đọc và chưa đọc) ──
+  // ── 1) Tất cả task có assigneeName = mình (cả tự assign + người khác assign) ──
   const allAssigned = useMemo(() => {
     if (!currentUser) return [];
     return todos.filter(t =>
       t.assigneeName === currentUser.name &&
-      t.ownerName !== currentUser.name &&
       !t.completed
     );
   }, [todos, currentUser]);
@@ -185,7 +184,7 @@ export default function Header({ title }: HeaderProps) {
                                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.description}</div>
                               )}
                               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '0.68rem', color: 'var(--text-tertiary)' }}>
-                                <span>👤 {t.ownerName}</span>
+                                <span>👤 {t.ownerName === currentUser?.name ? 'Tự giao' : t.ownerName}</span>
                                 {t.dueDate && (
                                   <span style={{ color: overdue ? 'var(--danger)' : undefined, fontWeight: overdue ? 600 : 400 }}>
                                     <Clock size={10} style={{ verticalAlign: 'middle' }} /> {overdue ? '⚠️ ' : ''}{fmtDate(t.dueDate)}
