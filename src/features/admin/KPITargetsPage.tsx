@@ -83,11 +83,15 @@ export default function KPITargetsPage() {
     return filtered.map(t => {
       const actualSubs = submissions.filter(s => {
         if (!s.submittedAt.startsWith(period)) return false;
-        if (s.teamGroup !== t.teamGroup) return false;
+        // Target cá nhân → match theo người, bỏ qua teamGroup (vì member có thể nộp cross-team)
+        if (t.employeeName) {
+          if (s.employeeName !== t.employeeName) return false;
+        } else {
+          // Target tổng nhóm → filter theo teamGroup
+          if (s.teamGroup !== t.teamGroup) return false;
+        }
         if (t.siteId && s.siteId !== t.siteId) return false;
         if (t.taskType && s.taskType !== t.taskType) return false;
-        // Target cá nhân → chỉ đếm submissions của người đó
-        if (t.employeeName && s.employeeName !== t.employeeName) return false;
         return true;
       });
       const actualLinks = actualSubs.reduce((sum, s) => sum + s.links.length, 0);
