@@ -13,7 +13,7 @@ const projectTypes: ProjectType[] = ['Campaign', 'Series', 'Client'];
 const projectStatuses: ProjectStatus[] = ['Đang chạy', 'Hoàn thành', 'Tạm dừng', 'Hủy'];
 
 export default function Projects() {
-  const { projects, contents, clients, expenses, members, addProject, updateProject, deleteProject, currentUser, addTodo } = useAppStore();
+  const { projects, contents, clients, expenses, members, submissions, projectTasks, addProject, updateProject, deleteProject, currentUser, addTodo } = useAppStore();
   const canManage = currentUser?.role === 'Manager' || currentUser?.role === 'Leader';
   const navigate = useNavigate();
   const [view, setView] = useState<'card' | 'list'>('card');
@@ -34,9 +34,34 @@ export default function Projects() {
   }, [projects, filterType, filterStatus, filterClient]);
 
   const getProjectProgress = (projectId: string) => {
-    const pContents = contents.filter(c => c.projectId === projectId);
-    if (pContents.length === 0) return 0;
-    return Math.round(pContents.reduce((s, c) => s + c.progress, 0) / pContents.length);
+    const tasks = projectTasks.filter(t => t.projectId === projectId);
+    if (tasks.length === 0) {
+      // Fallback: nếu không có task, dùng contents cũ
+      const pContents = contents.filter(c => c.projectId === projectId);
+      if (pContents.length === 0) return 0;
+      return Math.round(pContents.reduce((s, c) => s + c.progress, 0) / pContents.length);
+    }
+    const projectSubs = submissions.filter(s => s.projectId === projectId);
+    const progresses = tasks.map(t => {
+      const matched = projectSubs.filter(s => {
+        if (s.projectTaskId === t.id) return true;
+        if (s.projectTaskId) return false;
+        if (t.taskType && s.taskType !== t.taskType) return false;
+        if (t.taskDetail && s.taskDetail !== t.taskDetail) return false;
+        if (t.assignees && t.assignees.length > 0 && !t.assignees.includes(s.employeeName)) return false;
+        return !!t.taskType || !!t.taskDetail;
+      });
+      const mode = t.trackingMode || 'link';
+      if (mode === 'quantity' && t.targetQuantity && t.targetQuantity > 0) {
+        const qty = matched.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
+        return Math.min(100, Math.round((qty / t.targetQuantity) * 100));
+      } else if (t.targetLinks > 0) {
+        const links = matched.reduce((sum, s) => sum + s.links.length, 0);
+        return Math.min(100, Math.round((links / t.targetLinks) * 100));
+      }
+      return 0;
+    });
+    return Math.round(progresses.reduce((s, p) => s + p, 0) / progresses.length);
   };
 
   const getProjectSpent = (projectId: string) => {
