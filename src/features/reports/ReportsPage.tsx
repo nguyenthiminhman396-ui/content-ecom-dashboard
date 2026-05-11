@@ -499,14 +499,26 @@ function ReportFormModal({ item, currentWeekStart, currentWeekData, onClose, onS
               </div>
             </div>
 
-            {/* Auto stats */}
+            {/* Editable stats */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '16px' }}>
-              {[['Link', form.totalLinks], ['Điểm', form.totalPoints?.toFixed(0)], ['Việc', form.totalTasksCompleted]].map(([l, v]) => (
-                <div key={l as string} style={{ padding: '10px', borderRadius: 'var(--radius-md)', background: 'var(--bg-secondary)', textAlign: 'center' }}>
-                  <div style={{ fontWeight: 800, fontSize: '1.2rem', color: 'var(--primary-600)' }}>{v}</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{l}</div>
-                </div>
-              ))}
+              <div style={{ padding: '10px', borderRadius: 'var(--radius-md)', background: 'var(--bg-secondary)', textAlign: 'center' }}>
+                <input type="number" min="0" className="form-input" value={form.totalLinks ?? 0}
+                  onChange={e => setForm({ ...form, totalLinks: parseInt(e.target.value) || 0 })}
+                  style={{ width: '80px', textAlign: 'center', fontWeight: 800, fontSize: '1.2rem', color: 'var(--primary-600)', border: '1px dashed var(--border-medium)', background: 'transparent', padding: '2px 4px', margin: '0 auto', display: 'block' }} />
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>Link</div>
+              </div>
+              <div style={{ padding: '10px', borderRadius: 'var(--radius-md)', background: 'var(--bg-secondary)', textAlign: 'center' }}>
+                <input type="number" min="0" step="0.1" className="form-input" value={Math.round((form.totalPoints ?? 0) * 10) / 10}
+                  onChange={e => setForm({ ...form, totalPoints: parseFloat(e.target.value) || 0 })}
+                  style={{ width: '80px', textAlign: 'center', fontWeight: 800, fontSize: '1.2rem', color: 'var(--primary-600)', border: '1px dashed var(--border-medium)', background: 'transparent', padding: '2px 4px', margin: '0 auto', display: 'block' }} />
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>Điểm</div>
+              </div>
+              <div style={{ padding: '10px', borderRadius: 'var(--radius-md)', background: 'var(--bg-secondary)', textAlign: 'center' }}>
+                <input type="number" min="0" className="form-input" value={form.totalTasksCompleted ?? 0}
+                  onChange={e => setForm({ ...form, totalTasksCompleted: parseInt(e.target.value) || 0 })}
+                  style={{ width: '80px', textAlign: 'center', fontWeight: 800, fontSize: '1.2rem', color: 'var(--primary-600)', border: '1px dashed var(--border-medium)', background: 'transparent', padding: '2px 4px', margin: '0 auto', display: 'block' }} />
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>Việc</div>
+              </div>
             </div>
 
             {/* Project progress */}
@@ -526,22 +538,55 @@ function ReportFormModal({ item, currentWeekStart, currentWeekData, onClose, onS
                     <input className="form-input" value={p.notes} onChange={e => updateProjectProgress(idx, 'notes', e.target.value)}
                       style={{ flex: 1, fontSize: '0.82rem', padding: '4px 6px' }} placeholder="Ghi chú..." />
                   </div>
-                  {/* Task breakdown */}
+                  {/* Task breakdown — editable */}
                   {p.taskBreakdown && p.taskBreakdown.length > 0 && (
                     <div style={{ marginTop: '6px', paddingLeft: '12px', fontSize: '0.76rem' }}>
-                      {p.taskBreakdown.map((t, ti) => (
-                        <div key={ti} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '2px 0' }}>
-                          <span style={{ flex: 1, color: 'var(--text-secondary)' }}>🎯 {t.taskName}</span>
-                          <span style={{ fontWeight: 600, color: 'var(--primary-600)' }}>
-                            {t.completedLinks}/{t.targetLinks} link
-                          </span>
-                          <span style={{ fontWeight: 700,
-                                         color: t.progress >= 100 ? 'var(--success)' : t.progress >= 50 ? 'var(--primary-600)' : 'var(--warning)',
-                                         minWidth: 40, textAlign: 'right' }}>
-                            {t.progress}%
-                          </span>
-                        </div>
-                      ))}
+                      {p.taskBreakdown.map((t, ti) => {
+                        const updatedProgress = t.targetLinks > 0 ? Math.min(100, Math.round((t.completedLinks / t.targetLinks) * 100)) : 0;
+                        return (
+                          <div key={ti} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '3px 0' }}>
+                            <span style={{ flex: 1, color: 'var(--text-secondary)' }}>🎯 {t.taskName}</span>
+                            <input type="number" min="0" className="form-input"
+                              value={t.completedLinks}
+                              onChange={e => {
+                                const pp = [...(form.projectProgress || [])];
+                                const bd = [...(pp[idx].taskBreakdown || [])];
+                                const newCompleted = parseInt(e.target.value) || 0;
+                                bd[ti] = { ...bd[ti], completedLinks: newCompleted, progress: bd[ti].targetLinks > 0 ? Math.min(100, Math.round((newCompleted / bd[ti].targetLinks) * 100)) : 0 };
+                                pp[idx] = { ...pp[idx], taskBreakdown: bd };
+                                // Recalc project progress from tasks
+                                const avgProg = bd.length > 0 ? Math.round(bd.reduce((s, x) => s + x.progress, 0) / bd.length) : 0;
+                                const totalDone = bd.reduce((s, x) => s + x.completedLinks, 0);
+                                const totalTarget = bd.reduce((s, x) => s + x.targetLinks, 0);
+                                pp[idx] = { ...pp[idx], progress: avgProg, tasksCompleted: totalDone, tasksTotal: totalTarget };
+                                setForm({ ...form, projectProgress: pp });
+                              }}
+                              style={{ width: '50px', fontSize: '0.76rem', padding: '2px 4px', textAlign: 'center', border: '1px dashed var(--border-medium)' }} />
+                            <span style={{ color: 'var(--text-tertiary)' }}>/</span>
+                            <input type="number" min="0" className="form-input"
+                              value={t.targetLinks}
+                              onChange={e => {
+                                const pp = [...(form.projectProgress || [])];
+                                const bd = [...(pp[idx].taskBreakdown || [])];
+                                const newTarget = parseInt(e.target.value) || 0;
+                                bd[ti] = { ...bd[ti], targetLinks: newTarget, progress: newTarget > 0 ? Math.min(100, Math.round((bd[ti].completedLinks / newTarget) * 100)) : 0 };
+                                pp[idx] = { ...pp[idx], taskBreakdown: bd };
+                                const avgProg = bd.length > 0 ? Math.round(bd.reduce((s, x) => s + x.progress, 0) / bd.length) : 0;
+                                const totalDone = bd.reduce((s, x) => s + x.completedLinks, 0);
+                                const totalTarget = bd.reduce((s, x) => s + x.targetLinks, 0);
+                                pp[idx] = { ...pp[idx], progress: avgProg, tasksCompleted: totalDone, tasksTotal: totalTarget };
+                                setForm({ ...form, projectProgress: pp });
+                              }}
+                              style={{ width: '50px', fontSize: '0.76rem', padding: '2px 4px', textAlign: 'center', border: '1px dashed var(--border-medium)' }} />
+                            <span style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)' }}>link</span>
+                            <span style={{ fontWeight: 700,
+                                           color: updatedProgress >= 100 ? 'var(--success)' : updatedProgress >= 50 ? 'var(--primary-600)' : 'var(--warning)',
+                                           minWidth: 40, textAlign: 'right' }}>
+                              {updatedProgress}%
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
