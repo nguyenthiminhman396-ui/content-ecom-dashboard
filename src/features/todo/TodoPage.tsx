@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useAppStore } from '@/shared/store/appStore';
 import {
   CheckSquare, Plus, Trash2, X, Save, AlertTriangle,
-  ChevronDown, ChevronUp, Clock, Flag, Edit3, UserPlus
+  ChevronDown, ChevronUp, Clock, Flag, Edit3, UserPlus, Eye
 } from 'lucide-react';
 import type { TodoItem, TodoPriority } from '@/shared/types';
 import toast from 'react-hot-toast';
@@ -205,6 +205,7 @@ export default function TodoPage() {
         <TodoFormModal
           item={editItem}
           availableMembers={availableMembers}
+          readOnly={!!editItem && editItem.ownerName !== currentUser.name}
           onClose={() => { setShowForm(false); setEditItem(null); }}
           onSave={data => {
             if (editItem) {
@@ -317,10 +318,17 @@ function TodoCard({ item, currentUserName, onToggle, onEdit, onDelete }: {
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-          {/* Only owner or assignee can edit */}
-          <button className="btn btn-icon btn-ghost" onClick={() => onEdit(item)} title="Sửa" style={{ padding: 4 }}>
-            <Edit3 size={13} />
-          </button>
+          {isMyTask ? (
+            /* Owner: full edit */
+            <button className="btn btn-icon btn-ghost" onClick={() => onEdit(item)} title="Sửa" style={{ padding: 4 }}>
+              <Edit3 size={13} />
+            </button>
+          ) : (
+            /* Assignee: view-only */
+            <button className="btn btn-icon btn-ghost" onClick={() => onEdit(item)} title="Xem chi tiết" style={{ padding: 4 }}>
+              <Eye size={13} />
+            </button>
+          )}
           {/* Only owner can delete */}
           {isMyTask && (
             <button className="btn btn-icon btn-ghost" onClick={() => onDelete(item)}
@@ -335,9 +343,10 @@ function TodoCard({ item, currentUserName, onToggle, onEdit, onDelete }: {
 }
 
 // ── Form Modal ───────────────────────────────────────────────────────────────
-function TodoFormModal({ item, availableMembers, onClose, onSave }: {
+function TodoFormModal({ item, availableMembers, readOnly, onClose, onSave }: {
   item: TodoItem | null;
   availableMembers: string[];
+  readOnly?: boolean;
   onClose: () => void;
   onSave: (data: Partial<TodoItem>) => void;
 }) {
@@ -345,67 +354,143 @@ function TodoFormModal({ item, availableMembers, onClose, onSave }: {
     title: '', description: '', dueDate: '', priority: 'medium' as TodoPriority, assigneeName: '',
   });
 
+  const pm = PRIORITY_META[(form.priority || 'medium') as TodoPriority];
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
         <div className="modal-header">
-          <h3 className="modal-title">{item ? 'Chỉnh sửa công việc' : 'Thêm công việc mới'}</h3>
+          <h3 className="modal-title">
+            {readOnly ? '📋 Chi tiết công việc' : item ? 'Chỉnh sửa công việc' : 'Thêm công việc mới'}
+          </h3>
           <button className="modal-close" onClick={onClose}><X size={16} /></button>
         </div>
-        <form onSubmit={e => {
-          e.preventDefault();
-          if (!form.title?.trim()) { toast.error('Cần nhập tiêu đề'); return; }
-          onSave(form);
-        }}>
-          <div className="modal-body">
-            <div className="form-group">
-              <label className="form-label">Tiêu đề *</label>
-              <input className="form-input" value={form.title ?? ''} placeholder="VD: Viết 10 bài SEO nhà thuốc..."
-                onChange={e => setForm({ ...form, title: e.target.value })} autoFocus />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Mô tả chi tiết</label>
-              <textarea className="form-textarea" value={form.description ?? ''} rows={2}
-                placeholder="Ghi chú thêm..."
-                onChange={e => setForm({ ...form, description: e.target.value })} />
-            </div>
-            <div className="form-row">
+        {readOnly ? (
+          /* ── Read-only view for assignees ── */
+          <div>
+            <div className="modal-body">
+              {/* Info banner */}
+              <div style={{
+                padding: '10px 14px', borderRadius: 'var(--radius-sm)', marginBottom: '16px',
+                background: 'var(--primary-50)', border: '1px solid var(--primary-100)',
+                display: 'flex', alignItems: 'center', gap: '8px',
+                fontSize: '0.8rem', color: 'var(--primary-700)',
+              }}>
+                <Eye size={14} />
+                Bạn được assign task này — chỉ người tạo ({item?.ownerName}) mới có thể chỉnh sửa.
+              </div>
+
               <div className="form-group">
-                <label className="form-label">Hạn hoàn thành</label>
-                <input className="form-input" type="date" value={form.dueDate ?? ''}
-                  onChange={e => setForm({ ...form, dueDate: e.target.value || undefined })} />
+                <label className="form-label" style={{ color: 'var(--text-tertiary)', fontSize: '0.78rem' }}>Tiêu đề</label>
+                <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>{form.title || '—'}</div>
+              </div>
+
+              {form.description && (
+                <div className="form-group">
+                  <label className="form-label" style={{ color: 'var(--text-tertiary)', fontSize: '0.78rem' }}>Mô tả</label>
+                  <div style={{
+                    fontSize: '0.88rem', color: 'var(--text-secondary)',
+                    whiteSpace: 'pre-wrap', lineHeight: 1.5,
+                    padding: '10px 12px', background: 'var(--bg-secondary)',
+                    borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)',
+                  }}>{form.description}</div>
+                </div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label" style={{ color: 'var(--text-tertiary)', fontSize: '0.78rem' }}>Hạn hoàn thành</label>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Clock size={13} color="var(--text-tertiary)" />
+                    {form.dueDate ? new Date(form.dueDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Không có'}
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label" style={{ color: 'var(--text-tertiary)', fontSize: '0.78rem' }}>Ưu tiên</label>
+                  <span style={{
+                    fontSize: '0.82rem', padding: '3px 12px', borderRadius: 'var(--radius-full)',
+                    background: pm.bg, color: pm.color, fontWeight: 600, display: 'inline-block',
+                  }}>
+                    {pm.icon} {pm.label}
+                  </span>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ color: 'var(--text-tertiary)', fontSize: '0.78rem' }}>Người giao</label>
+                <div style={{ fontSize: '0.88rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <UserPlus size={13} color="var(--primary-500)" />
+                  {item?.ownerName || '—'}
+                </div>
+              </div>
+
+              {item?.createdAt && (
+                <div style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+                  Tạo lúc: {new Date(item.createdAt).toLocaleString('vi-VN')}
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={onClose}>Đóng</button>
+            </div>
+          </div>
+        ) : (
+          /* ── Editable form for owner ── */
+          <form onSubmit={e => {
+            e.preventDefault();
+            if (!form.title?.trim()) { toast.error('Cần nhập tiêu đề'); return; }
+            onSave(form);
+          }}>
+            <div className="modal-body">
+              <div className="form-group">
+                <label className="form-label">Tiêu đề *</label>
+                <input className="form-input" value={form.title ?? ''} placeholder="VD: Viết 10 bài SEO nhà thuốc..."
+                  onChange={e => setForm({ ...form, title: e.target.value })} autoFocus />
               </div>
               <div className="form-group">
-                <label className="form-label">Ưu tiên</label>
-                <select className="form-select" value={form.priority ?? 'medium'}
-                  onChange={e => setForm({ ...form, priority: e.target.value as TodoPriority })}>
-                  <option value="high">🔴 Cao</option>
-                  <option value="medium">🟡 Trung bình</option>
-                  <option value="low">⚪ Thấp</option>
+                <label className="form-label">Mô tả chi tiết</label>
+                <textarea className="form-textarea" value={form.description ?? ''} rows={2}
+                  placeholder="Ghi chú thêm..."
+                  onChange={e => setForm({ ...form, description: e.target.value })} />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Hạn hoàn thành</label>
+                  <input className="form-input" type="date" value={form.dueDate ?? ''}
+                    onChange={e => setForm({ ...form, dueDate: e.target.value || undefined })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Ưu tiên</label>
+                  <select className="form-select" value={form.priority ?? 'medium'}
+                    onChange={e => setForm({ ...form, priority: e.target.value as TodoPriority })}>
+                    <option value="high">🔴 Cao</option>
+                    <option value="medium">🟡 Trung bình</option>
+                    <option value="low">⚪ Thấp</option>
+                  </select>
+                </div>
+              </div>
+              {/* Assign task */}
+              <div className="form-group">
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <UserPlus size={14} color="var(--primary-500)" />
+                  Assign cho (tùy chọn)
+                </label>
+                <select className="form-select" value={form.assigneeName ?? ''}
+                  onChange={e => setForm({ ...form, assigneeName: e.target.value || undefined })}>
+                  <option value="">— Không assign (chỉ mình thấy) —</option>
+                  {availableMembers.map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
+                <p style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: 4 }}>
+                  💡 Chỉ bạn và người được assign mới thấy task này. Người được assign sẽ nhận thông báo.
+                </p>
               </div>
             </div>
-            {/* Assign task */}
-            <div className="form-group">
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <UserPlus size={14} color="var(--primary-500)" />
-                Assign cho (tùy chọn)
-              </label>
-              <select className="form-select" value={form.assigneeName ?? ''}
-                onChange={e => setForm({ ...form, assigneeName: e.target.value || undefined })}>
-                <option value="">— Không assign (chỉ mình thấy) —</option>
-                {availableMembers.map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
-              <p style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: 4 }}>
-                💡 Chỉ bạn và người được assign mới thấy task này. Người được assign sẽ nhận thông báo.
-              </p>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={onClose}>Hủy</button>
+              <button type="submit" className="btn btn-primary"><Save size={14} /> {item ? 'Cập nhật' : 'Thêm việc'}</button>
             </div>
-          </div>
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Hủy</button>
-            <button type="submit" className="btn btn-primary"><Save size={14} /> {item ? 'Cập nhật' : 'Thêm việc'}</button>
-          </div>
-        </form>
+          </form>
+        )}
       </div>
     </div>
   );
