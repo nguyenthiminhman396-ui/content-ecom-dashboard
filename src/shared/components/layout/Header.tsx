@@ -1,12 +1,23 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '@/shared/store/appStore';
-import { Bell, RefreshCw, LogOut, ChevronDown, User as UserIcon, ShieldCheck, X, Clock, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Bell, RefreshCw, LogOut, ChevronDown, User as UserIcon, ShieldCheck, X, Clock, AlertTriangle, CheckCircle, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 function fmtDate(d?: string) {
   if (!d) return '';
   const [y, m, day] = d.split('-');
   return `${day}/${m}/${y}`;
+}
+
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Vừa xong';
+  if (mins < 60) return `${mins} phút trước`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} giờ trước`;
+  const days = Math.floor(hours / 24);
+  return `${days} ngày trước`;
 }
 
 function isOverdue(dueDate?: string) {
@@ -28,9 +39,10 @@ interface HeaderProps {
 }
 
 export default function Header({ title }: HeaderProps) {
-  const { sidebarCollapsed, isSyncing, currentUser, setCurrentUser, todos, updateTodo } = useAppStore();
+  const { sidebarCollapsed, isSyncing, currentUser, setCurrentUser, todos, updateTodo,
+    notifications, markNotificationRead, markAllNotificationsRead } = useAppStore();
 
-  // ── 1) Tất cả task có assigneeName = mình (cả tự assign + người khác assign) ──
+  // ── 1) Task assigned to me (chưa hoàn thành) ──
   const allAssigned = useMemo(() => {
     if (!currentUser) return [];
     return todos.filter(t =>
@@ -41,11 +53,10 @@ export default function Header({ title }: HeaderProps) {
 
   const unreadAssigned = allAssigned.filter(t => !t.acknowledged);
 
-  // ── 2) Nhắc nhở deadline — chỉ cho người thực hiện, không cho người assign ──
+  // ── 2) Deadline reminders ──
   const deadlineReminders = useMemo(() => {
     if (!currentUser) return [];
     return todos.filter(t => {
-      // Chỉ hiển thị cho: (1) việc mình tạo cho chính mình, (2) việc được giao cho mình
       const isMyOwn = t.ownerName === currentUser.name && (!t.assigneeName || t.assigneeName === currentUser.name);
       const isAssignedToMe = t.assigneeName === currentUser.name && t.ownerName !== currentUser.name;
       if ((!isMyOwn && !isAssignedToMe) || t.completed || !t.dueDate) return false;
@@ -53,8 +64,18 @@ export default function Header({ title }: HeaderProps) {
     });
   }, [todos, currentUser]);
 
-  // Badge chỉ đếm chưa đọc
-  const totalUnread = unreadAssigned.length + deadlineReminders.length;
+  // ── 3) Completion notifications for current user ──
+  const myNotifications = useMemo(() => {
+    if (!currentUser) return [];
+    return notifications
+      .filter(n => n.recipientName === currentUser.name)
+      .slice(0, 20); // limit to recent 20
+  }, [notifications, currentUser]);
+
+  const unreadNotifs = myNotifications.filter(n => !n.read);
+
+  // Badge: assigned + deadline + completion notifications
+  const totalUnread = unreadAssigned.length + deadlineReminders.length + unreadNotifs.length;
 
   const [open, setOpen] = useState(false);
   const [showNotifPopup, setShowNotifPopup] = useState(false);
@@ -69,6 +90,13 @@ export default function Header({ title }: HeaderProps) {
       toast.success('Đã đăng xuất');
       window.location.href = '/';
     }
+  };
+
+  const handleMarkAllRead = () => {
+    if (!currentUser) return;
+    unreadAssigned.forEach(t => updateTodo(t.id, { acknowledged: true }));
+    markAllNotificationsRead(currentUser.name);
+    toast.success('Đã đánh dấu đọc tất cả');
   };
 
   return (
@@ -99,13 +127,12 @@ export default function Header({ title }: HeaderProps) {
           {/* ── Notification Dropdown ──────────────────────────────── */}
           {showNotifPopup && (
             <>
-              {/* Backdrop ẩn để bấm ra ngoài đóng popup */}
               <div onClick={() => setShowNotifPopup(false)}
                 style={{ position: 'fixed', inset: 0, zIndex: 90 }} />
 
               <div style={{
                 position: 'absolute', top: 'calc(100% + 8px)', right: 0, zIndex: 100,
-                width: '380px', maxHeight: '480px',
+                width: '400px', maxHeight: '520px',
                 background: 'var(--bg-card)', border: '1px solid var(--border-light)',
                 borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-lg)',
                 display: 'flex', flexDirection: 'column',
@@ -132,14 +159,64 @@ export default function Header({ title }: HeaderProps) {
 
                 {/* Body */}
                 <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px' }}>
-                  {allAssigned.length === 0 && deadlineReminders.length === 0 && (
+                  {allAssigned.length === 0 && deadlineReminders.length === 0 && myNotifications.length === 0 && (
                     <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
                       <CheckCircle size={30} style={{ opacity: 0.3, marginBottom: 6 }} />
                       <div style={{ fontSize: '0.85rem' }}>Không có thông báo nào</div>
                     </div>
                   )}
 
-                  {/* ── Nhóm 1: Được phân công ──────────────── */}
+                  {/* ── Nhóm 1: Hoàn thành công việc (task_completed) ──────── */}
+                  {myNotifications.length > 0 && (
+                    <div style={{ marginBottom: '12px' }}>
+                      <div style={{
+                        fontSize: '0.7rem', fontWeight: 700, color: 'var(--success)',
+                        textTransform: 'uppercase', letterSpacing: '0.04em',
+                        marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '5px',
+                      }}>
+                        <CheckCircle size={11} /> Hoàn thành ({myNotifications.length})
+                        {unreadNotifs.length > 0 && (
+                          <span style={{ fontSize: '0.64rem', color: 'var(--danger)', fontWeight: 700 }}>
+                            · {unreadNotifs.length} mới
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        {myNotifications.map(n => (
+                          <div key={n.id}
+                            onClick={() => { if (!n.read) markNotificationRead(n.id); }}
+                            style={{
+                              padding: '8px 10px',
+                              borderLeft: `3px solid ${!n.read ? 'var(--success)' : 'var(--border-light)'}`,
+                              borderRadius: 'var(--radius-sm)',
+                              background: !n.read ? '#F0FDF4' : 'var(--bg-secondary)',
+                              opacity: !n.read ? 1 : 0.7,
+                              cursor: !n.read ? 'pointer' : 'default',
+                              transition: 'all 0.15s ease',
+                              position: 'relative',
+                            }}>
+                            {!n.read && <div style={{
+                              position: 'absolute', top: 10, right: 10,
+                              width: 8, height: 8, borderRadius: '50%',
+                              background: 'var(--success)',
+                            }} />}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                              <Check size={13} color="var(--success)" />
+                              <span style={{ fontWeight: !n.read ? 700 : 500, fontSize: '0.82rem',
+                                paddingRight: !n.read ? '18px' : 0 }}>
+                                {n.message}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)', paddingLeft: '19px' }}>
+                              {timeAgo(n.createdAt)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Nhóm 2: Được phân công ──────────────── */}
                   {allAssigned.length > 0 && (
                     <div style={{ marginBottom: '12px' }}>
                       <div style={{
@@ -171,7 +248,6 @@ export default function Header({ title }: HeaderProps) {
                                 transition: 'all 0.15s ease',
                                 position: 'relative',
                               }}>
-                              {/* Chấm xanh cho chưa đọc */}
                               {isUnread && <div style={{
                                 position: 'absolute', top: 10, right: 10,
                                 width: 8, height: 8, borderRadius: '50%',
@@ -199,7 +275,7 @@ export default function Header({ title }: HeaderProps) {
                     </div>
                   )}
 
-                  {/* ── Nhóm 2: Nhắc nhở deadline ─────────────── */}
+                  {/* ── Nhóm 3: Nhắc nhở deadline ─────────────── */}
                   {deadlineReminders.length > 0 && (
                     <div>
                       <div style={{
@@ -249,17 +325,15 @@ export default function Header({ title }: HeaderProps) {
                 </div>
 
                 {/* Footer */}
-                {unreadAssigned.length > 0 && (
+                {totalUnread > 0 && (
                   <div style={{
                     padding: '10px 12px', borderTop: '1px solid var(--border-light)',
                     display: 'flex', justifyContent: 'flex-end',
                   }}>
-                    <button className="btn btn-primary" style={{ fontSize: '0.82rem', padding: '6px 14px' }} onClick={() => {
-                      unreadAssigned.forEach(t => {
-                        updateTodo(t.id, { acknowledged: true });
-                      });
-                      toast.success(`Đã đánh dấu đọc ${unreadAssigned.length} thông báo`);
-                    }}>Đánh dấu đã đọc tất cả ({unreadAssigned.length})</button>
+                    <button className="btn btn-primary" style={{ fontSize: '0.82rem', padding: '6px 14px' }}
+                      onClick={handleMarkAllRead}>
+                      Đánh dấu đã đọc tất cả ({totalUnread})
+                    </button>
                   </div>
                 )}
               </div>

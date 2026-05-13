@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AppState, FilterState, KPISubmission, MemberAccount, WeeklyReport, ProjectTask, BonusPoint, RnDLog, MonthlyKPITarget, TodoItem } from '@/shared/types';
+import type { AppState, FilterState, KPISubmission, MemberAccount, WeeklyReport, ProjectTask, BonusPoint, RnDLog, MonthlyKPITarget, TodoItem, AppNotification } from '@/shared/types';
 import { DEFAULT_KPI_SCALE_CONFIG } from '@/shared/types';
 import { mockProjects, mockContents, mockMembers, mockClients, mockExpenses, defaultTaskPointRules, defaultSites } from '@/shared/data/mockData';
 
@@ -22,6 +22,7 @@ const DB_EXPENSES    = 'hcms_expenses';
 const DB_TASK_PT_RULES = 'hcms_task_point_rules';
 const DB_PERF_REVIEWS  = 'hcms_perf_reviews';
 const DB_USER          = 'hcms_current_user';
+const DB_NOTIFICATIONS = 'hcms_notifications';
 
 // ── Persist to Postgres with retry ────────────────────────────────────────
 function saveDB(key: string, value: unknown) {
@@ -78,6 +79,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   kpiTargets:   [] as MonthlyKPITarget[],
   todos:        [] as TodoItem[],
   weeklyReports: [] as WeeklyReport[],
+  notifications: [] as AppNotification[],
 
   // ── UI state ─────────────────────────────────────────────────────────────
   currentUser:      null,
@@ -364,14 +366,59 @@ export const useAppStore = create<AppState>((set, get) => ({
     saveDB(DB_TODOS, todos);
   },
   updateTodo: (id, updates) => {
+    const oldTodo = get().todos.find(x => x.id === id);
     const todos = get().todos.map(x => x.id === id ? { ...x, ...updates } : x);
     set({ todos });
     saveDB(DB_TODOS, todos);
+
+    // Auto-notification: khi assignee tick done → thông báo cho owner
+    if (oldTodo && !oldTodo.completed && updates.completed === true) {
+      const currentUser = get().currentUser;
+      // Chỉ tạo notification khi: người tick done là assignee (không phải owner)
+      if (currentUser && oldTodo.assigneeName === currentUser.name && oldTodo.ownerName !== currentUser.name) {
+        const notif: AppNotification = {
+          id: `notif_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,5)}`,
+          type: 'task_completed',
+          recipientName: oldTodo.ownerName,
+          actorName: currentUser.name,
+          title: 'Công việc đã hoàn thành',
+          message: `${currentUser.name} đã hoàn thành "${oldTodo.title}"`,
+          referenceId: oldTodo.id,
+          read: false,
+          createdAt: new Date().toISOString(),
+        };
+        get().addNotification(notif);
+      }
+    }
   },
   deleteTodo: (id) => {
     const todos = get().todos.filter(x => x.id !== id);
     set({ todos });
     saveDB(DB_TODOS, todos);
+  },
+
+  // ── Notification CRUD ─────────────────────────────────────────────────────────
+  addNotification: (n) => {
+    const notifications = [n, ...get().notifications];
+    set({ notifications });
+    saveDB(DB_NOTIFICATIONS, notifications);
+  },
+  markNotificationRead: (id) => {
+    const notifications = get().notifications.map(n => n.id === id ? { ...n, read: true } : n);
+    set({ notifications });
+    saveDB(DB_NOTIFICATIONS, notifications);
+  },
+  markAllNotificationsRead: (recipientName) => {
+    const notifications = get().notifications.map(n =>
+      n.recipientName === recipientName ? { ...n, read: true } : n
+    );
+    set({ notifications });
+    saveDB(DB_NOTIFICATIONS, notifications);
+  },
+  clearNotifications: (recipientName) => {
+    const notifications = get().notifications.filter(n => n.recipientName !== recipientName);
+    set({ notifications });
+    saveDB(DB_NOTIFICATIONS, notifications);
   },
 
   // ── UI actions ────────────────────────────────────────────────────────────
@@ -449,6 +496,7 @@ export async function initFromDB() {
       [DB_KPI_TARGETS]:    'kpiTargets',
       [DB_WEEKLY]:         'weeklyReports',
       [DB_ACCOUNTS]:       'memberAccounts',
+      [DB_NOTIFICATIONS]:  'notifications',
     };
 
     for (const [key, stateKey] of Object.entries(keyMap)) {

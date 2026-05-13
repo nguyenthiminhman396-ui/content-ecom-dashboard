@@ -490,9 +490,30 @@ export interface RnDLog {
 }
 
 // ============================================
-// Config
+// Notifications — thông báo khi assignee hoàn thành task
 // ============================================
 
+export type NotificationType = 'task_completed' | 'task_assigned' | 'info';
+
+export interface AppNotification {
+  id: string;
+  /** Loại thông báo */
+  type: NotificationType;
+  /** Người nhận thông báo (ownerName) */
+  recipientName: string;
+  /** Người gây ra sự kiện (assigneeName) */
+  actorName: string;
+  /** Tiêu đề thông báo */
+  title: string;
+  /** Nội dung chi tiết */
+  message: string;
+  /** ID todo/task liên quan */
+  referenceId?: string;
+  /** Đã đọc chưa */
+  read: boolean;
+  /** Thời gian tạo ISO */
+  createdAt: string;
+}
 
 
 // ============================================
@@ -536,6 +557,8 @@ export interface AppState {
   kpiTargets: MonthlyKPITarget[];
   /** Personal checklist / to-do */
   todos: TodoItem[];
+  /** Thông báo (task completion, assignment, etc.) */
+  notifications: AppNotification[];
 
   // UI State
   currentUser: Member | null;
@@ -604,6 +627,12 @@ export interface AppState {
   addTodo: (t: TodoItem) => void;
   updateTodo: (id: string, updates: Partial<TodoItem>) => void;
   deleteTodo: (id: string) => void;
+
+  // Notification CRUD
+  addNotification: (n: AppNotification) => void;
+  markNotificationRead: (id: string) => void;
+  markAllNotificationsRead: (recipientName: string) => void;
+  clearNotifications: (recipientName: string) => void;
 
   // KPISubmission CRUD — Member chỉ add, Manager/Leader có thể delete khi cần
   addSubmission: (sub: KPISubmission) => void;
