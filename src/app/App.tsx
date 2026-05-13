@@ -7,7 +7,7 @@ import { useAppStore, initFromDB } from '@/shared/store/appStore';
 import '@/index.css';
 
 export default function App() {
-  const { currentUser, setCurrentUser } = useAppStore();
+  const { currentUser } = useAppStore();
   const [bootstrapped, setBootstrapped] = useState(false);
 
   // Bootstrap: load all data from Postgres

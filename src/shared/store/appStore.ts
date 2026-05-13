@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AppState, FilterState, KPISubmission, KPIScaleConfig, MemberAccount, WeeklyReport, Site, ProjectTask, BonusPoint, RnDLog, MonthlyKPITarget, TodoItem } from '@/shared/types';
+import type { AppState, FilterState, KPISubmission, MemberAccount, WeeklyReport, ProjectTask, BonusPoint, RnDLog, MonthlyKPITarget, TodoItem } from '@/shared/types';
 import { DEFAULT_KPI_SCALE_CONFIG } from '@/shared/types';
 import { mockProjects, mockContents, mockMembers, mockClients, mockExpenses, defaultTaskPointRules, defaultSites } from '@/shared/data/mockData';
 
