@@ -126,8 +126,8 @@ export interface Expense {
 }
 
 // ============================================
-// KPI Entry — đọc 1 chiều từ Google Sheet (tab Contents)
-// Mỗi hàng = 1 lần nhân viên nộp việc qua Google Form
+// KPI Entry — dữ liệu KPI
+// Mỗi hàng = 1 lần nhân viên nộp việc
 // ============================================
 
 export interface KPIEntry {
@@ -493,55 +493,7 @@ export interface RnDLog {
 // Config
 // ============================================
 
-export interface KPISheetTab {
-  tabName: string;
-  projectName: string;
-  active: boolean;
-}
 
-export interface GoogleSheetsConfig {
-  spreadsheetId: string;
-  clientId: string;
-  kpiTabs?: KPISheetTab[];
-}
-
-// Tên các tab trong Google Sheet
-export const SHEET_TAB_NAMES = {
-  PROJECTS:    'Projects',
-  CONTENTS:    'Contents',
-  MEMBERS:     'Members',
-  CLIENTS:     'Clients',
-  EXPENSES:    'Expenses',
-  CONFIG:      'AppConfig',       // Bảng điểm quy đổi
-  REVIEWS:     'AppReviews',      // Đánh giá performance
-  SUBMISSIONS: 'AppSubmissions',  // KPI người dùng submit qua dashboard
-  SCALE:       'AppScale',        // Cấu hình thang điểm/thời gian (1 hàng)
-  SITES:       'AppSites',        // Sites: Nhà thuốc, Tiêm chủng,...
-  PROJ_TASKS:  'AppProjectTasks', // Task cứng của project
-  BONUS:       'AppBonus',        // Điểm thưởng
-  TODOS:       'AppTodos',        // Checklist công việc cá nhân
-} as const;
-
-export const SHEET_HEADERS = {
-  PROJECTS: ['id','name','type','clientId','budget','deadline','status','leader','description','isMonthly','activeMonths','costPerPoint'],
-  CONTENTS: ['id','projectId','title','type','topic','assignee','deadline','status','progress',
-             'approvalLevel','approver','approvalResult','notes','link','publishedAt'],
-  MEMBERS:  ['id','name','role','expertise','email','avatar','kpiRole','teamGroup','productivityFactor'],
-  CLIENTS:  ['id','name','industry','contact','totalBudget'],
-  EXPENSES: ['id','projectId','category','amount','date','createdBy','notes'],
-  CONFIG:   ['id','taskLabel','category','timePerLink','pointPerLink','notes','active'],
-  REVIEWS:  ['id','employeeName','period','qualityScore','attitudeScore',
-             'timelinessScore','daysOff','allowedDaysOff','notes','reviewedAt','reviewerId'],
-  SUBMISSIONS: ['id','employeeName','submittedAt','taskType','taskDetail','siteId','projectId','projectTaskId',
-                'links','teamGroup','timePerLink','pointPerLink','totalPoints','locked','notes','hoursWorked','quantity'],
-  SCALE:    ['key','pointPerHour','standardHoursPerMonth','memberTargetPoints','leaderProductionWeight',
-             'wProductivity','wQuality','wAttitude','wTimeliness','wAttendance','allowedDaysOff','updatedAt','workingDaysPerMonth'],
-  SITES:    ['id','name','urlPattern','description','active','color'],
-  PROJ_TASKS: ['id','projectId','name','trackingMode','taskType','taskDetail','targetLinks','targetQuantity','assignees','deadline','notes'],
-  BONUS:    ['id','employeeName','amount','reason','projectId','period','awardedAt','awardedBy',
-             'status','approvedBy','approvedAt','rejectionNote'],
-  TODOS:    ['id','ownerName','assigneeName','title','description','dueDate','priority','completed','completedAt','createdAt'],
-} as const;
 
 // ============================================
 // App State
@@ -585,12 +537,8 @@ export interface AppState {
   /** Personal checklist / to-do */
   todos: TodoItem[];
 
-  // Google Sheets config
-  sheetsConfig: GoogleSheetsConfig | null;
-
   // UI State
   currentUser: Member | null;
-  isConnected: boolean;
   isSyncing: boolean;
   lastSyncTime: Date | null;
   sidebarCollapsed: boolean;
@@ -688,8 +636,6 @@ export interface AppState {
   updatePerformanceReview: (id: string, updates: Partial<PerformanceReview>) => void;
   deletePerformanceReview: (id: string) => void;
 
-  // Sheets actions
-  setSheetsConfig: (config: GoogleSheetsConfig | null) => void;
   ensureDefaultProjects: () => void;
 
   // UI actions
@@ -698,7 +644,6 @@ export interface AppState {
   resetFilters: () => void;
   toggleSidebar: () => void;
   setSyncing: (syncing: boolean) => void;
-  setConnected: (connected: boolean) => void;
   // WeeklyReport CRUD
   weeklyReports: WeeklyReport[];
   addWeeklyReport: (report: WeeklyReport) => void;
