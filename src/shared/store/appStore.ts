@@ -48,6 +48,48 @@ function saveDB(key: string, value: unknown) {
   postToDb(1);
 }
 
+// ── Atomic: append items to array (no overwrite) ──────────────────────────
+function appendDB(key: string, items: unknown[]) {
+  const post = (attempt: number) => {
+    fetch('/api/store', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, op: 'append', items })
+    })
+      .then(res => { if (!res.ok && attempt < 3) setTimeout(() => post(attempt + 1), 1000 * attempt); })
+      .catch(() => { if (attempt < 3) setTimeout(() => post(attempt + 1), 1000 * attempt); else console.error('DB Append failed:', key); });
+  };
+  post(1);
+}
+
+// ── Atomic: remove items by id ────────────────────────────────────────────
+function removeItemDB(key: string, ids: string[]) {
+  const post = (attempt: number) => {
+    fetch('/api/store', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, op: 'remove', ids })
+    })
+      .then(res => { if (!res.ok && attempt < 3) setTimeout(() => post(attempt + 1), 1000 * attempt); })
+      .catch(() => { if (attempt < 3) setTimeout(() => post(attempt + 1), 1000 * attempt); else console.error('DB Remove failed:', key); });
+  };
+  post(1);
+}
+
+// ── Atomic: update single item by id (merge fields) ──────────────────────
+function updateItemDB(key: string, id: string, data: unknown) {
+  const post = (attempt: number) => {
+    fetch('/api/store', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, op: 'update', id, data })
+    })
+      .then(res => { if (!res.ok && attempt < 3) setTimeout(() => post(attempt + 1), 1000 * attempt); })
+      .catch(() => { if (attempt < 3) setTimeout(() => post(attempt + 1), 1000 * attempt); else console.error('DB Update failed:', key); });
+  };
+  post(1);
+}
+
 const defaultFilters: FilterState = {
   projectId:     '',
   clientId:      '',
@@ -119,109 +161,109 @@ export const useAppStore = create<AppState>((set, get) => ({
   addSubmission: (sub) => {
     const submissions = [...get().submissions, sub];
     set({ submissions });
-    saveDB(DB_SUBMISSIONS, submissions);
+    appendDB(DB_SUBMISSIONS, [sub]);
   },
   addSubmissionsBatch: (subs) => {
     const submissions = [...get().submissions, ...subs];
     set({ submissions });
-    saveDB(DB_SUBMISSIONS, submissions);
+    appendDB(DB_SUBMISSIONS, subs);
   },
   deleteSubmission: (id) => {
     const submissions = get().submissions.filter(s => s.id !== id);
     set({ submissions });
-    saveDB(DB_SUBMISSIONS, submissions);
+    removeItemDB(DB_SUBMISSIONS, [id]);
   },
 
   // ── Content CRUD ─────────────────────────────────────────────────────────
   addContent: (content) => {
     const contents = [...get().contents, content];
     set({ contents });
-    saveDB(DB_CONTENTS, contents);
+    appendDB(DB_CONTENTS, [content]);
   },
   updateContent: (id, updates) => {
     const contents = get().contents.map((c) => c.id === id ? { ...c, ...updates } : c);
     set({ contents });
-    saveDB(DB_CONTENTS, contents);
+    updateItemDB(DB_CONTENTS, id, updates);
   },
   deleteContent: (id) => {
     const contents = get().contents.filter((c) => c.id !== id);
     set({ contents });
-    saveDB(DB_CONTENTS, contents);
+    removeItemDB(DB_CONTENTS, [id]);
   },
 
   // ── Project CRUD ─────────────────────────────────────────────────────────
   addProject: (project) => {
     const projects = [...get().projects, project];
     set({ projects });
-    saveDB(DB_PROJECTS, projects);
+    appendDB(DB_PROJECTS, [project]);
   },
   updateProject: (id, updates) => {
     const projects = get().projects.map((p) => p.id === id ? { ...p, ...updates } : p);
     set({ projects });
-    saveDB(DB_PROJECTS, projects);
+    updateItemDB(DB_PROJECTS, id, updates);
   },
   deleteProject: (id) => {
     const projects = get().projects.filter((p) => p.id !== id);
     set({ projects });
-    saveDB(DB_PROJECTS, projects);
+    removeItemDB(DB_PROJECTS, [id]);
   },
 
   // ── Expense CRUD ─────────────────────────────────────────────────────────
   addExpense: (expense) => {
     const expenses = [...get().expenses, expense];
     set({ expenses });
-    saveDB(DB_EXPENSES, expenses);
+    appendDB(DB_EXPENSES, [expense]);
   },
   updateExpense: (id, updates) => {
     const expenses = get().expenses.map((e) => e.id === id ? { ...e, ...updates } : e);
     set({ expenses });
-    saveDB(DB_EXPENSES, expenses);
+    updateItemDB(DB_EXPENSES, id, updates);
   },
   deleteExpense: (id) => {
     const expenses = get().expenses.filter((e) => e.id !== id);
     set({ expenses });
-    saveDB(DB_EXPENSES, expenses);
+    removeItemDB(DB_EXPENSES, [id]);
   },
 
   // ── TaskPointRule CRUD ───────────────────────────────────────────────────
   addTaskPointRule: (rule) => {
     const taskPointRules = [...get().taskPointRules, rule];
     set({ taskPointRules });
-    saveDB(DB_TASK_PT_RULES, taskPointRules);
+    appendDB(DB_TASK_PT_RULES, [rule]);
   },
   updateTaskPointRule: (id, updates) => {
     const taskPointRules = get().taskPointRules.map((r) => r.id === id ? { ...r, ...updates } : r);
     set({ taskPointRules });
-    saveDB(DB_TASK_PT_RULES, taskPointRules);
+    updateItemDB(DB_TASK_PT_RULES, id, updates);
   },
   deleteTaskPointRule: (id) => {
     const taskPointRules = get().taskPointRules.filter((r) => r.id !== id);
     set({ taskPointRules });
-    saveDB(DB_TASK_PT_RULES, taskPointRules);
+    removeItemDB(DB_TASK_PT_RULES, [id]);
   },
 
   // ── PerformanceReview CRUD ───────────────────────────────────────────────
   addPerformanceReview: (review) => {
     const performanceReviews = [...get().performanceReviews, review];
     set({ performanceReviews });
-    saveDB(DB_PERF_REVIEWS, performanceReviews);
+    appendDB(DB_PERF_REVIEWS, [review]);
   },
   updatePerformanceReview: (id, updates) => {
     const performanceReviews = get().performanceReviews.map((r) => r.id === id ? { ...r, ...updates } : r);
     set({ performanceReviews });
-    saveDB(DB_PERF_REVIEWS, performanceReviews);
+    updateItemDB(DB_PERF_REVIEWS, id, updates);
   },
   deletePerformanceReview: (id) => {
     const performanceReviews = get().performanceReviews.filter((r) => r.id !== id);
     set({ performanceReviews });
-    saveDB(DB_PERF_REVIEWS, performanceReviews);
+    removeItemDB(DB_PERF_REVIEWS, [id]);
   },
 
   // ── Member CRUD ───────────────────────────────────────────────────────────
   addMember: (m, account) => {
     const members = [...get().members, m];
     set({ members });
-    saveDB(DB_MEMBERS, members);
+    appendDB(DB_MEMBERS, [m]);
     if (account) {
       const accs = [...get().memberAccounts.filter(a => a.memberId !== account.memberId), account];
       set({ memberAccounts: accs });
@@ -231,13 +273,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   updateMember: (id, updates) => {
     const members = get().members.map(m => m.id === id ? { ...m, ...updates } : m);
     set({ members });
-    saveDB(DB_MEMBERS, members);
+    updateItemDB(DB_MEMBERS, id, updates);
   },
   deleteMember: (id) => {
     const members = get().members.filter(m => m.id !== id);
     const memberAccounts = get().memberAccounts.filter(a => a.memberId !== id);
     set({ members, memberAccounts });
-    saveDB(DB_MEMBERS, members);
+    removeItemDB(DB_MEMBERS, [id]);
     saveDB(DB_ACCOUNTS, memberAccounts);
   },
   setMemberAccount: (account) => {
@@ -255,121 +297,119 @@ export const useAppStore = create<AppState>((set, get) => ({
   addSite: (s) => {
     const sites = [...get().sites, s];
     set({ sites });
-    saveDB(DB_SITES, sites);
+    appendDB(DB_SITES, [s]);
   },
   updateSite: (id, updates) => {
     const sites = get().sites.map(s => s.id === id ? { ...s, ...updates } : s);
     set({ sites });
-    saveDB(DB_SITES, sites);
+    updateItemDB(DB_SITES, id, updates);
   },
   deleteSite: (id) => {
     const sites = get().sites.filter(s => s.id !== id);
     set({ sites });
-    saveDB(DB_SITES, sites);
+    removeItemDB(DB_SITES, [id]);
   },
 
   // ── ProjectTask CRUD ─────────────────────────────────────────────────────
   addProjectTask: (t) => {
     const projectTasks = [...get().projectTasks, t];
     set({ projectTasks });
-    saveDB(DB_PROJ_TASKS, projectTasks);
+    appendDB(DB_PROJ_TASKS, [t]);
   },
   updateProjectTask: (id, updates) => {
     const projectTasks = get().projectTasks.map(t => t.id === id ? { ...t, ...updates } : t);
     set({ projectTasks });
-    saveDB(DB_PROJ_TASKS, projectTasks);
+    updateItemDB(DB_PROJ_TASKS, id, updates);
   },
   deleteProjectTask: (id) => {
     const projectTasks = get().projectTasks.filter(t => t.id !== id);
     set({ projectTasks });
-    saveDB(DB_PROJ_TASKS, projectTasks);
+    removeItemDB(DB_PROJ_TASKS, [id]);
   },
 
   // ── BonusPoint CRUD ─────────────────────────────────────────────────────
   addBonusPoint: (b) => {
     const bonusPoints = [...get().bonusPoints, b];
     set({ bonusPoints });
-    saveDB(DB_BONUS, bonusPoints);
+    appendDB(DB_BONUS, [b]);
   },
   updateBonusPoint: (id, updates) => {
     const bonusPoints = get().bonusPoints.map(b => b.id === id ? { ...b, ...updates } : b);
     set({ bonusPoints });
-    saveDB(DB_BONUS, bonusPoints);
+    updateItemDB(DB_BONUS, id, updates);
   },
   deleteBonusPoint: (id) => {
     const bonusPoints = get().bonusPoints.filter(b => b.id !== id);
     set({ bonusPoints });
-    saveDB(DB_BONUS, bonusPoints);
+    removeItemDB(DB_BONUS, [id]);
   },
   approveBonusPoint: (id, approverName) => {
-    const bonusPoints = get().bonusPoints.map(b => b.id === id
-      ? { ...b, status: 'approved' as const, approvedBy: approverName, approvedAt: new Date().toISOString() }
-      : b);
+    const upd = { status: 'approved' as const, approvedBy: approverName, approvedAt: new Date().toISOString() };
+    const bonusPoints = get().bonusPoints.map(b => b.id === id ? { ...b, ...upd } : b);
     set({ bonusPoints });
-    saveDB(DB_BONUS, bonusPoints);
+    updateItemDB(DB_BONUS, id, upd);
   },
   rejectBonusPoint: (id, approverName, note) => {
-    const bonusPoints = get().bonusPoints.map(b => b.id === id
-      ? { ...b, status: 'rejected' as const, approvedBy: approverName, approvedAt: new Date().toISOString(), rejectionNote: note ?? '' }
-      : b);
+    const upd = { status: 'rejected' as const, approvedBy: approverName, approvedAt: new Date().toISOString(), rejectionNote: note ?? '' };
+    const bonusPoints = get().bonusPoints.map(b => b.id === id ? { ...b, ...upd } : b);
     set({ bonusPoints });
-    saveDB(DB_BONUS, bonusPoints);
+    updateItemDB(DB_BONUS, id, upd);
   },
 
   // ── R&D Log CRUD ─────────────────────────────────────────────────────────
   addRnDLog: (l) => {
     const rndLogs = [...get().rndLogs, l];
     set({ rndLogs });
-    saveDB(DB_RND, rndLogs);
+    appendDB(DB_RND, [l]);
   },
   updateRnDLog: (id, updates) => {
-    const rndLogs = get().rndLogs.map(x => x.id === id ? { ...x, ...updates, updatedAt: new Date().toISOString() } : x);
+    const upd = { ...updates, updatedAt: new Date().toISOString() };
+    const rndLogs = get().rndLogs.map(x => x.id === id ? { ...x, ...upd } : x);
     set({ rndLogs });
-    saveDB(DB_RND, rndLogs);
+    updateItemDB(DB_RND, id, upd);
   },
   deleteRnDLog: (id) => {
     const rndLogs = get().rndLogs.filter(x => x.id !== id);
     set({ rndLogs });
-    saveDB(DB_RND, rndLogs);
+    removeItemDB(DB_RND, [id]);
   },
 
   // ── Spot-check (qualityCheck trên submission) ────────────────────────────
   setQualityCheck: (submissionId, score, checkedBy, note) => {
-    const submissions = get().submissions.map(s => s.id === submissionId
-      ? { ...s, qualityCheck: { score, checkedBy, checkedAt: new Date().toISOString(), note } }
-      : s);
+    const qc = { qualityCheck: { score, checkedBy, checkedAt: new Date().toISOString(), note } };
+    const submissions = get().submissions.map(s => s.id === submissionId ? { ...s, ...qc } : s);
     set({ submissions });
-    saveDB(DB_SUBMISSIONS, submissions);
+    updateItemDB(DB_SUBMISSIONS, submissionId, qc);
   },
 
   // ── Monthly KPI Target CRUD ──────────────────────────────────────────────
   addKpiTarget: (t) => {
     const kpiTargets = [...get().kpiTargets, t];
     set({ kpiTargets });
-    saveDB(DB_KPI_TARGETS, kpiTargets);
+    appendDB(DB_KPI_TARGETS, [t]);
   },
   updateKpiTarget: (id, updates) => {
     const kpiTargets = get().kpiTargets.map(x => x.id === id ? { ...x, ...updates } : x);
     set({ kpiTargets });
-    saveDB(DB_KPI_TARGETS, kpiTargets);
+    updateItemDB(DB_KPI_TARGETS, id, updates);
   },
   deleteKpiTarget: (id) => {
     const kpiTargets = get().kpiTargets.filter(x => x.id !== id);
     set({ kpiTargets });
-    saveDB(DB_KPI_TARGETS, kpiTargets);
+    removeItemDB(DB_KPI_TARGETS, [id]);
   },
 
   // ── Todo CRUD ─────────────────────────────────────────────────────────────────
   addTodo: (t) => {
     const todos = [...get().todos, t];
     set({ todos });
-    saveDB(DB_TODOS, todos);
+    appendDB(DB_TODOS, [t]);
   },
   updateTodo: (id, updates) => {
     const oldTodo = get().todos.find(x => x.id === id);
     const todos = get().todos.map(x => x.id === id ? { ...x, ...updates } : x);
     set({ todos });
-    saveDB(DB_TODOS, todos);
+    updateItemDB(DB_TODOS, id, updates);
 
     // Auto-notification: khi assignee tick done → thông báo cho owner
     if (oldTodo && !oldTodo.completed && updates.completed === true) {
@@ -394,19 +434,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   deleteTodo: (id) => {
     const todos = get().todos.filter(x => x.id !== id);
     set({ todos });
-    saveDB(DB_TODOS, todos);
+    removeItemDB(DB_TODOS, [id]);
   },
 
   // ── Notification CRUD ─────────────────────────────────────────────────────────
   addNotification: (n) => {
     const notifications = [n, ...get().notifications];
     set({ notifications });
-    saveDB(DB_NOTIFICATIONS, notifications);
+    appendDB(DB_NOTIFICATIONS, [n]);
   },
   markNotificationRead: (id) => {
     const notifications = get().notifications.map(n => n.id === id ? { ...n, read: true } : n);
     set({ notifications });
-    saveDB(DB_NOTIFICATIONS, notifications);
+    updateItemDB(DB_NOTIFICATIONS, id, { read: true });
   },
   markAllNotificationsRead: (recipientName) => {
     const notifications = get().notifications.map(n =>
@@ -439,17 +479,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   addWeeklyReport: (report) => {
     const weeklyReports = [...get().weeklyReports, report];
     set({ weeklyReports });
-    saveDB(DB_WEEKLY, weeklyReports);
+    appendDB(DB_WEEKLY, [report]);
   },
   updateWeeklyReport: (id, updates) => {
     const weeklyReports = get().weeklyReports.map(r => r.id === id ? { ...r, ...updates } : r);
     set({ weeklyReports });
-    saveDB(DB_WEEKLY, weeklyReports);
+    updateItemDB(DB_WEEKLY, id, updates);
   },
   deleteWeeklyReport: (id) => {
     const weeklyReports = get().weeklyReports.filter(r => r.id !== id);
     set({ weeklyReports });
-    saveDB(DB_WEEKLY, weeklyReports);
+    removeItemDB(DB_WEEKLY, [id]);
   },
 
   // ── Migrate: bỏ p_nhathuoc/p_tiemchung khỏi Projects (chúng là Sites) ───
