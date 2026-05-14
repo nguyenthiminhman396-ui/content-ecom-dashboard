@@ -424,8 +424,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   // ── UI actions ────────────────────────────────────────────────────────────
   setCurrentUser:  (user) => {
     set({ currentUser: user });
-    // Persist current user to DB
-    saveDB(DB_USER, user);
+    // Persist per-device (localStorage, KHÔNG lưu DB chung vì mỗi máy 1 acc)
+    try {
+      if (user) localStorage.setItem('hcms_current_user', JSON.stringify(user));
+      else localStorage.removeItem('hcms_current_user');
+    } catch { /* ignore */ }
   },
   setFilter:       (key, value)        => set((s) => ({ filters: { ...s.filters, [key]: value } })),
   resetFilters:    ()                  => set({ filters: defaultFilters }),
@@ -503,11 +506,6 @@ export async function initFromDB() {
       if (data[key] !== undefined && data[key] !== null) {
         stateUpdate[stateKey] = data[key];
       }
-    }
-
-    // Restore currentUser from DB
-    if (data[DB_USER]) {
-      stateUpdate['currentUser'] = data[DB_USER];
     }
 
     // Apply scale config migration
