@@ -637,7 +637,7 @@ export interface AppState {
   // KPISubmission CRUD — Member chỉ add, Manager/Leader có thể delete khi cần
   addSubmission: (sub: KPISubmission) => void;
   /** Thêm hàng loạt — dùng khi user paste/upload nhiều link cùng loại */
-  addSubmissionsBatch: (subs: KPISubmission[]) => void;
+  addSubmissionsBatch: (subs: KPISubmission[]) => Promise<boolean>;
   deleteSubmission: (id: string) => void;
 
   // Content CRUD

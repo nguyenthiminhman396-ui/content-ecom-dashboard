@@ -49,45 +49,60 @@ function saveDB(key: string, value: unknown) {
 }
 
 // ── Atomic: append items to array (no overwrite) ──────────────────────────
-function appendDB(key: string, items: unknown[]) {
-  const post = (attempt: number) => {
-    fetch('/api/store', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key, op: 'append', items })
-    })
-      .then(res => { if (!res.ok && attempt < 3) setTimeout(() => post(attempt + 1), 1000 * attempt); })
-      .catch(() => { if (attempt < 3) setTimeout(() => post(attempt + 1), 1000 * attempt); else console.error('DB Append failed:', key); });
-  };
-  post(1);
+async function appendDB(key: string, items: unknown[]): Promise<boolean> {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch('/api/store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, op: 'append', items })
+      });
+      if (res.ok) return true;
+      if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
+    } catch {
+      if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
+    }
+  }
+  console.error('DB Append failed after 3 retries:', key);
+  return false;
 }
 
 // ── Atomic: remove items by id ────────────────────────────────────────────
-function removeItemDB(key: string, ids: string[]) {
-  const post = (attempt: number) => {
-    fetch('/api/store', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key, op: 'remove', ids })
-    })
-      .then(res => { if (!res.ok && attempt < 3) setTimeout(() => post(attempt + 1), 1000 * attempt); })
-      .catch(() => { if (attempt < 3) setTimeout(() => post(attempt + 1), 1000 * attempt); else console.error('DB Remove failed:', key); });
-  };
-  post(1);
+async function removeItemDB(key: string, ids: string[]): Promise<boolean> {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch('/api/store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, op: 'remove', ids })
+      });
+      if (res.ok) return true;
+      if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
+    } catch {
+      if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
+    }
+  }
+  console.error('DB Remove failed after 3 retries:', key);
+  return false;
 }
 
 // ── Atomic: update single item by id (merge fields) ──────────────────────
-function updateItemDB(key: string, id: string, data: unknown) {
-  const post = (attempt: number) => {
-    fetch('/api/store', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key, op: 'update', id, data })
-    })
-      .then(res => { if (!res.ok && attempt < 3) setTimeout(() => post(attempt + 1), 1000 * attempt); })
-      .catch(() => { if (attempt < 3) setTimeout(() => post(attempt + 1), 1000 * attempt); else console.error('DB Update failed:', key); });
-  };
-  post(1);
+async function updateItemDB(key: string, id: string, data: unknown): Promise<boolean> {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch('/api/store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, op: 'update', id, data })
+      });
+      if (res.ok) return true;
+      if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
+    } catch {
+      if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
+    }
+  }
+  console.error('DB Update failed after 3 retries:', key);
+  return false;
 }
 
 const defaultFilters: FilterState = {
@@ -163,10 +178,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ submissions });
     appendDB(DB_SUBMISSIONS, [sub]);
   },
-  addSubmissionsBatch: (subs) => {
-    const submissions = [...get().submissions, ...subs];
+  addSubmissionsBatch: async (subs) => {
+    const oldSubmissions = get().submissions;
+    const submissions = [...oldSubmissions, ...subs];
     set({ submissions });
-    appendDB(DB_SUBMISSIONS, subs);
+    const ok = await appendDB(DB_SUBMISSIONS, subs);
+    if (!ok) {
+      // Rollback local state if DB save failed
+      set({ submissions: oldSubmissions });
+    }
+    return ok;
   },
   deleteSubmission: (id) => {
     const submissions = get().submissions.filter(s => s.id !== id);

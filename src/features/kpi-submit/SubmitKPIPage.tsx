@@ -166,11 +166,12 @@ export default function SubmitKPIPage() {
   };
 
   // ── Submit ──
+  const [submitting, setSubmitting] = useState(false);
   const canSubmit = isProjectMode
     ? (hoursWorked > 0 && taskDetail && projectId)
     : (links.length > 0 && selectedRule);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!currentUser) { toast.error('Bạn cần đăng nhập'); return; }
     if (!taskType)    { toast.error('Chọn đầu việc'); return; }
     if (!taskDetail)  { toast.error('Chọn chi tiết đầu việc'); return; }
@@ -199,12 +200,18 @@ export default function SubmitKPIPage() {
         quantity:     quantity || undefined,
       };
 
-      addSubmissionsBatch([sub]);
-      toast.success(`Đã submit ${hoursWorked}h · ${projectPoints} điểm`);
-      setHoursWorked(0);
-      setProjectDescription('');
-      setNotes('');
-      setProjectId('');
+      setSubmitting(true);
+      const ok = await addSubmissionsBatch([sub]);
+      setSubmitting(false);
+      if (ok) {
+        toast.success(`✅ Đã lưu vào DB: ${hoursWorked}h · ${projectPoints} điểm`);
+        setHoursWorked(0);
+        setProjectDescription('');
+        setNotes('');
+        setProjectId('');
+      } else {
+        toast.error('❌ Lưu thất bại! Dữ liệu chưa được lưu. Hãy thử lại.', { duration: 6000 });
+      }
     } else {
       if (!links.length) { toast.error('Chưa có link hợp lệ'); return; }
       if (!selectedRule)  { toast.error('Không tìm thấy rule điểm'); return; }
@@ -235,13 +242,19 @@ export default function SubmitKPIPage() {
         quantity:     quantity || undefined,
       };
 
-      addSubmissionsBatch([sub]);
-      toast.success(`Đã submit ${links.length} link · ${linkPoints}đ`);
-      setLinksRaw('');
-      setNotes('');
-      setProjectId('');
-      setProjectTaskId('');
-      setQuantity(0);
+      setSubmitting(true);
+      const ok = await addSubmissionsBatch([sub]);
+      setSubmitting(false);
+      if (ok) {
+        toast.success(`✅ Đã lưu vào DB: ${links.length} link · ${linkPoints}đ`);
+        setLinksRaw('');
+        setNotes('');
+        setProjectId('');
+        setProjectTaskId('');
+        setQuantity(0);
+      } else {
+        toast.error('❌ Lưu thất bại! Dữ liệu chưa được lưu. Hãy thử lại.', { duration: 6000 });
+      }
     }
     setShowPreview(false);
   };
@@ -531,11 +544,11 @@ export default function SubmitKPIPage() {
               </button>
             )}
             <button type="button" className="btn btn-primary"
-              disabled={!canSubmit}
+              disabled={!canSubmit || submitting}
               onClick={handleSubmit}>
-              <Send size={14} /> Submit {isProjectMode
-                ? `(${hoursWorked}h · ${projectPoints}đ)`
-                : `(${links.length} link · ${linkPoints}đ)`}
+              <Send size={14} /> {submitting ? 'Đang lưu...' : isProjectMode
+                ? `Submit (${hoursWorked}h · ${projectPoints}đ)`
+                : `Submit (${links.length} link · ${linkPoints}đ)`}
             </button>
           </div>
         </div>
