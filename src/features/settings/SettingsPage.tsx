@@ -238,7 +238,8 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* Database status */}
+        {/* Database status — Manager only */}
+        {currentUser?.role === 'Manager' && (
         <div className="card" style={{ padding: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -260,6 +261,7 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
+        )}
 
         {/* Logout */}
         <div className="card" style={{ padding: '16px' }}>

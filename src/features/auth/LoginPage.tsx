@@ -18,7 +18,7 @@ const ENV_ACCOUNTS = [
 ].filter((a) => a.email);
 
 export default function Login({ onLogin }: LoginProps) {
-  const { setCurrentUser, members, memberAccounts } = useAppStore();
+  const { setCurrentUser, members, memberAccounts, setMemberAccount } = useAppStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -47,10 +47,32 @@ export default function Login({ onLogin }: LoginProps) {
       setError('Tài khoản không tồn tại.');
       return;
     }
-    if (envAcc.role !== 'Client' && envAcc.pass !== password) {
-      setError('Mật khẩu không chính xác.');
-      return;
+
+    // Check if a MemberAccount already exists for this .env user (from a previous password change)
+    const existingDbAcc = memberAccounts.find(a => a.memberId === envAcc.id && a.active);
+    if (existingDbAcc) {
+      // Use DB password (user đã đổi password)
+      if (existingDbAcc.password !== password) {
+        setError('Mật khẩu không chính xác.');
+        return;
+      }
+    } else {
+      // First time — use .env password
+      if (envAcc.role !== 'Client' && envAcc.pass !== password) {
+        setError('Mật khẩu không chính xác.');
+        return;
+      }
+      // Auto-create MemberAccount in DB so they can change password later
+      if (envAcc.role !== 'Client' && envAcc.pass) {
+        setMemberAccount({
+          memberId: envAcc.id,
+          email: envAcc.email,
+          password: envAcc.pass,
+          active: true,
+        });
+      }
     }
+
     const memberToSet: Member = {
       id: envAcc.id,
       name: envAcc.name,

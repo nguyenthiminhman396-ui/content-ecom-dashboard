@@ -36,7 +36,7 @@ const navItems: NavItem[] = [
   { path: '/kpi-targets',   icon: Target,          label: 'KPI Target / Tháng',  section: 'Hệ thống', allowedRoles: ['Manager', 'Leader', 'Member'] },
   { path: '/point-config',  icon: Calculator,      label: 'Cấu hình Điểm',       section: 'Hệ thống', allowedRoles: ['Manager'] },
   { path: '/import-data',   icon: Database,        label: 'Import dữ liệu cũ',   section: 'Hệ thống', allowedRoles: ['Manager'] },
-  { path: '/settings',      icon: Settings,        label: 'Cài đặt',             section: 'Hệ thống', allowedRoles: ['Manager'] },
+  { path: '/settings',      icon: Settings,        label: 'Cài đặt',             section: 'Hệ thống' },
 ];
 
 export default function Sidebar() {
