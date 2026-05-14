@@ -79,6 +79,7 @@ export default function SubmitKPIPage() {
   // ── Hour-based mode (Approach A) ──
   const [hoursWorked, setHoursWorked] = useState<number>(0);
   const [projectTeamGroup, setProjectTeamGroup] = useState<TeamGroup>('Bài viết');
+  const [linkTeamGroup, setLinkTeamGroup] = useState<TeamGroup>(resolveTeamGroup(defaultTaskCategories[0]?.taskTypeName ?? ''));
   const [projectDescription, setProjectDescription] = useState('');
 
   const isProjectMode = taskType === PROJECT_TASK_TYPE;
@@ -92,6 +93,10 @@ export default function SubmitKPIPage() {
     setTaskType(val);
     const first = taskPointRules.find(r => r.active && r.category === val);
     setTaskDetail(first?.taskLabel ?? '');
+    // Auto-fill nhóm team theo đầu việc (có thể đổi tay)
+    if (val !== PROJECT_TASK_TYPE) {
+      setLinkTeamGroup(resolveTeamGroup(val));
+    }
     // Reset hour fields when switching modes
     if (val === PROJECT_TASK_TYPE) {
       setLinksRaw('');
@@ -115,10 +120,7 @@ export default function SubmitKPIPage() {
   }, [taskPointRules, taskType, taskDetail]);
 
   const links = useMemo(() => parseLinks(linksRaw), [linksRaw]);
-  const teamGroup = useMemo(() => {
-    if (isProjectMode) return projectTeamGroup;
-    return resolveTeamGroup(taskType);
-  }, [taskType, isProjectMode, projectTeamGroup]);
+  const teamGroup = isProjectMode ? projectTeamGroup : linkTeamGroup;
 
   // ── Scoring logic ──
   const timePerLink = selectedRule?.timePerLink ?? 0;
@@ -296,13 +298,9 @@ export default function SubmitKPIPage() {
                 <option key={c.id} value={c.taskTypeName}>{c.taskTypeName}</option>
               ))}
             </select>
-            {isProjectMode ? (
+            {isProjectMode && (
               <p style={{ fontSize: '0.78rem', color: '#6366F1', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <Clock size={12} /> Chế độ tính theo giờ — nhập số giờ thay vì link
-              </p>
-            ) : teamGroup && (
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', marginTop: '6px' }}>
-                → Tự động phân vào nhóm <strong style={{ color: 'var(--primary-600)' }}>{teamGroup}</strong>
               </p>
             )}
           </div>
@@ -346,7 +344,22 @@ export default function SubmitKPIPage() {
             </div>
           )}
 
-          {/* Project (required for project mode, optional otherwise) */}
+          {/* Nhóm team — link mode: auto-fill nhưng cho sửa tay */}
+          {!isProjectMode && (
+            <div className="form-group">
+              <label className="form-label">
+                <Layers size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                Nhóm team <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>
+                  (tự động theo đầu việc, có thể đổi tay)
+                </span>
+              </label>
+              <select className="form-select" value={linkTeamGroup}
+                onChange={e => setLinkTeamGroup(e.target.value as TeamGroup)}>
+                {TEAM_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
+              </select>
+            </div>
+          )}
+
           <div className="form-group">
             <label className="form-label">
               <Briefcase size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />
