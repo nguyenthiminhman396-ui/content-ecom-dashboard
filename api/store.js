@@ -45,6 +45,12 @@ export default async function handler(req, res) {
       `;
       return res.status(200).json({ success: true });
     }
+    if (req.method === 'DELETE') {
+      const { key } = req.body || {};
+      if (!key) return res.status(400).json({ error: 'Key is required' });
+      await sql`DELETE FROM global_store WHERE key = ${key}`;
+      return res.status(200).json({ success: true, deleted: key });
+    }
 
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {

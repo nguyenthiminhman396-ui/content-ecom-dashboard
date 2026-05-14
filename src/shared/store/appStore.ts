@@ -526,6 +526,15 @@ export async function initFromDB() {
       useAppStore.setState(stateUpdate);
     }
 
+    // Migration: xoá key currentUser cũ khỏi DB chung (không dùng nữa, mỗi máy lưu localStorage)
+    if (data[DB_USER]) {
+      fetch('/api/store', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: DB_USER }),
+      }).catch(() => {});
+    }
+
     useAppStore.getState().ensureDefaultProjects();
     useAppStore.setState({ lastSyncTime: new Date() });
   } catch (e) {
