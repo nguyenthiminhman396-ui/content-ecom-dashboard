@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   ClipboardList, Send, Upload, Trash2, AlertTriangle, CheckCircle2, FileSpreadsheet,
   Layers, Tag, Briefcase, Link2, Hash, X, Eye, Clock
@@ -9,18 +9,22 @@ import type { KPISubmission, TaskPointRule, TeamGroup } from '@/shared/types';
 import toast from 'react-hot-toast';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+// Strong unique ID: UUID v4 nếu browser support (crypto.randomUUID), fallback
+// timestamp + 14-char random (~ 78 bit entropy) để tránh collision khi 10 người
+// submit cùng millisecond. Trùng ID sẽ bị SQL idempotent skip → mất submission.
 function generateId(prefix = 'sub'): string {
-  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  try {
+    const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+    if (c && typeof c.randomUUID === 'function') {
+      return `${prefix}_${c.randomUUID()}`;
+    }
+  } catch { /* ignore */ }
+  const t = Date.now().toString(36);
+  const r1 = Math.random().toString(36).slice(2, 12);
+  const r2 = Math.random().toString(36).slice(2, 12);
+  return `${prefix}_${t}_${r1}${r2}`;
 }
 
-function resolveTeamGroup(taskType: string): TeamGroup {
-  const cat = defaultTaskCategories.find(c => c.taskTypeName === taskType);
-  if (!cat) return '';
-  if (cat.teamName === 'Bài viết' || cat.teamName === 'Sản phẩm' || cat.teamName === 'Multimedia - Tin nhanh') {
-    return cat.teamName;
-  }
-  return '';
-}
 
 function parseLinks(raw: string): string[] {
   return raw
@@ -68,7 +72,7 @@ export default function SubmitKPIPage() {
   const [taskType, setTaskType] = useState<string>(defaultTaskCategories[0]?.taskTypeName ?? '');
   const [taskDetail, setTaskDetail] = useState<string>('');
   const [projectId, setProjectId] = useState<string>('');
-  const [siteId, setSiteId] = useState<string>(sites.find(s => s.active)?.id ?? '');
+  const [siteId, setSiteId] = useState<string>('');
   const [projectTaskId, setProjectTaskId] = useState<string>('');
   const [quantity, setQuantity] = useState<number>(0);
   const [linksRaw, setLinksRaw] = useState<string>('');
@@ -78,9 +82,17 @@ export default function SubmitKPIPage() {
 
   // ── Hour-based mode (Approach A) ──
   const [hoursWorked, setHoursWorked] = useState<number>(0);
-  const [projectTeamGroup, setProjectTeamGroup] = useState<TeamGroup>('Bài viết');
-  const [linkTeamGroup, setLinkTeamGroup] = useState<TeamGroup>(resolveTeamGroup(defaultTaskCategories[0]?.taskTypeName ?? ''));
+  const [projectTeamGroup, setProjectTeamGroup] = useState<TeamGroup>('');
+  const [linkTeamGroup, setLinkTeamGroup] = useState<TeamGroup>('');
   const [projectDescription, setProjectDescription] = useState('');
+
+  // ── Auto-pick first matching detail rule khi mount hoặc khi taskPointRules load xong ──
+  // Fix: trước đây taskDetail mặc định = '' → dropdown hiện "— Chọn —" → user phải tự chọn
+  useEffect(() => {
+    if (taskDetail) return; // đã có rồi thì giữ
+    const first = taskPointRules.find(r => r.active && r.category === taskType);
+    if (first?.taskLabel) setTaskDetail(first.taskLabel);
+  }, [taskPointRules, taskType, taskDetail]);
 
   const isProjectMode = taskType === PROJECT_TASK_TYPE;
 
@@ -93,10 +105,7 @@ export default function SubmitKPIPage() {
     setTaskType(val);
     const first = taskPointRules.find(r => r.active && r.category === val);
     setTaskDetail(first?.taskLabel ?? '');
-    // Auto-fill nhóm team theo đầu việc (có thể đổi tay)
-    if (val !== PROJECT_TASK_TYPE) {
-      setLinkTeamGroup(resolveTeamGroup(val));
-    }
+    
     // Reset hour fields when switching modes
     if (val === PROJECT_TASK_TYPE) {
       setLinksRaw('');
@@ -169,18 +178,24 @@ export default function SubmitKPIPage() {
 
   // ── Submit ──
   const [submitting, setSubmitting] = useState(false);
+  // Sync guard chặn double-click trước khi React render kịp button disabled state.
+  // useState/setSubmitting cập nhật ở next render → 2 click trong cùng tick vẫn lọt.
+  const submittingRef = useRef(false);
   const canSubmit = isProjectMode
-    ? (hoursWorked > 0 && taskDetail && projectId)
-    : (links.length > 0 && selectedRule);
+    ? (hoursWorked > 0 && taskDetail && projectId && projectTeamGroup)
+    : (links.length > 0 && selectedRule && siteId && linkTeamGroup);
 
   const handleSubmit = async () => {
+    if (submittingRef.current) return; // chặn parallel submit
     if (!currentUser) { toast.error('Bạn cần đăng nhập'); return; }
     if (!taskType)    { toast.error('Chọn đầu việc'); return; }
     if (!taskDetail)  { toast.error('Chọn chi tiết đầu việc'); return; }
 
+    submittingRef.current = true;
     if (isProjectMode) {
-      if (hoursWorked <= 0) { toast.error('Nhập số giờ làm việc'); return; }
-      if (!projectId) { toast.error('Chọn dự án cho công việc này'); return; }
+      if (!projectTeamGroup) { toast.error('Chọn nhóm team'); submittingRef.current = false; return; }
+      if (hoursWorked <= 0) { toast.error('Nhập số giờ làm việc'); submittingRef.current = false; return; }
+      if (!projectId) { toast.error('Chọn dự án cho công việc này'); submittingRef.current = false; return; }
 
       const sub: KPISubmission = {
         id:           generateId(),
@@ -205,6 +220,7 @@ export default function SubmitKPIPage() {
       setSubmitting(true);
       const ok = await addSubmissionsBatch([sub]);
       setSubmitting(false);
+      submittingRef.current = false;
       if (ok) {
         toast.success(`✅ Đã lưu vào DB: ${hoursWorked}h · ${projectPoints} điểm`);
         setHoursWorked(0);
@@ -215,15 +231,10 @@ export default function SubmitKPIPage() {
         toast.error('❌ Lưu thất bại! Dữ liệu chưa được lưu. Hãy thử lại.', { duration: 6000 });
       }
     } else {
-      if (!links.length) { toast.error('Chưa có link hợp lệ'); return; }
-      if (!selectedRule)  { toast.error('Không tìm thấy rule điểm'); return; }
-
-      // Auto-detect siteId from URL if not selected
-      let resolvedSiteId = siteId;
-      if (!resolvedSiteId && links[0]) {
-        const matchSite = sites.find(s => s.active && links[0].includes(s.urlPattern));
-        if (matchSite) resolvedSiteId = matchSite.id;
-      }
+      if (!siteId)        { toast.error('Chọn site đăng bài'); submittingRef.current = false; return; }
+      if (!linkTeamGroup) { toast.error('Chọn nhóm team'); submittingRef.current = false; return; }
+      if (!links.length)  { toast.error('Chưa có link hợp lệ'); submittingRef.current = false; return; }
+      if (!selectedRule)  { toast.error('Không tìm thấy rule điểm'); submittingRef.current = false; return; }
 
       const sub: KPISubmission = {
         id:           generateId(),
@@ -231,7 +242,7 @@ export default function SubmitKPIPage() {
         submittedAt:  new Date().toISOString(),
         taskType,
         taskDetail,
-        siteId:       resolvedSiteId || undefined,
+        siteId,
         projectId:    projectId || undefined,
         projectTaskId: projectTaskId || undefined,
         links,
@@ -247,6 +258,7 @@ export default function SubmitKPIPage() {
       setSubmitting(true);
       const ok = await addSubmissionsBatch([sub]);
       setSubmitting(false);
+      submittingRef.current = false;
       if (ok) {
         toast.success(`✅ Đã lưu vào DB: ${links.length} link · ${linkPoints}đ`);
         setLinksRaw('');
@@ -326,17 +338,15 @@ export default function SubmitKPIPage() {
             )}
           </div>
 
-          {/* Site (Nhà thuốc / Tiêm chủng / ...) — bắt buộc cho link mode */}
+          {/* Site (Nhà thuốc / Tiêm chủng / ...) — bắt buộc */}
           {!isProjectMode && (
             <div className="form-group">
               <label className="form-label">
                 <Briefcase size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-                Site đăng bài <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>
-                  (auto-detect từ URL nếu không chọn)
-                </span>
+                Site đăng bài *
               </label>
               <select className="form-select" value={siteId} onChange={e => setSiteId(e.target.value)}>
-                <option value="">— Auto-detect —</option>
+                <option value="">— Chọn —</option>
                 {sites.filter(s => s.active).map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
@@ -344,17 +354,16 @@ export default function SubmitKPIPage() {
             </div>
           )}
 
-          {/* Nhóm team — link mode: auto-fill nhưng cho sửa tay */}
+          {/* Nhóm team — bắt buộc, không auto-fill để tránh nhầm */}
           {!isProjectMode && (
             <div className="form-group">
               <label className="form-label">
                 <Layers size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-                Nhóm team <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>
-                  (tự động theo đầu việc, có thể đổi tay)
-                </span>
+                Nhóm team *
               </label>
               <select className="form-select" value={linkTeamGroup}
                 onChange={e => setLinkTeamGroup(e.target.value as TeamGroup)}>
+                <option value="">— Chọn —</option>
                 {TEAM_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
@@ -445,6 +454,7 @@ export default function SubmitKPIPage() {
                 <label className="form-label">Nhóm team *</label>
                 <select className="form-select" value={projectTeamGroup}
                   onChange={e => setProjectTeamGroup(e.target.value as TeamGroup)}>
+                  <option value="">— Chọn —</option>
                   {TEAM_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
                 </select>
               </div>

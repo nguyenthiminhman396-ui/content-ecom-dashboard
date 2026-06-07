@@ -365,17 +365,21 @@ export default function DashboardPage() {
   }, [currentUser, submissions, prevMonthSubs, prevFromMs, prevToMs, filterEmployee]);
 
   const taskDetailBreakdown = useMemo(() => {
-    type Row = { teamGroup: string; taskType: string; taskDetail: string;
+    // Group THEO (taskType + taskDetail) — KHÔNG theo team.
+    // Mục đích: trang tổng cho phép thấy tổng số công việc cùng loại dù do nhiều
+    // nhóm thực hiện. Chi tiết theo team đã có ở trang Target/KPI.
+    type Row = { teams: Set<string>; taskType: string; taskDetail: string;
                  nowLinks: number; nowPoints: number;
                  prevLinks: number; prevPoints: number; };
     const map = new Map<string, Row>();
 
     const upsert = (s: typeof scopedSubs[number], side: 'now' | 'prev') => {
-      const key = `${s.teamGroup}|${s.taskType}|${s.taskDetail}`;
+      const key = `${s.taskType}|${s.taskDetail}`;
       const cur = map.get(key) ?? {
-        teamGroup: s.teamGroup, taskType: s.taskType, taskDetail: s.taskDetail,
+        teams: new Set<string>(), taskType: s.taskType, taskDetail: s.taskDetail,
         nowLinks: 0, nowPoints: 0, prevLinks: 0, prevPoints: 0,
       };
+      if (s.teamGroup) cur.teams.add(s.teamGroup);
       if (side === 'now') {
         cur.nowLinks  += s.links.length;
         cur.nowPoints += s.totalPoints;
@@ -389,20 +393,32 @@ export default function DashboardPage() {
     taskDetailNowSubs.forEach(s => upsert(s, 'now'));
     taskDetailPrevSubs.forEach(s => upsert(s, 'prev'));
 
-    return Array.from(map.values())
+    // Sắp xếp team theo thứ tự quen thuộc (Bài viết → Sản phẩm → Multimedia - Tin nhanh)
+    const TEAM_ORDER = ['Bài viết', 'Sản phẩm', 'Multimedia - Tin nhanh'];
+    return Array.from(map.values()).map(r => ({
+      ...r,
+      teamList: Array.from(r.teams).sort((a, b) => {
+        const ai = TEAM_ORDER.indexOf(a); const bi = TEAM_ORDER.indexOf(b);
+        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi) || a.localeCompare(b);
+      }),
+    }))
       .sort((a, b) => (b.nowLinks + b.prevLinks) - (a.nowLinks + a.prevLinks));
   }, [taskDetailNowSubs, taskDetailPrevSubs]);
 
   // Lọc chi tiết đầu việc
   const filteredBreakdown = useMemo(() => {
     let data = taskDetailBreakdown;
-    if (filterTeam) data = data.filter(r => r.teamGroup === filterTeam);
+    if (filterTeam) data = data.filter(r => r.teams.has(filterTeam));
     if (filterTask) data = data.filter(r => r.taskDetail === filterTask || r.taskType === filterTask);
     return data;
   }, [taskDetailBreakdown, filterTeam, filterTask]);
 
-  // Unique task details cho bộ lọc
-  const uniqueTeams = useMemo(() => Array.from(new Set(taskDetailBreakdown.map(r => r.teamGroup))).sort(), [taskDetailBreakdown]);
+  // Unique team xuất hiện ở bất kỳ row nào (dùng cho dropdown filter)
+  const uniqueTeams = useMemo(() => {
+    const set = new Set<string>();
+    taskDetailBreakdown.forEach(r => r.teams.forEach(t => set.add(t)));
+    return Array.from(set).sort();
+  }, [taskDetailBreakdown]);
   const uniqueTasks = useMemo(() => {
     const set = new Set<string>();
     taskDetailBreakdown.forEach(r => { if (r.taskDetail) set.add(r.taskDetail); });
@@ -413,7 +429,7 @@ export default function DashboardPage() {
   const exportCSV = () => {
     const headers = ['Đầu việc', 'Chi tiết', 'Nhóm', 'Link kỳ này', 'Link T-1', 'Δ Link %', 'Điểm kỳ này', 'Điểm T-1', 'Δ Điểm %'];
     const rows = filteredBreakdown.map(r => [
-      r.taskType, r.taskDetail, r.teamGroup,
+      r.taskType, r.taskDetail, r.teamList.join(', '),
       r.nowLinks, r.prevLinks, pct(r.nowLinks, r.prevLinks),
       r.nowPoints.toFixed(0), r.prevPoints.toFixed(0), pct(r.nowPoints, r.prevPoints),
     ]);
@@ -1042,10 +1058,10 @@ export default function DashboardPage() {
               </thead>
               <tbody>
                 {filteredBreakdown.map((r, i) => {
-                  const teamColor =
-                    r.teamGroup === 'Bài viết' ? '#1D9E75' :
-                    r.teamGroup === 'Sản phẩm' ? '#8B5CF6' :
-                    r.teamGroup === 'Multimedia - Tin nhanh' ? '#F59E0B' : '#94A3B8';
+                  const teamColorOf = (t: string) =>
+                    t === 'Bài viết' ? '#1D9E75' :
+                    t === 'Sản phẩm' ? '#8B5CF6' :
+                    t === 'Multimedia - Tin nhanh' ? '#F59E0B' : '#94A3B8';
                   const linkPct = pct(r.nowLinks, r.prevLinks);
                   const pointPct = pct(r.nowPoints, r.prevPoints);
                   const linkColor  = linkPct > 0 ? 'var(--success)' : linkPct < 0 ? 'var(--danger)' : 'var(--text-tertiary)';
@@ -1057,11 +1073,20 @@ export default function DashboardPage() {
                         <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>{r.taskType}</div>
                       </td>
                       <td>
-                        <span style={{
-                          background: `${teamColor}15`, color: teamColor,
-                          padding: '2px 8px', borderRadius: 'var(--radius-full)',
-                          fontSize: '0.72rem', fontWeight: 600, whiteSpace: 'nowrap',
-                        }}>{r.teamGroup}</span>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                          {r.teamList.length === 0 ? (
+                            <span style={{ color: 'var(--text-tertiary)', fontSize: '0.72rem' }}>—</span>
+                          ) : r.teamList.map(t => {
+                            const c = teamColorOf(t);
+                            return (
+                              <span key={t} style={{
+                                background: `${c}15`, color: c,
+                                padding: '2px 8px', borderRadius: 'var(--radius-full)',
+                                fontSize: '0.72rem', fontWeight: 600, whiteSpace: 'nowrap',
+                              }}>{t}</span>
+                            );
+                          })}
+                        </div>
                       </td>
                       <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--primary-600)' }}>
                         {r.nowLinks.toLocaleString()}

@@ -3,9 +3,9 @@ import { useAppStore } from '@/shared/store/appStore';
 import { usePersistedState } from '@/shared/hooks/usePersistedState';
 import {
   History, Lock, Trash2, ExternalLink, ChevronDown, ChevronUp, Search, Layers,
-  Calendar, X, Hash, Trophy, Link2, Download
+  Calendar, X, Hash, Trophy, Link2, Download, Edit3, Save, AlertCircle,
 } from 'lucide-react';
-import type { KPISubmission, TeamGroup } from '@/shared/types';
+import type { KPISubmission, TeamGroup, TaskPointRule } from '@/shared/types';
 import { exportCsv } from '@/shared/utils/helpers';
 import toast from 'react-hot-toast';
 
@@ -27,8 +27,9 @@ function startOfMonth(d: Date): Date {
 }
 
 export default function MySubmissionsPage() {
-  const { currentUser, submissions, members, projects, deleteSubmission, setQualityCheck } = useAppStore();
+  const { currentUser, submissions, members, projects, deleteSubmission, setQualityCheck, updateSubmission, taskPointRules } = useAppStore();
   const [spotItem, setSpotItem] = useState<KPISubmission | null>(null);
+  const [editItem, setEditItem] = useState<KPISubmission | null>(null);
   const openSpotCheck = (s: KPISubmission) => setSpotItem(s);
 
   const [filterTeam, setFilterTeam] = usePersistedState<TeamGroup | 'Tất cả'>('mysub_team', 'Tất cả');
@@ -361,6 +362,14 @@ export default function MySubmissionsPage() {
                             </button>
                           )}
                           {isManager && (
+                            <button onClick={e => { e.stopPropagation(); setEditItem(s); }}
+                              className="btn btn-icon btn-ghost"
+                              style={{ color: 'var(--primary-500)' }}
+                              title="Chỉnh sửa submission (Manager)">
+                              <Edit3 size={14} />
+                            </button>
+                          )}
+                          {isManager && (
                             <button onClick={e => { e.stopPropagation(); handleDelete(s); }}
                               className="btn btn-icon btn-ghost"
                               style={{ color: 'var(--danger)' }}>
@@ -420,6 +429,18 @@ export default function MySubmissionsPage() {
             setQualityCheck(spotItem.id, score, currentUser.name, note);
             toast.success(`Đã spot-check ${score}/5 cho ${spotItem.employeeName}`);
             setSpotItem(null);
+          }}
+        />
+      )}
+      {editItem && isManager && (
+        <EditSubmissionModal
+          item={editItem}
+          taskPointRules={taskPointRules}
+          onClose={() => setEditItem(null)}
+          onSave={(updates) => {
+            updateSubmission(editItem.id, updates);
+            toast.success('Đã cập nhật submission!');
+            setEditItem(null);
           }}
         />
       )}
@@ -505,6 +526,191 @@ function Stat2({ label, value, color }: { label: string; value: number | string;
     <div style={{ textAlign: 'center', minWidth: 50 }}>
       <div style={{ fontWeight: 700, fontSize: '0.95rem', color }}>{value}</div>
       <div style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)' }}>{label}</div>
+    </div>
+  );
+}
+
+/* ─────────────────────────── EditSubmissionModal (Manager only) ── */
+
+function EditSubmissionModal({ item, taskPointRules, onClose, onSave }: {
+  item: KPISubmission;
+  taskPointRules: TaskPointRule[];
+  onClose: () => void;
+  onSave: (updates: Partial<KPISubmission>) => void;
+}) {
+  const TEAM_OPTIONS: TeamGroup[] = ['Bài viết', 'Sản phẩm', 'Multimedia - Tin nhanh'];
+
+  const [taskType,   setTaskType]   = useState(item.taskType);
+  const [taskDetail, setTaskDetail] = useState(item.taskDetail);
+  const [teamGroup,  setTeamGroup]  = useState<TeamGroup>(item.teamGroup);
+  const [links,      setLinks]      = useState<string[]>([...item.links]);
+  const [notes,      setNotes]      = useState(item.notes ?? '');
+  const [auditNote,  setAuditNote]  = useState('');
+
+  // Auto-recalc pointPerLink khi taskDetail thay đổi
+  const matchedRule = taskPointRules.find(
+    r => r.active && (r.taskLabel === taskDetail || r.taskLabel === taskType)
+  );
+  const newPointPerLink = matchedRule?.pointPerLink ?? item.pointPerLink;
+  const newTotalPoints  = parseFloat((newPointPerLink * links.filter(l => l.trim()).length).toFixed(2));
+
+  const handleLinkChange = (i: number, val: string) => {
+    const next = [...links];
+    next[i] = val;
+    setLinks(next);
+  };
+  const addLink    = () => setLinks(l => [...l, '']);
+  const removeLink = (i: number) => setLinks(l => l.filter((_, idx) => idx !== i));
+
+  const handleSave = () => {
+    const cleanLinks = links.filter(l => l.trim());
+    if (cleanLinks.length === 0) { toast.error('Phải có ít nhất 1 link'); return; }
+    onSave({
+      taskType,
+      taskDetail,
+      teamGroup,
+      links: cleanLinks,
+      notes: auditNote ? `[Sửa bởi Manager: ${auditNote}] ${notes}`.trim() : notes || undefined,
+      pointPerLink: newPointPerLink,
+      totalPoints:  newTotalPoints,
+    });
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}
+        style={{ maxWidth: '600px', maxHeight: '90vh', overflow: 'auto', borderRadius: 'var(--radius-xl)' }}>
+
+        {/* header */}
+        <div style={{ padding: '18px 22px', background: 'linear-gradient(135deg,#f59e0b,#d97706)', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <h3 style={{ color: '#fff', fontWeight: 800, fontSize: '1rem', margin: 0 }}>✏️ Chỉnh sửa submission</h3>
+            <div style={{ color: 'rgba(255,255,255,.8)', fontSize: '0.8rem', marginTop: '2px' }}>
+              {item.employeeName} · {new Date(item.submittedAt).toLocaleString('vi-VN')}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: 'rgba(255,255,255,.15)', border: 'none', borderRadius: 'var(--radius-md)', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff' }}>
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* warning banner */}
+        <div style={{ padding: '10px 16px', background: '#fef3c7', borderBottom: '1px solid #fde68a', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: '#92400e' }}>
+          <AlertCircle size={14} style={{ flexShrink: 0 }} />
+          Chỉ Manager mới có quyền sửa. Điểm sẽ tự tính lại theo số link mới và rule hiện tại.
+        </div>
+
+        <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+          {/* taskType */}
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label">Đầu việc (taskType)</label>
+            <input className="form-input" value={taskType} onChange={e => setTaskType(e.target.value)}
+              placeholder="Ví dụ: Bài Góc sức khỏe - Bệnh lý - Thành phần" />
+          </div>
+
+          {/* taskDetail */}
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label">Chi tiết đầu việc (taskDetail)
+              {matchedRule && (
+                <span style={{ fontSize: '0.7rem', color: 'var(--primary-600)', fontWeight: 400, marginLeft: '8px' }}>
+                  → {newPointPerLink}đ/link (rule: {matchedRule.taskLabel})
+                </span>
+              )}
+            </label>
+            <input className="form-input" value={taskDetail} onChange={e => setTaskDetail(e.target.value)}
+              placeholder="Ví dụ: SEO, Bài mới, Cập nhật..." />
+          </div>
+
+          {/* teamGroup */}
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label">Nhóm team</label>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {TEAM_OPTIONS.map(t => (
+                <button key={t} type="button"
+                  onClick={() => setTeamGroup(t)}
+                  style={{ padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid',
+                    borderColor: teamGroup === t ? 'var(--primary-500)' : 'var(--border-medium)',
+                    background: teamGroup === t ? 'var(--primary-50)' : 'transparent',
+                    color: teamGroup === t ? 'var(--primary-700)' : 'var(--text-secondary)',
+                    fontWeight: teamGroup === t ? 700 : 400, fontSize: '0.8rem', cursor: 'pointer' }}>
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* links */}
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Danh sách link <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}>({links.filter(l=>l.trim()).length} link hợp lệ)</span></span>
+              <button type="button" onClick={addLink}
+                style={{ fontSize: '0.75rem', padding: '2px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--primary-300)', background: 'var(--primary-50)', color: 'var(--primary-700)', cursor: 'pointer' }}>
+                + Thêm link
+              </button>
+            </label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: 240, overflowY: 'auto', paddingRight: '4px' }}>
+              {links.map((l, i) => (
+                <div key={i} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', minWidth: '18px', textAlign: 'right' }}>{i + 1}.</span>
+                  <input className="form-input" value={l} onChange={e => handleLinkChange(i, e.target.value)}
+                    placeholder="https://..." style={{ flex: 1, fontSize: '0.82rem' }} />
+                  {links.length > 1 && (
+                    <button type="button" onClick={() => removeLink(i)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: '4px', flexShrink: 0 }}>
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* notes */}
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label">Ghi chú (tùy chọn)</label>
+            <textarea className="form-textarea" value={notes} onChange={e => setNotes(e.target.value)} rows={2}
+              placeholder="Ghi chú đính kèm submission..." />
+          </div>
+
+          {/* audit note — bắt buộc ghi lý do sửa */}
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label" style={{ color: '#92400e' }}>⚠️ Lý do chỉnh sửa <span style={{ fontWeight: 400, fontSize: '0.7rem' }}>(sẽ ghi vào ghi chú)</span></label>
+            <input className="form-input" value={auditNote} onChange={e => setAuditNote(e.target.value)}
+              placeholder="Ví dụ: Nhân viên add nhầm taskDetail, cần sửa lại đúng..." />
+          </div>
+
+          {/* recalc preview */}
+          <div style={{ padding: '12px 14px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', border: '1px solid #86efac', display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontWeight: 800, fontSize: '1.3rem', color: '#16a34a' }}>{links.filter(l=>l.trim()).length}</div>
+              <div style={{ fontSize: '0.7rem', color: '#166534' }}>Link</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontWeight: 800, fontSize: '1.3rem', color: '#16a34a' }}>{newPointPerLink}</div>
+              <div style={{ fontSize: '0.7rem', color: '#166534' }}>đ/link</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontWeight: 800, fontSize: '1.3rem', color: '#16a34a' }}>{newTotalPoints.toFixed(1)}</div>
+              <div style={{ fontSize: '0.7rem', color: '#166534' }}>Tổng điểm</div>
+            </div>
+            {newTotalPoints !== item.totalPoints && (
+              <div style={{ alignSelf: 'center', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', padding: '3px 10px', borderRadius: '999px' }}>
+                Trước: {item.totalPoints.toFixed(1)}đ → Sau: {newTotalPoints.toFixed(1)}đ
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* footer */}
+        <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+          <button className="btn btn-secondary" onClick={onClose}>Hủy</button>
+          <button className="btn btn-primary" onClick={handleSave}
+            style={{ background: 'linear-gradient(135deg,#f59e0b,#d97706)', border: 'none', boxShadow: '0 4px 12px rgba(245,158,11,.3)' }}>
+            <Save size={14} /> Lưu chỉnh sửa
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

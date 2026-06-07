@@ -5,6 +5,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
@@ -28,14 +29,29 @@ export default async function handler(req, res) {
       if (!key) return res.status(400).json({ error: 'Key is required' });
 
       // ── Atomic APPEND: add items to array without overwriting ──
+      // Idempotent theo id: nếu item.id đã tồn tại trong array → bỏ qua (tránh duplicate khi retry network).
+      // Atomic ở mức row của Postgres: ON CONFLICT DO UPDATE giữ lock cho đến khi UPDATE chạy xong,
+      // nên 10 client đồng thời append vẫn merge đúng, không ghi đè nhau.
       if (op === 'append' && items) {
         const jsonItems = JSON.stringify(items);
         await sql`
           INSERT INTO global_store (key, value)
           VALUES (${key}, ${jsonItems}::jsonb)
-          ON CONFLICT (key) DO UPDATE 
-          SET value = (COALESCE(global_store.value, '[]'::jsonb) || ${jsonItems}::jsonb),
-              updated_at = CURRENT_TIMESTAMP
+          ON CONFLICT (key) DO UPDATE
+          SET value = (
+            COALESCE(global_store.value, '[]'::jsonb)
+            || COALESCE((
+              SELECT jsonb_agg(new_item)
+              FROM jsonb_array_elements(${jsonItems}::jsonb) AS new_item
+              WHERE (new_item->>'id') IS NULL
+                 OR NOT EXISTS (
+                   SELECT 1
+                   FROM jsonb_array_elements(COALESCE(global_store.value, '[]'::jsonb)) AS old_item
+                   WHERE old_item->>'id' = new_item->>'id'
+                 )
+            ), '[]'::jsonb)
+          ),
+          updated_at = CURRENT_TIMESTAMP
         `;
         return res.status(200).json({ success: true, op: 'append' });
       }

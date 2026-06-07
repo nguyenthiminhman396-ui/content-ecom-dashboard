@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Content, ContentStatus, ContentType, HealthTopic } from '@/shared/types';
-import { getContentStatusClass } from '@/shared/utils/helpers';
+import { getContentStatusClass, makeId } from '@/shared/utils/helpers';
 
 const contentTypes: ContentType[] = ['Bài viết', 'Video', 'Infographic', 'Social Post', 'Podcast'];
 // @ts-expect-error reserved for filter UI
@@ -67,7 +67,7 @@ export default function ContentsPage() {
     }
   };
 
-  const generateId = () => `C${Date.now().toString(36)}`;
+  const generateId = () => makeId('C');
 
   return (
     <div>

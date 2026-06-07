@@ -179,13 +179,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     appendDB(DB_SUBMISSIONS, [sub]);
   },
   addSubmissionsBatch: async (subs) => {
-    const oldSubmissions = get().submissions;
-    const submissions = [...oldSubmissions, ...subs];
+    const submissions = [...get().submissions, ...subs];
     set({ submissions });
     const ok = await appendDB(DB_SUBMISSIONS, subs);
     if (!ok) {
-      // Rollback local state if DB save failed
-      set({ submissions: oldSubmissions });
+      // Rollback an toàn: chỉ remove các subs vừa append, KHÔNG overwrite toàn bộ.
+      // Tránh mất các state update khác (vd: từ initFromDB hoặc submit khác) chạy
+      // trong lúc await ở trên.
+      const failedIds = new Set(subs.map(s => s.id));
+      set({ submissions: get().submissions.filter(s => !failedIds.has(s.id)) });
     }
     return ok;
   },
@@ -193,6 +195,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const submissions = get().submissions.filter(s => s.id !== id);
     set({ submissions });
     removeItemDB(DB_SUBMISSIONS, [id]);
+  },
+  updateSubmission: (id, updates) => {
+    const submissions = get().submissions.map(s => s.id === id ? { ...s, ...updates } : s);
+    set({ submissions });
+    updateItemDB(DB_SUBMISSIONS, id, updates);
   },
 
   // ── Content CRUD ─────────────────────────────────────────────────────────
@@ -537,7 +544,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 // ── Helper: load data từ Postgres (Neon) ────────────────────────────────
 export async function initFromDB() {
   try {
-    const res = await fetch('/api/store');
+    const res = await fetch('/api/store', { cache: 'no-store' });
     if (!res.ok) return;
     const data = await res.json();
     const stateUpdate: Record<string, unknown> = {};

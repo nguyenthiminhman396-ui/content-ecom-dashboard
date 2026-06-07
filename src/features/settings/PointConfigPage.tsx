@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import type { TaskPointRule, KPIScaleConfig } from '@/shared/types';
 import { DEFAULT_KPI_SCALE_CONFIG } from '@/shared/types';
+import { makeId } from '@/shared/utils/helpers';
 import toast from 'react-hot-toast';
 
 export default function PointConfigPage() {
@@ -105,7 +106,7 @@ export default function PointConfigPage() {
     }
   };
 
-  const generateId = () => `rule_${Date.now().toString(36)}`;
+  const generateId = () => makeId('rule');
 
   return (
     <div>

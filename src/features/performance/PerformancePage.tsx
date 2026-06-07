@@ -8,6 +8,7 @@ import { Award, Plus, Edit3, Trash2, X, Save, Star, TrendingUp, Users, Calendar,
 import { Chart as ChartJS, RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend } from 'chart.js';
 import { Radar } from 'react-chartjs-2';
 import type { PerformanceReview } from '@/shared/types';
+import { makeId } from '@/shared/utils/helpers';
 import toast from 'react-hot-toast';
 
 ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
@@ -157,7 +158,7 @@ export default function PerformancePage() {
     };
   }, [performanceSummary]);
 
-  const generateId = () => `rev_${Date.now().toString(36)}`;
+  const generateId = () => makeId('rev');
   const getRankBadge = (rank: number) => {
     if (rank === 1) return { emoji: '🥇', bg: '#FEF3C7', color: '#D97706' };
     if (rank === 2) return { emoji: '🥈', bg: '#F1F5F9', color: '#64748B' };

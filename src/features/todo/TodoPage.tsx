@@ -5,9 +5,10 @@ import {
   ChevronDown, ChevronUp, Clock, Flag, Edit3, UserPlus, Eye
 } from 'lucide-react';
 import type { TodoItem, TodoPriority } from '@/shared/types';
+import { makeId } from '@/shared/utils/helpers';
 import toast from 'react-hot-toast';
 
-function genId() { return `todo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,5)}`; }
+function genId() { return makeId('todo'); }
 function fmtDate(d: string) { try { return new Date(d).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }); } catch { return d; } }
 
 function isOverdue(dueDate?: string) {
@@ -244,15 +245,16 @@ function TodoCard({ item, currentUserName, onToggle, onEdit, onDelete }: {
   const isMyTask = item.ownerName === currentUserName;
 
   return (
-    <div className="card" style={{
+    <div className="card" onClick={() => onEdit(item)} style={{
       padding: '12px 16px',
       opacity: item.completed ? 0.65 : 1,
       borderLeft: overdue ? '4px solid var(--danger)' : dueSoon ? '4px solid var(--warning)' : `4px solid ${pm.color}`,
       transition: 'all 0.2s ease',
+      cursor: 'pointer'
     }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
         {/* Checkbox */}
-        <button onClick={() => onToggle(item)} style={{
+        <button onClick={(e) => { e.stopPropagation(); onToggle(item); }} style={{
           width: 22, height: 22, borderRadius: 6, flexShrink: 0, marginTop: 2,
           border: item.completed ? 'none' : '2px solid var(--border-medium)',
           background: item.completed ? 'var(--success)' : 'transparent',
@@ -320,18 +322,18 @@ function TodoCard({ item, currentUserName, onToggle, onEdit, onDelete }: {
         <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
           {isMyTask ? (
             /* Owner: full edit */
-            <button className="btn btn-icon btn-ghost" onClick={() => onEdit(item)} title="Sửa" style={{ padding: 4 }}>
+            <button className="btn btn-icon btn-ghost" onClick={(e) => { e.stopPropagation(); onEdit(item); }} title="Sửa" style={{ padding: 4 }}>
               <Edit3 size={13} />
             </button>
           ) : (
             /* Assignee: view-only */
-            <button className="btn btn-icon btn-ghost" onClick={() => onEdit(item)} title="Xem chi tiết" style={{ padding: 4 }}>
+            <button className="btn btn-icon btn-ghost" onClick={(e) => { e.stopPropagation(); onEdit(item); }} title="Xem chi tiết" style={{ padding: 4 }}>
               <Eye size={13} />
             </button>
           )}
           {/* Only owner can delete */}
           {isMyTask && (
-            <button className="btn btn-icon btn-ghost" onClick={() => onDelete(item)}
+            <button className="btn btn-icon btn-ghost" onClick={(e) => { e.stopPropagation(); onDelete(item); }}
               style={{ padding: 4, color: 'var(--danger)' }} title="Xóa">
               <Trash2 size={13} />
             </button>

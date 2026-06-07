@@ -126,6 +126,37 @@ export function getProjectStatusClass(status: ProjectStatus): string {
   return map[status] || '';
 }
 
+/**
+ * Tạo ID duy nhất, an toàn cho concurrent writes.
+ *
+ * **DÙNG HÀM NÀY CHO MỌI ID** (submissions, todos, tasks, expenses, ...).
+ *
+ * - Ưu tiên `crypto.randomUUID()` (UUID v4, 122 bit entropy ≈ không thể trùng).
+ * - Fallback: timestamp + 2×10 ký tự random (~ 103 bit entropy).
+ *
+ * Lý do: SQL idempotent append trong `/api/store.js` dedup theo `id`. Nếu 2 user
+ * sinh trùng ID cùng millisecond, item thứ 2 sẽ bị skip = mất submission/task.
+ * Pattern cũ `Date.now() + Math.random().slice(2,5)` chỉ có 3 char random
+ * = 46k combinations → quá yếu với 10-12 người dùng đồng thời.
+ */
+export function makeId(prefix = 'id'): string {
+  try {
+    const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+    if (c && typeof c.randomUUID === 'function') {
+      return `${prefix}_${c.randomUUID()}`;
+    }
+  } catch { /* ignore */ }
+  const t = Date.now().toString(36);
+  const r1 = Math.random().toString(36).slice(2, 12);
+  const r2 = Math.random().toString(36).slice(2, 12);
+  return `${prefix}_${t}_${r1}${r2}`;
+}
+
+/**
+ * @deprecated KHÔNG dùng cho concurrent context — 2 user thấy cùng `max` sẽ
+ * sinh cùng ID. Giữ lại tạm thời cho project codes (P001, P002) là human-readable.
+ * Khi có thể, chuyển sang `makeId(prefix)`.
+ */
 export function generateId(prefix: string, items: { id: string }[]): string {
   const max = items.reduce((acc, item) => {
     const num = parseInt(item.id.replace(prefix, ''));

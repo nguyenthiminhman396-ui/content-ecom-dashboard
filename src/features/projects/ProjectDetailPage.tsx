@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/shared/store/appStore';
-import { formatFullCurrency, getProjectStatusClass } from '@/shared/utils/helpers';
+import { formatFullCurrency, getProjectStatusClass, makeId } from '@/shared/utils/helpers';
 import {
   ArrowLeft, Calendar, Users, Wallet, FileText, ExternalLink,
   Plus, X, Edit3, Trash2, Save, Target, Sparkles, ChevronDown, ChevronUp
@@ -10,8 +10,10 @@ import type { ProjectTask, Expense } from '@/shared/types';
 import { defaultTaskCategories } from '@/shared/data/mockData';
 import toast from 'react-hot-toast';
 
+// Sử dụng makeId() từ shared/utils/helpers — UUID v4 để tránh collision khi
+// nhiều người add task cùng lúc (idempotent SQL sẽ skip ID trùng → mất data).
 function generateId(prefix = 'pt'): string {
-  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`;
+  return makeId(prefix);
 }
 
 export default function ProjectDetailPage() {
@@ -37,7 +39,7 @@ export default function ProjectDetailPage() {
     assignees.forEach(name => {
       // Tạo todo cho tất cả assignees, kể cả tự assign
       addTodo({
-        id: `todo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`,
+        id: makeId('todo'),
         ownerName: currentUser.name,
         assigneeName: name,
         title: `📌 Được phân công task: ${taskName}`,

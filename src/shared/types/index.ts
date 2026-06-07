@@ -639,6 +639,8 @@ export interface AppState {
   /** Thêm hàng loạt — dùng khi user paste/upload nhiều link cùng loại */
   addSubmissionsBatch: (subs: KPISubmission[]) => Promise<boolean>;
   deleteSubmission: (id: string) => void;
+  /** Manager chỉnh sửa submission đã submit — phòng hờ nhập sai */
+  updateSubmission: (id: string, updates: Partial<KPISubmission>) => void;
 
   // Content CRUD
   addContent: (content: Content) => void;

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/shared/store/appStore';
-import { formatCurrency, getProjectStatusClass, generateId } from '@/shared/utils/helpers';
+import { formatCurrency, getProjectStatusClass, makeId } from '@/shared/utils/helpers';
 import {
   FolderKanban, LayoutGrid, List, Calendar, Users,
   Plus, Filter, ChevronRight, Edit3, Trash2, X
@@ -301,7 +301,7 @@ export default function Projects() {
               updateProject(editItem.id, data);
               toast.success('Đã cập nhật dự án');
             } else {
-              const newId = generateId('P', projects);
+              const newId = makeId('P');
               addProject({ ...data, id: newId } as Project);
               toast.success('Đã thêm dự án mới');
             }
@@ -309,7 +309,7 @@ export default function Projects() {
             // Gửi thông báo nếu thay đổi leader / có leader mới (kể cả tự assign)
             if (leaderChanged && leaderName && currentUser) {
               addTodo({
-                id: `todo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`,
+                id: makeId('todo'),
                 ownerName: currentUser.name,
                 assigneeName: leaderName,
                 title: `🚀 Được phân công làm Leader dự án`,
