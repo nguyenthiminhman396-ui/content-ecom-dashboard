@@ -33,8 +33,8 @@ export interface LeadershipMetrics {
   totalScore: number;        // 0-100 (= avg KPI + SLA)
 }
 
-const KPI_WEIGHT = 0.50;
-const SLA_WEIGHT = 0.50;
+const KPI_WEIGHT = 1.00;
+const SLA_WEIGHT = 0.00;
 
 function getMonthKey(iso: string): string {
   if (!iso) return '';

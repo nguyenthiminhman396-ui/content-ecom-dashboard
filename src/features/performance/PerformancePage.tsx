@@ -4,7 +4,7 @@ import { flattenDailyTasks } from '@/shared/selectors/dailyTasks';
 import { computeLeadershipMetrics, LEADERSHIP_WEIGHTS } from '@/shared/selectors/leadershipMetrics';
 import { usePersistedState } from '@/shared/hooks/usePersistedState';
 import { useNavigate } from 'react-router-dom';
-import { Award, Plus, Edit3, Trash2, X, Save, Star, TrendingUp, Users, Calendar, ChevronDown, ChevronUp, Search, ArrowUpDown, ShieldCheck, Lightbulb, Target, Trophy, Gift, Eye, MessageSquare } from 'lucide-react';
+import { Award, Plus, Edit3, Trash2, X, Save, Star, TrendingUp, Users, Calendar, ChevronDown, ChevronUp, Search, ArrowUpDown, ShieldCheck, Lightbulb, Trophy, Gift, Eye, MessageSquare } from 'lucide-react';
 import { Chart as ChartJS, RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend } from 'chart.js';
 import { Radar } from 'react-chartjs-2';
 import type { PerformanceReview } from '@/shared/types';
@@ -312,16 +312,16 @@ export default function PerformancePage() {
         </div>
       </div>
 
-      {/* ── Leadership Score Panel — 2 chiều cốt lõi ── */}
+      {/* ── Leadership Score Panel ── */}
       {visibleLeadership.length > 0 && (
         <div className="card" style={{ padding: '24px', marginTop: '20px' }}>
           <div style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: '6px',
                         display: 'flex', alignItems: 'center', gap: '8px' }}>
             <ShieldCheck size={18} color="var(--primary-500)" />
-            Đánh giá Leader — Đảm bảo KPI team & Deadline
+            Đánh giá Leader — Đảm bảo KPI Team
           </div>
           <p style={{ fontSize: '0.82rem', color: 'var(--text-tertiary)', marginBottom: '18px' }}>
-            2 chiều cốt lõi của Lead: dẫn dắt team đạt KPI và đảm bảo task đúng deadline.
+            Nhiệm vụ cốt lõi của Lead: dẫn dắt team đạt 100% KPI mục tiêu.
             <br />
             <em>Chất lượng & R&D tự chọn — Manager đánh giá qua thưởng/phạt (Bonus).</em>
           </p>
@@ -359,8 +359,8 @@ export default function PerformancePage() {
                     </div>
                   </div>
 
-                  {/* 2 chiều to và rõ */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                  {/* KPI Team card */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px' }}>
                     <BigMetricCard
                       icon={<Trophy size={20} />}
                       label="KPI Team"
@@ -369,17 +369,6 @@ export default function PerformancePage() {
                       headline={`${m.teamPointsActual.toLocaleString('vi-VN', { maximumFractionDigits: 0 })}đ / ${m.teamPointsTarget.toLocaleString('vi-VN')}đ`}
                       sub={`Team đạt ${m.kpiTeamScore}% target tổng (${m.teamMembers} member × ${(m.teamPointsTarget / Math.max(m.teamMembers, 1)).toLocaleString('vi-VN')}đ)`}
                       color="var(--primary-500)"
-                    />
-                    <BigMetricCard
-                      icon={<Target size={20} />}
-                      label="Deadline (SLA)"
-                      weight={`${Math.round(LEADERSHIP_WEIGHTS.sla * 100)}% trọng số`}
-                      score={m.slaScore}
-                      headline={`${m.onTimeTasks} / ${m.totalTasks} task đúng hạn`}
-                      sub={m.totalTasks === 0
-                        ? 'Tháng này chưa có task cứng nào trong scope'
-                        : `${m.onTimeTasks} task hoàn thành trước deadline trong tháng`}
-                      color="var(--accent-500)"
                     />
                   </div>
 
