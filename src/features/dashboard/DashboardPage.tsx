@@ -266,18 +266,24 @@ export default function DashboardPage() {
     return { now: tNow, prev: tPrev, bonusNow: totalBonusNow, bonusPrev: totalBonusPrev };
   }, [thisMonthSubs, prevMonthSubs, totalBonusNow, totalBonusPrev, scaleConfig.pointPerHour]);
 
+  // Lấy danh sách các members thực sự có làm việc (có data trong submissions)
+  const activeMembers = useMemo(() => {
+    const activeNames = new Set(submissions.map(s => s.employeeName));
+    return members.filter(m => activeNames.has(m.name) && m.name !== 'manntm3');
+  }, [members, submissions]);
+
   // ── Headcount cố định theo scope (không phụ thuộc ai submit tháng đó) ──
   const scopedHeadcount = useMemo(() => {
     if (!currentUser) return 1;
     if (filterEmployee) return 1; // đang xem 1 người cụ thể
-    if (currentUser.role === 'Manager') return Math.max(members.filter(m => m.name !== 'manntm3').length, 1);
+    if (currentUser.role === 'Manager') return Math.max(activeMembers.length, 1);
     if (currentUser.role === 'Leader') {
       const me = members.find(m => m.name === currentUser.name || m.id === currentUser.id);
       if (!me?.teamGroup) return 1;
-      return Math.max(members.filter(m => m.teamGroup === me.teamGroup && m.name !== 'manntm3').length, 1);
+      return Math.max(activeMembers.filter(m => m.teamGroup === me.teamGroup).length, 1);
     }
     return 1; // Member: chỉ tính bản thân
-  }, [currentUser, members, filterEmployee]);
+  }, [currentUser, members, filterEmployee, activeMembers]);
 
   // ── Doughnut: tỉ trọng 3 nhóm ──
   const teamData = useMemo(() => {
@@ -666,13 +672,13 @@ export default function DashboardPage() {
               : scaleConfig.memberTargetPoints;
           }
 
-          let relevantMembers = members.filter(m => m.name !== 'manntm3');
+          let relevantMembers = activeMembers;
           if (currentUser.role === 'Leader') {
             const me = members.find(m => m.name === currentUser.name);
             if (me?.teamGroup) {
-              relevantMembers = relevantMembers.filter(m => m.teamGroup === me.teamGroup);
+              relevantMembers = activeMembers.filter(m => m.teamGroup === me.teamGroup);
             } else {
-              relevantMembers = relevantMembers.filter(m => m.name === currentUser.name);
+              relevantMembers = activeMembers.filter(m => m.name === currentUser.name);
             }
           }
 
