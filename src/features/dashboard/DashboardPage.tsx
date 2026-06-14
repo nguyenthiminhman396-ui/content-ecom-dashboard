@@ -136,7 +136,13 @@ export default function DashboardPage() {
   function shiftMonthDate(iso: string, deltaMonths: number): string {
     if (!iso) return '';
     const d = new Date(iso + (iso.length <= 10 ? 'T00:00:00' : ''));
+    const origDay = d.getDate();
+    // Đặt ngày = 1 trước khi shift để tránh tràn tháng (VD: 31/5 → 31/4 không tồn tại → JS nhảy sang 1/5)
+    d.setDate(1);
     d.setMonth(d.getMonth() + deltaMonths);
+    // Clamp ngày về cuối tháng đích nếu ngày gốc lớn hơn số ngày tháng đích
+    const lastDayOfTargetMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(origDay, lastDayOfTargetMonth));
     return d.toISOString().slice(0, 10);
   }
   const prevDateFrom = dateFrom ? shiftMonthDate(dateFrom, -1) : '';
