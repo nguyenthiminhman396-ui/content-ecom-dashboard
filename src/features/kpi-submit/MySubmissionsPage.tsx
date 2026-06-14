@@ -679,7 +679,7 @@ function EditSubmissionModal({ item, taskPointRules, onClose, onSave }: {
                     style={{ fontSize: '0.85rem' }}>
                     <option value="">— Không chọn task cụ thể —</option>
                     {availableTasks.map(t => (
-                      <option key={t.id} value={t.id}>{t.taskName}</option>
+                      <option key={t.id} value={t.id}>{t.name}</option>
                     ))}
                   </select>
                 )}
