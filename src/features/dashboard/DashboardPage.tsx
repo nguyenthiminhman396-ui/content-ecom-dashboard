@@ -107,7 +107,7 @@ export default function DashboardPage() {
     if (filterEmployee && (currentUser.role === 'Manager' || currentUser.role === 'Leader')) {
       base = base.filter(s => s.employeeName === filterEmployee);
     }
-    return base;
+    return base.filter(s => s.employeeName !== 'manntm3');
   }, [submissions, currentUser, members, filterEmployee]);
 
   // ── Available employees for filter (based on scope) ──
@@ -199,7 +199,7 @@ export default function DashboardPage() {
     if (filterEmployee && (currentUser.role === 'Manager' || currentUser.role === 'Leader')) {
       base = base.filter(b => b.employeeName === filterEmployee);
     }
-    return base;
+    return base.filter(b => b.employeeName !== 'manntm3');
   }, [bonusPoints, currentUser, members, filterEmployee]);
 
   const bonusInRange = useMemo(() => {
@@ -270,11 +270,11 @@ export default function DashboardPage() {
   const scopedHeadcount = useMemo(() => {
     if (!currentUser) return 1;
     if (filterEmployee) return 1; // đang xem 1 người cụ thể
-    if (currentUser.role === 'Manager') return Math.max(members.length, 1);
+    if (currentUser.role === 'Manager') return Math.max(members.filter(m => m.name !== 'manntm3').length, 1);
     if (currentUser.role === 'Leader') {
       const me = members.find(m => m.name === currentUser.name || m.id === currentUser.id);
       if (!me?.teamGroup) return 1;
-      return Math.max(members.filter(m => m.teamGroup === me.teamGroup).length, 1);
+      return Math.max(members.filter(m => m.teamGroup === me.teamGroup && m.name !== 'manntm3').length, 1);
     }
     return 1; // Member: chỉ tính bản thân
   }, [currentUser, members, filterEmployee]);
@@ -666,7 +666,7 @@ export default function DashboardPage() {
             // Leader xem team: mỗi member = full target, leader bản thân = 60%
             const me = members.find(m => m.name === currentUser.name);
             const myTeam = me?.teamGroup;
-            const teamMembers = myTeam ? members.filter(m => m.teamGroup === myTeam) : [];
+            const teamMembers = myTeam ? members.filter(m => m.teamGroup === myTeam && m.name !== 'manntm3') : [];
             const leaderCount = teamMembers.filter(m => m.kpiRole === 'leader').length;
             const memberCount = empCount - leaderCount;
             return (memberCount * scaleConfig.memberTargetPoints) + 
@@ -768,17 +768,6 @@ export default function DashboardPage() {
                 const mgmtScoreNow = getMgmtScore(selectedPeriodNow);
                 const mgmtScorePrev = getMgmtScore(selectedPeriodPrev);
 
-                const prodPctNow = Math.round((stats.now.points / Math.max(targetNow, 1)) * 100);
-                const prodPctPrev = Math.round((stats.prev.points / Math.max(targetPrev, 1)) * 100);
-
-                let overallKpiNow = prodPctNow;
-                let overallKpiPrev = prodPctPrev;
-
-                if (mgmtScoreNow !== null) {
-                  overallKpiNow = Math.round(prodPctNow * scaleConfig.leaderProductionWeight + mgmtScoreNow * (1 - scaleConfig.leaderProductionWeight));
-                  overallKpiPrev = Math.round(prodPctPrev * scaleConfig.leaderProductionWeight + (mgmtScorePrev ?? 0) * (1 - scaleConfig.leaderProductionWeight));
-                }
-
                 return (
                   <>
                     {mgmtScoreNow !== null && (
@@ -786,12 +775,6 @@ export default function DashboardPage() {
                         now={mgmtScoreNow}
                         prev={mgmtScorePrev ?? 0}
                         color="var(--primary-600)" suffix="%" />
-                    )}
-                    {(mgmtScoreNow !== null || currentUser?.role === 'Manager') && (
-                      <CompareCard icon={<Sparkles size={18} />} label="KPI tổng hợp"
-                        now={overallKpiNow}
-                        prev={overallKpiPrev}
-                        color="#F59E0B" suffix="%" />
                     )}
                   </>
                 );
