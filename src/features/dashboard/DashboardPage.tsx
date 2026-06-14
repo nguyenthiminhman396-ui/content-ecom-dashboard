@@ -114,13 +114,13 @@ export default function DashboardPage() {
   const availableEmployees = useMemo(() => {
     if (!currentUser) return [];
     if (currentUser.role === 'Manager') {
-      return Array.from(new Set(submissions.map(s => s.employeeName))).sort();
+      return Array.from(new Set(submissions.map(s => s.employeeName))).filter(n => n !== 'manntm3').sort();
     }
     if (currentUser.role === 'Leader') {
       const me = members.find(m => m.name === currentUser.name || m.id === currentUser.id);
-      if (!me?.teamGroup) return [currentUser.name];
+      if (!me?.teamGroup) return [currentUser.name].filter(n => n !== 'manntm3');
       const teamMembers = members.filter(m => m.teamGroup === me.teamGroup).map(m => m.name);
-      return Array.from(new Set([...teamMembers, currentUser.name])).sort();
+      return Array.from(new Set([...teamMembers, currentUser.name])).filter(n => n !== 'manntm3').sort();
     }
     return [];
   }, [currentUser, members, submissions]);

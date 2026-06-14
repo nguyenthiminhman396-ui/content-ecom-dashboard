@@ -71,7 +71,7 @@ export default function PerformancePage() {
   }, [isLeader, currentUser, members]);
 
   const allEmployees = useMemo(() => {
-    const all = Array.from(new Set([...kpiEntries.map(e => e.employeeName), ...submissions.map(s => s.employeeName)])).sort();
+    const all = Array.from(new Set([...kpiEntries.map(e => e.employeeName), ...submissions.map(s => s.employeeName)])).filter(n => n !== 'manntm3').sort();
     if (isManager) return all;
     if (isLeader && leaderTeam) return all.filter(n => { const m = members.find(mm => mm.name === n); return m?.teamGroup === leaderTeam; });
     return currentUser ? all.filter(n => n === currentUser.name) : [];
