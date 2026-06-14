@@ -9,7 +9,8 @@ import {
   BarElement, ArcElement, Tooltip, Legend, Filler
 } from 'chart.js';
 import { Doughnut, Line } from 'react-chartjs-2';
-import type { KPISubmission } from '@/shared/types';
+import type { KPISubmission, Member } from '@/shared/types';
+import { computeLeadershipMetrics } from '@/shared/selectors/leadershipMetrics';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend, Filler);
 
@@ -48,7 +49,7 @@ function startOfMonth(d: Date): Date { return new Date(d.getFullYear(), d.getMon
 function endOfMonth(d: Date): Date { return new Date(d.getFullYear(), d.getMonth() + 1, 0); }
 
 export default function DashboardPage() {
-  const { submissions, projects, scaleConfig, members, currentUser, projectTasks, bonusPoints } = useAppStore();
+  const { submissions, projects, scaleConfig, members, currentUser, projectTasks, bonusPoints, rndLogs } = useAppStore();
 
   const now = new Date();
   const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -739,6 +740,63 @@ export default function DashboardPage() {
                 now={Math.round((stats.now.points / Math.max(targetNow, 1)) * 100)}
                 prev={Math.round((stats.prev.points / Math.max(targetPrev, 1)) * 100)}
                 color="var(--success)" suffix="%" />
+              
+              {(() => {
+                const selectedPeriodNow = dateTo ? dateTo.slice(0, 7) : thisMonth;
+                const selectedPeriodPrev = prevDateTo ? prevDateTo.slice(0, 7) : prevMonth;
+                
+                const getMgmtScore = (period: string) => {
+                  if (!showMgmt && currentUser?.role !== 'Manager') return null;
+                  
+                  let leadersToEval: Member[] = [];
+                  if (showMgmt) {
+                    const lead = members.find(m => m.name === (filterEmployee || currentUser?.name));
+                    if (lead) leadersToEval.push(lead);
+                  } else if (currentUser?.role === 'Manager' && !filterEmployee) {
+                    leadersToEval = members.filter(m => m.kpiRole === 'leader');
+                  }
+                  
+                  if (leadersToEval.length === 0) return null;
+                  
+                  const scores = leadersToEval.map(l => 
+                    computeLeadershipMetrics(l, period, members, submissions, projectTasks, rndLogs, scaleConfig, bonusPoints).totalScore
+                  );
+                  
+                  return Math.round(scores.reduce((s, a) => s + a, 0) / scores.length);
+                };
+
+                const mgmtScoreNow = getMgmtScore(selectedPeriodNow);
+                const mgmtScorePrev = getMgmtScore(selectedPeriodPrev);
+
+                const prodPctNow = Math.round((stats.now.points / Math.max(targetNow, 1)) * 100);
+                const prodPctPrev = Math.round((stats.prev.points / Math.max(targetPrev, 1)) * 100);
+
+                let overallKpiNow = prodPctNow;
+                let overallKpiPrev = prodPctPrev;
+
+                if (mgmtScoreNow !== null) {
+                  overallKpiNow = Math.round(prodPctNow * scaleConfig.leaderProductionWeight + mgmtScoreNow * (1 - scaleConfig.leaderProductionWeight));
+                  overallKpiPrev = Math.round(prodPctPrev * scaleConfig.leaderProductionWeight + (mgmtScorePrev ?? 0) * (1 - scaleConfig.leaderProductionWeight));
+                }
+
+                return (
+                  <>
+                    {mgmtScoreNow !== null && (
+                      <CompareCard icon={<ShieldCheck size={18} />} label="% Target quản lý"
+                        now={mgmtScoreNow}
+                        prev={mgmtScorePrev ?? 0}
+                        color="var(--primary-600)" suffix="%" />
+                    )}
+                    {(mgmtScoreNow !== null || currentUser?.role === 'Manager') && (
+                      <CompareCard icon={<Sparkles size={18} />} label="KPI tổng hợp"
+                        now={overallKpiNow}
+                        prev={overallKpiPrev}
+                        color="#F59E0B" suffix="%" />
+                    )}
+                  </>
+                );
+              })()}
+
               <CompareCard icon={<Trophy size={18} />} label="Điểm"
                 now={Math.round(stats.now.points * 10) / 10} prev={Math.round(stats.prev.points * 10) / 10} color="var(--accent-500)" suffix="đ" />
               <CompareCard icon={<Calendar size={18} />} label="Thời gian làm việc"
