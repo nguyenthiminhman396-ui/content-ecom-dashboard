@@ -143,7 +143,11 @@ export default function DashboardPage() {
     // Clamp ngày về cuối tháng đích nếu ngày gốc lớn hơn số ngày tháng đích
     const lastDayOfTargetMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
     d.setDate(Math.min(origDay, lastDayOfTargetMonth));
-    return d.toISOString().slice(0, 10);
+    // PHẢI dùng local time — toISOString() trả về UTC, bị lệch ngày ở múi giờ UTC+7
+    const yy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yy}-${mm}-${dd}`;
   }
   const prevDateFrom = dateFrom ? shiftMonthDate(dateFrom, -1) : '';
   const prevDateTo   = dateTo   ? shiftMonthDate(dateTo, -1)   : '';
