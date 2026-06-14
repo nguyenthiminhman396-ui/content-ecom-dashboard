@@ -33,6 +33,12 @@ export interface Project {
   isMonthly?: boolean;
   /** Chi phí ước tính cho 1 điểm KPI — dùng tính tổng chi phí bài viết */
   costPerPoint?: number;
+  /**
+   * Tiến độ thủ công (0–100) — chỉ dùng khi dự án chưa có ProjectTask nào.
+   * Khi task nhỏ được thêm vào, hệ thống TỰ ĐỘNG ưu tiên tính từ submissions,
+   * bỏ qua trường này. Có thể dùng song song để ghi nhận ước tính nếu muốn.
+   */
+  manualProgress?: number;
 }
 
 // ============================================

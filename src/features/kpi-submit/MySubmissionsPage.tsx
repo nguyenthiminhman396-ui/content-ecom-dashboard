@@ -539,13 +539,21 @@ function EditSubmissionModal({ item, taskPointRules, onClose, onSave }: {
   onSave: (updates: Partial<KPISubmission>) => void;
 }) {
   const TEAM_OPTIONS: TeamGroup[] = ['Bài viết', 'Sản phẩm', 'Multimedia - Tin nhanh'];
+  const { projects, projectTasks } = useAppStore();
 
-  const [taskType,   setTaskType]   = useState(item.taskType);
-  const [taskDetail, setTaskDetail] = useState(item.taskDetail);
-  const [teamGroup,  setTeamGroup]  = useState<TeamGroup>(item.teamGroup);
-  const [links,      setLinks]      = useState<string[]>([...item.links]);
-  const [notes,      setNotes]      = useState(item.notes ?? '');
-  const [auditNote,  setAuditNote]  = useState('');
+  const [taskType,       setTaskType]       = useState(item.taskType);
+  const [taskDetail,     setTaskDetail]     = useState(item.taskDetail);
+  const [teamGroup,      setTeamGroup]      = useState<TeamGroup>(item.teamGroup);
+  const [links,          setLinks]          = useState<string[]>([...item.links]);
+  const [notes,          setNotes]          = useState(item.notes ?? '');
+  const [auditNote,      setAuditNote]      = useState('');
+  const [projectId,      setProjectId]      = useState(item.projectId ?? '');
+  const [projectTaskId,  setProjectTaskId]  = useState(item.projectTaskId ?? '');
+
+  // Tasks filtered by selected project
+  const availableTasks = projectId
+    ? projectTasks.filter(t => t.projectId === projectId)
+    : [];
 
   // Auto-recalc pointPerLink khi taskDetail thay đổi
   const matchedRule = taskPointRules.find(
@@ -573,6 +581,8 @@ function EditSubmissionModal({ item, taskPointRules, onClose, onSave }: {
       notes: auditNote ? `[Sửa bởi Manager: ${auditNote}] ${notes}`.trim() : notes || undefined,
       pointPerLink: newPointPerLink,
       totalPoints:  newTotalPoints,
+      projectId:     projectId || undefined,
+      projectTaskId: projectTaskId || undefined,
     });
   };
 
@@ -638,6 +648,43 @@ function EditSubmissionModal({ item, taskPointRules, onClose, onSave }: {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* project assignment */}
+          <div style={{ padding: '12px 14px', borderRadius: 'var(--radius-md)', background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              🗂️ Gắn dự án
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Dự án</label>
+              <select className="form-input" value={projectId}
+                onChange={e => { setProjectId(e.target.value); setProjectTaskId(''); }}
+                style={{ fontSize: '0.85rem' }}>
+                <option value="">— Không gắn dự án —</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            {projectId && (
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">Task nhỏ trong dự án <span style={{ fontWeight: 400, color: 'var(--text-tertiary)' }}>(tuỳ chọn)</span></label>
+                {availableTasks.length === 0 ? (
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', padding: '6px 10px', background: 'var(--bg-primary)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)' }}>
+                    Dự án này chưa có task nhỏ
+                  </div>
+                ) : (
+                  <select className="form-input" value={projectTaskId}
+                    onChange={e => setProjectTaskId(e.target.value)}
+                    style={{ fontSize: '0.85rem' }}>
+                    <option value="">— Không chọn task cụ thể —</option>
+                    {availableTasks.map(t => (
+                      <option key={t.id} value={t.id}>{t.taskName}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
           </div>
 
           {/* links */}

@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Báo cáo tuần — Team Content (Interactive)</title>
+  <style>
+    :root {
+      --bg:#f4f7fb;--card:#fff;--ink:#0f172a;--text:#334155;--muted:#64748b;
+      --line:#e2e8f0;--blue:#2563eb;--blue-50:#eff6ff;--green:#16a34a;
+      --green-50:#ecfdf5;--amber:#f59e0b;--amber-50:#fffbeb;--red:#dc2626;
+      --red-50:#fef2f2;--purple:#7c3aed;--purple-50:#f5f3ff;
+      --shadow:0 18px 45px rgba(15,23,42,.08);--radius:22px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body {
+      font-family:Inter,'Segoe UI',system-ui,sans-serif;color:var(--text);
+      background:radial-gradient(circle at 8% 0%,rgba(37,99,235,.16),transparent 28%),
+        radial-gradient(circle at 92% 0%,rgba(124,58,237,.12),transparent 26%),var(--bg);
+      line-height:1.5;
+    }
+    .page{width:min(1160px,calc(100% - 32px));margin:28px auto 56px}
+
+    /* HERO */
+    .hero {
+      position:relative;overflow:hidden;border-radius:30px;padding:34px;color:#fff;
+      background:linear-gradient(135deg,#0f172a 0%,#1d4ed8 58%,#7c3aed 100%);
+      box-shadow:var(--shadow);
+    }
+    .hero::after {
+      content:"";position:absolute;right:-90px;top:-90px;width:280px;height:280px;
+      border-radius:50%;background:rgba(255,255,255,.12);pointer-events:none;
+    }
+    .hero-grid{position:relative;z-index:1;display:grid;grid-template-columns:1.45fr .9fr;gap:28px;align-items:end}
+    .eyebrow {
+      display:inline-flex;gap:8px;align-items:center;padding:7px 12px;border-radius:999px;
+      background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.24);font-size:13px;margin-bottom:4px;
+    }
+    h1{font-size:clamp(28px,4.5vw,50px);letter-spacing:-1.8px;line-height:1.06;margin:10px 0 10px}
+    .hero p{max-width:760px;color:rgba(255,255,255,.82);font-size:15px}
+    .hero-panel {
+      background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.24);
+      border-radius:24px;padding:20px;backdrop-filter:blur(8px);
+    }
+    .hero-panel .big{font-size:40px;line-height:1;font-weight:900;margin-bottom:6px}
+    .hero-panel .label{color:rgba(255,255,255,.78);font-size:14px}
+    .hero-panel hr{border:0;border-top:1px solid rgba(255,255,255,.18);margin:14px 0}
+    .mini-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;color:rgba(255,255,255,.82);margin-top:7px}
+    .mini-row b{color:#fff}
+
+    /* SECTIONS */
+    .section-title {
+      display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin:30px 0 14px;
+    }
+    .section-title h2{font-size:24px;letter-spacing:-.6px;color:var(--ink)}
+    .section-title span{font-size:13px;color:var(--muted)}
+
+    /* GRIDS */
+    .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+    .grid-2{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}
+    .project-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+
+    /* CARDS */
+    .card {
+      background:rgba(255,255,255,.9);border:1px solid rgba(226,232,240,.85);
+      border-radius:var(--radius);box-shadow:0 8px 24px rgba(15,23,42,.06);
+      padding:20px;backdrop-filter:blur(8px);
+    }
+    .kpi .icon{width:44px;height:44px;border-radius:15px;display:grid;place-items:center;font-size:22px;margin-bottom:14px}
+    .icon-blue{background:var(--blue-50);color:var(--blue)}
+    .icon-green{background:var(--green-50);color:var(--green)}
+    .icon-amber{background:var(--amber-50);color:var(--amber)}
+    .icon-red{background:var(--red-50);color:var(--red)}
+    .icon-purple{background:var(--purple-50);color:var(--purple)}
+    .kpi-label{font-size:13px;color:var(--muted);margin-bottom:4px;display:flex;align-items:center;gap:6px}
+    .kpi-value{font-size:34px;font-weight:900;letter-spacing:-1px;color:var(--ink);line-height:1}
+    .kpi-note{font-size:13px;color:var(--muted);margin-top:8px}
+
+    /* PROJECT CARDS */
+    .project-card{border:1px solid var(--line);border-radius:18px;padding:16px;background:#fff}
+    .project-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:10px}
+    .project-title{font-weight:700;color:var(--ink);font-size:15px}
+    .project-meta{font-size:12px;color:var(--muted);margin-top:2px}
+    .pill{display:inline-flex;align-items:center;border-radius:999px;padding:5px 10px;font-size:11px;font-weight:800;white-space:nowrap}
+    .pill-good{background:var(--green-50);color:var(--green)}
+    .pill-watch{background:var(--amber-50);color:#b45309}
+    .pill-risk{background:var(--red-50);color:var(--red)}
+    .pill-info{background:var(--blue-50);color:var(--blue)}
+    .progress-line{height:11px;border-radius:999px;background:#e5e7eb;overflow:hidden;margin:10px 0 8px}
+    .progress-line .fill{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--blue),var(--purple));transition:width .4s}
+    .progress-line.red .fill{background:linear-gradient(90deg,var(--red),#fb7185)}
+    .progress-line.amber .fill{background:linear-gradient(90deg,var(--amber),#f97316)}
+    .progress-foot{display:flex;justify-content:space-between;color:var(--muted);font-size:13px}
+    .project-action{margin-top:10px;padding:10px 12px;border-radius:13px;background:#f8fafc;font-size:13px;color:#475569;border:1px dashed #cbd5e1}
+
+    /* TABLE */
+    table{width:100%;border-collapse:collapse}
+    .table-card{padding:0;overflow:hidden}
+    th,td{padding:13px 15px;border-bottom:1px solid var(--line);font-size:14px;text-align:left;vertical-align:middle}
+    th{background:#f8fafc;color:#475569;font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+    tr:last-child td{border-bottom:0}
+    .tbl-note{color:var(--muted);font-size:13px}
+
+    /* BOTTLENECKS */
+    .bottleneck-list{display:grid;gap:12px}
+    .bottleneck {
+      display:grid;grid-template-columns:38px 1fr;gap:12px;padding:14px;
+      border-radius:16px;border:1px solid var(--line);background:#fff;
+    }
+    .bn-no{width:38px;height:38px;border-radius:13px;display:grid;place-items:center;background:var(--red-50);color:var(--red);font-weight:900;flex-shrink:0}
+    .bottleneck h3{font-size:14px;color:var(--ink);margin-bottom:4px;font-weight:700}
+    .bottleneck p{font-size:13px;color:var(--muted);line-height:1.6}
+    .tag-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+    .tag{font-size:11px;font-weight:700;border-radius:999px;padding:3px 8px;background:#f1f5f9;color:#475569}
+    .risk-matrix{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+    .risk-box{padding:14px;border-radius:16px;border:1px solid var(--line);background:#fff}
+    .risk-box h3{font-size:14px;color:var(--ink);margin-bottom:8px;font-weight:700}
+    .risk-box ul{padding-left:16px;color:var(--muted);font-size:13px}
+    .risk-box li{margin:4px 0}
+
+    /* ACTION PLAN */
+    .recommend {
+      padding:22px;border-radius:var(--radius);
+      background:linear-gradient(135deg,#eff6ff,#faf5ff);
+      border:1px solid #dbeafe;color:#1e3a8a;
+    }
+    .recommend h3{font-size:18px;margin-bottom:12px;font-weight:700}
+    .recommend ol{padding-left:18px}
+    .recommend li{margin:9px 0;font-weight:600;font-size:14px;line-height:1.6}
+
+    /* FOOTER */
+    .footer{text-align:center;color:#94a3b8;font-size:12px;margin-top:28px;padding-top:18px;border-top:1px solid var(--line)}
+
+    /* ===================== AUTO BADGE ===================== */
+    .auto-lbl {
+      display:inline-block;font-size:9px;font-weight:800;text-transform:uppercase;
+      letter-spacing:.6px;background:#ecfdf5;color:#16a34a;
+      padding:2px 5px;border-radius:4px;border:1px solid #bbf7d0;line-height:1.4;
+    }
+
+    /* ===================== TOOLBAR ===================== */
+    #toolbar {
+      position:fixed;top:14px;right:16px;z-index:1000;
+      display:flex;gap:8px;align-items:center;
+      background:rgba(255,255,255,.96);backdrop-filter:blur(14px);
+      border:1px solid #e2e8f0;border-radius:14px;padding:8px 12px;
+      box-shadow:0 4px 20px rgba(0,0,0,.13);
+    }
+    .tbtn {
+      padding:7px 14px;border-radius:8px;border:none;cursor:pointer;
+      font-size:13px;font-weight:600;font-family:inherit;
+      display:inline-flex;align-items:center;gap:5px;transition:opacity .15s;
+    }
+    .tbtn:hover{opacity:.85}
+    .tbtn-edit{background:#1e40af;color:#fff}
+    .tbtn-save{background:#16a34a;color:#fff;display:none}
+    .tbtn-cancel{background:#6b7280;color:#fff;display:none}
+    .tbtn-print{background:#f1f5f9;color:#334155}
+    .edit-badge {
+      font-size:12px;font-weight:700;padding:5px 10px;border-radius:8px;
+      background:#fef3c7;color:#b45309;border:1px solid #fde68a;display:none;
+    }
+    body.editing .edit-badge{display:inline-block}
+    body.editing .tbtn-edit{display:none}
+    body.editing .tbtn-save,body.editing .tbtn-cancel{display:inline-flex}
+
+    /* ===================== EDIT MODE STYLES ===================== */
+    /* Editable text spans */
+    .et {
+      border-radius:4px;outline:none;display:inline;
+      transition:outline .12s,background .12s;
+    }
+    body.editing .et {
+      outline:2px dashed #93c5fd;outline-offset:2px;background:rgba(219,234,254,.25);
+      cursor:text;min-width:30px;
+    }
+    body.editing .et:hover{outline-color:#3b82f6;background:rgba(219,234,254,.45)}
+    body.editing .et:focus{outline:2px solid #2563eb !important;background:rgba(219,234,254,.6)}
+
+    /* Number inputs */
+    .e-num {
+      border:2px solid #3b82f6;border-radius:6px;padding:3px 6px;
+      font-family:inherit;font-size:inherit;font-weight:inherit;color:inherit;
+      background:#fff;text-align:center;width:70px;
+    }
+    .e-num:focus{outline:none;border-color:#1d4ed8;box-shadow:0 0 0 3px rgba(59,130,246,.2)}
+
+    /* Delete buttons */
+    .del-btn {
+      display:none;background:none;border:none;cursor:pointer;
+      color:#dc2626;font-size:18px;line-height:1;padding:1px 5px;border-radius:4px;
+      flex-shrink:0;
+    }
+    .del-btn:hover{background:#fef2f2}
+    body.editing .del-btn{display:inline-flex;align-items:center}
+
+    /* Add buttons */
+    .add-btn {
+      display:none;width:100%;padding:10px;border:2px dashed #cbd5e1;border-radius:12px;
+      background:none;cursor:pointer;color:#3b82f6;font-size:13px;font-family:inherit;
+      margin-top:10px;font-weight:600;transition:all .15s;
+    }
+    .add-btn:hover{background:#eff6ff;border-color:#3b82f6}
+    body.editing .add-btn{display:block}
+
+    /* Project number inputs row */
+    .proj-inputs {
+      display:none;gap:8px;align-items:center;margin-bottom:4px;
+      font-size:13px;color:var(--muted);flex-wrap:wrap;
+    }
+    body.editing .proj-inputs{display:flex}
+
+    /* Toast */
+    #toast {
+      position:fixed;bottom:24px;right:24px;z-index:2000;
+      background:#16a34a;color:#fff;padding:12px 20px;border-radius:12px;
+      font-size:14px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.15);
+      transform:translateY(80px);opacity:0;transition:.3s;pointer-events:none;
+    }
+    #toast.show{transform:translateY(0);opacity:1}
+
+    /* Responsive */
+    @media(max-width:940px){
+      .hero-grid,.grid-2{grid-template-columns:1fr}
+      .grid-4,.project-grid{grid-template-columns:repeat(2,1fr)}
+    }
+    @media(max-width:640px){
+      .page{width:calc(100% - 20px);margin-top:10px}
+      .hero{padding:22px;border-radius:22px}
+      .grid-4,.project-grid,.risk-matrix{grid-template-columns:1fr}
+      .section-title{flex-direction:column;align-items:flex-start}
+      .table-card{overflow-x:auto}
+      table{min-width:720px}
+      #toolbar{top:8px;right:8px;gap:4px;padding:6px 8px}
+      .tbtn{padding:5px 10px;font-size:12px}
+    }
+    @media print{
+      body{background:#fff}
+      .page{width:100%;margin:0}
+      .card,.hero,.project-card{box-shadow:none}
+      #toolbar,#toast,.add-btn,.del-btn{display:none!important}
+    }
+  </style>
+</head>
+<body>
+
+<!-- TOOLBAR -->
+<div id="toolbar">
+  <span class="edit-badge">✏️ Đang chỉnh sửa</span>
+  <button class="tbtn tbtn-edit" onclick="enterEdit()">✏️ Chỉnh sửa</button>
+  <button class="tbtn tbtn-save" onclick="saveEdit()">💾 Lưu</button>
+  <button class="tbtn tbtn-cancel" onclick="cancelEdit()">✕ Huỷ</button>
+  <button class="tbtn tbtn-print" onclick="window.print()">🖨 In PDF</button>
+</div>
+
+<!-- TOAST -->
+<div id="toast">✅ Đã lưu thành công!</div>
+
+<!-- REPORT ROOT -->
+<main class="page" id="root"></main>
+
+<script>
+// ================================================================
+// DATA
+// ================================================================
+let DATA = {
+  meta: {
+    week: "07/06 - 13/06/2026",
+    team: "Team Content",
+    desc: "Bản nâng cấp có thêm tiến độ dự án, phân loại điểm nghẽn và action plan để team nhìn nhanh: việc nào đang chạy tốt, việc nào đang kẹt, cần ai xử lý tiếp."
+  },
+  staff: { count: 4, tops: "ThiPTM · TamLTN2 · AnhLHP", submits: 22 },
+  tasks: [
+    { g:"Bài viết",  n:"Tối ưu bài viết đơn giản",                    l:121, p:60.5, media:false, note:"Sản lượng chính trong tuần, nên duy trì nhịp." },
+    { g:"Bài viết",  n:"Quản lý cộng tác viên Articles + Product",     l:1,   p:24.0, media:false, note:"Điểm cao, mang tính quản lý/điều phối." },
+    { g:"Bài viết",  n:"Bài AI theo batch",                            l:15,  p:11.3, media:false, note:"Có thể tăng nếu chuẩn hóa prompt và checklist QC." },
+    { g:"Bài viết",  n:"Bài Hỏi đáp BS",                               l:22,  p:11.0, media:false, note:"Cần rà consistency phần disclaimer/câu hỏi liên quan." },
+    { g:"Multimedia",n:"Short video",                                   l:2,   p:4.0,  media:true,  note:"Sản lượng thấp, cần xem lại brief hoặc pipeline nhận việc." }
+  ],
+  projects: [
+    { n:"Mẹ và bé",          done:0,   total:260, note:"Chưa khởi động thực tế",          action:"Cần chốt owner theo từng block: AI kể chuyện, mẹ bầu, truyện POKI, dinh dưỡng và research." },
+    { n:"Tòa soạn y khoa",   done:0,   total:7,   note:"Đang kẹt đầu vào/flow",           action:"Ưu tiên flow Content - HĐYK, bài test QC, framework/guideline và phân loại nội dung." },
+    { n:"Tối ưu AIO",        done:220, total:600, note:"Cần tăng tốc",                    action:"AIO FMCG mới 27%, cần tách batch ưu tiên và khóa checklist tối ưu để giảm vòng sửa." },
+    { n:"Listing Img",       done:34,  total:103, note:"Đang chạy tốt nhất nhóm dự án",   action:"TH2 - Order Ecom mới 23%, cần rà riêng asset thiếu, zip chưa đủ và ảnh cần chỉnh claim." },
+    { n:"MKT order",         done:6,   total:35,  note:"SEM chỉ 10%",                     action:"Cần xác định các order cần giao sớm, tách nhóm SEM khỏi nhóm order thường để theo dõi riêng." },
+    { n:"Bản đồ giải nhiệt", done:9,   total:33,  note:"Infographic 0%",                  action:"Cần ưu tiên infographic mùa nắng nóng và bài mùa mưa để kịp tính thời điểm." }
+  ],
+  bottlenecks: [
+    { title:"Nhiều đầu việc của dự án Mẹ và bé đang ở 0%", desc:"Các block AI kể chuyện, mẹ bầu, truyện POKI, dinh dưỡng, research và summary chưa có tiến độ ghi nhận.", tags:["Scope lớn","Chưa tách owner","Rủi ro trễ dây chuyền"] },
+    { title:"Tòa soạn y khoa chưa có tiến độ thực thi", desc:"Các hạng mục nền như flow Content - HĐYK, test QC, framework, guideline và input QC đều 0%.", tags:["Phụ thuộc quy trình","Cần chốt chuẩn","Ảnh hưởng chất lượng"] },
+    { title:"Các task dưới 30% cần tách khỏi nhóm tổng", desc:"SEM 10%, AIO FMCG 27%, TH2 - Order Ecom 23%, infographic mùa nắng nóng 0%, bài mùa mưa 20%.", tags:["Tiến độ thấp","Cần daily follow","Có deadline theo mùa"] },
+    { title:"Sản lượng phân bổ chưa đều", desc:"Top sản lượng tập trung ở một vài nhân sự, trong khi có cảnh báo sản lượng thấp ở NgocTTH3.", tags:["Capacity","Cần điều phối lại","Theo dõi theo người"] }
+  ],
+  risk: {
+    critical: ["Mẹ và bé: 0%","Tòa soạn y khoa: 0%","Listing Img TPCN: chưa có số liệu mục tiêu"],
+    watch:    ["MKT order: 35%","Tối ưu AIO: 37%","Bản đồ giải nhiệt: 18%"],
+    depends:  ["Asset/brief từ bên liên quan","Xác nhận guideline y khoa","Input từ sheet tracking"],
+    good:     ["Bài viết: 184 link","Tối ưu bài đơn giản: 121 link","Listing Img tổng: 62%"]
+  },
+  actions: [
+    "Khóa danh sách owner cho các block 0% của dự án Mẹ và bé, không để gom chung trong một dòng tổng.",
+    'Tách riêng nhóm "Critical 0%" và "Dưới 30%" để follow mỗi ngày, thay vì chỉ xem theo tổng dự án.',
+    "Với Tòa soạn y khoa, chốt trước flow Content - HĐYK và bộ guideline/template, rồi mới đẩy batch test QC.",
+    "Với Listing Img, tạo bảng phụ theo từng nguyên nhân kẹt: thiếu asset, sai claim, thiếu zip, chờ Ecom/NH/Hãng.",
+    "Rà lại phân bổ nhân sự: người có sản lượng thấp cần ghi rõ đang kẹt input, thiếu task hay thiếu thời gian xử lý."
+  ]
+};
+
+// ================================================================
+// STATE
+// ================================================================
+let editing = false;
+let snapshot = null; // backup before edit
+
+// ================================================================
+// CALCULATIONS
+// ================================================================
+function calc() {
+  const tl  = DATA.tasks.reduce((s,t) => s + (+t.l||0), 0);
+  const tp  = DATA.tasks.reduce((s,t) => s + (+t.p||0), 0);
+  const ml  = DATA.tasks.filter(t=>t.media).reduce((s,t) => s + (+t.l||0), 0);
+  const al  = tl - ml;
+  const avg = DATA.staff.count > 0 ? (tp / DATA.staff.count).toFixed(1) : "0.0";
+  const risk = DATA.projects.filter(p => p.total > 0 && (p.done/p.total) < 0.3).length;
+  return { tl, tp, ml, al, avg, risk };
+}
+
+function pstatus(p) {
+  const r   = p.total > 0 ? p.done / p.total : 0;
+  const pct = Math.round(r * 100);
+  if (pct === 0) return { label:"Critical",    cls:"pill-risk",  bar:"red",   pct };
+  if (pct < 30)  return { label:"Risk",        cls:"pill-risk",  bar:"red",   pct };
+  if (pct < 60)  return { label:"Watch",       cls:"pill-watch", bar:"amber", pct };
+  return              { label:"In progress", cls:"pill-info",  bar:"",      pct };
+}
+
+// ================================================================
+// HTML HELPERS
+// ================================================================
+function esc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function etext(path, value, style) {
+  if (!editing) return esc(value);
+  const s = style ? ` style="${style}"` : "";
+  return `<span class="et" contenteditable="true" data-path="${path}"${s}>${esc(value)}</span>`;
+}
+
+// ================================================================
+// RENDER SECTIONS
+// ================================================================
+function renderHero(c) {
+  return `
+  <section class="hero">
+    <div class="hero-grid">
+      <div>
+        <div class="eyebrow">📊 Weekly Report · ${etext("meta.team", DATA.meta.team)}</div>
+        <h1>Báo cáo tuần<br>${etext("meta.week", DATA.meta.week, "font-size:.7em;letter-spacing:-.5px")}</h1>
+        <p style="margin-top:8px">${etext("meta.desc", DATA.meta.desc)}</p>
+      </div>
+      <div class="hero-panel">
+        <div class="big" id="h-total">${c.tl}</div>
+        <div class="label">Tổng link ghi nhận trong tuần &nbsp;<span class="auto-lbl">AUTO</span></div>
+        <hr>
+        <div class="mini-row"><span>Tổng điểm</span><b id="h-pts">${c.tp.toFixed(1)}đ</b></div>
+        <div class="mini-row">
+          <span>Lượt submit</span>
+          <b>${editing
+            ? `<input class="e-num" type="number" value="${DATA.staff.submits}" data-path="staff.submits" style="width:50px" oninput="setPath('staff.submits',+this.value||0)">`
+            : DATA.staff.submits}</b>
+        </div>
+        <div class="mini-row"><span>Dự án đang theo dõi</span><b id="h-nproj">${DATA.projects.length}</b></div>
+      </div>
+    </div>
+  </section>`;
+}
+
+function renderKPIs(c) {
+  const E = editing;
+  return `
+  <div class="section-title">
+    <h2>1. Tổng quan hiệu suất</h2>
+    <span>Cập nhật lúc ${new Date().toLocaleTimeString("vi-VN")} · ${new Date().toLocaleDateString("vi-VN")}</span>
+  </div>
+  <section class="grid-4">
+    <div class="card kpi">
+      <div class="icon icon-blue">🔗</div>
+      <div class="kpi-label">Tổng link <span class="auto-lbl">AUTO</span></div>
+      <div class="kpi-value" id="k-tl">${c.tl}</div>
+      <div class="kpi-note" id="k-tl-note">${c.al} bài viết · ${c.ml} multimedia</div>
+    </div>
+    <div class="card kpi">
+      <div class="icon icon-green">🏁</div>
+      <div class="kpi-label">Tổng điểm <span class="auto-lbl">AUTO</span></div>
+      <div class="kpi-value" id="k-tp">${c.tp.toFixed(1)}</div>
+      <div class="kpi-note">TB <b id="k-avg">${c.avg}</b>đ/người</div>
+    </div>
+    <div class="card kpi">
+      <div class="icon icon-purple">👥</div>
+      <div class="kpi-label">Nhân sự có sản lượng</div>
+      <div class="kpi-value">
+        ${E
+          ? `<input class="e-num" type="number" value="${DATA.staff.count}" data-path="staff.count" min="1"
+               oninput="setPath('staff.count',+this.value||1);updateCalcDisplay()">`
+          : DATA.staff.count}
+      </div>
+      <div class="kpi-note">Top: ${etext("staff.tops", DATA.staff.tops)}</div>
+    </div>
+    <div class="card kpi">
+      <div class="icon icon-red">🚧</div>
+      <div class="kpi-label">Dự án rủi ro <span class="auto-lbl">AUTO</span></div>
+      <div class="kpi-value" id="k-risk">${c.risk}</div>
+      <div class="kpi-note">Đầu việc 0% hoặc dưới 30%</div>
+    </div>
+  </section>`;
+}
+
+function renderProjects() {
+  const E = editing;
+  const cards = DATA.projects.map((p,i) => {
+    const s = pstatus(p);
+    return `
+    <div class="project-card">
+      <div class="project-head">
+        <div>
+          <div class="project-title">${etext("projects."+i+".n", p.n)}</div>
+          <div class="project-meta" id="pm-${i}">${p.done}/${p.total} hạng mục hoàn thành</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span class="pill ${s.cls}" id="pp-${i}">${s.label}</span>
+          ${E ? `<button class="del-btn" title="Xoá dự án" onclick="delProject(${i})">×</button>` : ""}
+        </div>
+      </div>
+      <div class="proj-inputs">
+        <label>Hoàn thành:</label>
+        <input class="e-num" type="number" value="${p.done}" min="0"
+          oninput="updateProject(${i},'done',+this.value||0)">
+        <label>/ Tổng:</label>
+        <input class="e-num" type="number" value="${p.total}" min="1"
+          oninput="updateProject(${i},'total',Math.max(1,+this.value||1))">
+      </div>
+      <div class="progress-line${s.bar ? " "+s.bar : ""}" id="pb-${i}">
+        <span class="fill" id="pbf-${i}" style="width:${s.pct}%"></span>
+      </div>
+      <div class="progress-foot">
+        <b id="ppct-${i}">${s.pct}%</b>
+        <span>${etext("projects."+i+".note", p.note)}</span>
+      </div>
+      <div class="project-action">${etext("projects."+i+".action", p.action)}</div>
+    </div>`;
+  }).join("");
+
+  return `
+  <div class="section-title">
+    <h2>2. Tiến độ dự án</h2>
+    <span>Trạng thái tự động theo % hoàn thành</span>
+  </div>
+  <section class="project-grid">${cards}</section>
+  <button class="add-btn" onclick="addProject()">＋ Thêm dự án</button>`;
+}
+
+function renderBottlenecks() {
+  const E = editing;
+  const bns = DATA.bottlenecks.map((b,i) => `
+    <div class="bottleneck">
+      <div class="bn-no">${i+1}</div>
+      <div>
+        <h3>${etext("bottlenecks."+i+".title", b.title)}</h3>
+        <p>${etext("bottlenecks."+i+".desc", b.desc)}</p>
+        <div class="tag-row">
+          ${b.tags.map((t,j) => `<span class="tag">${etext("bottlenecks."+i+".tags."+j, t)}</span>`).join("")}
+          ${E ? `<button class="del-btn" title="Xoá điểm nghẽn" onclick="delBottleneck(${i})" style="font-size:14px">×</button>` : ""}
+        </div>
+      </div>
+    </div>`).join("");
+
+  const riskDefs = [
+    { key:"critical", icon:"🔥", label:"Critical",     bg:"var(--red-50)",   bc:"#fecaca" },
+    { key:"watch",    icon:"⚠️", label:"Cần theo dõi", bg:"var(--amber-50)", bc:"#fde68a" },
+    { key:"depends",  icon:"🔗", label:"Phụ thuộc",    bg:"var(--blue-50)",  bc:"#bfdbfe" },
+    { key:"good",     icon:"✅", label:"Đang ổn",      bg:"var(--green-50)", bc:"#bbf7d0" }
+  ];
+  const riskHtml = riskDefs.map(({key,icon,label,bg,bc}) => `
+    <div class="risk-box" style="background:${bg};border-color:${bc}">
+      <h3>${icon} ${label}</h3>
+      <ul>${DATA.risk[key].map((item,j) => `<li>${etext("risk."+key+"."+j, item)}</li>`).join("")}</ul>
+      ${E ? `<button class="add-btn" onclick="addRiskItem('${key}')" style="margin-top:4px;font-size:11px;padding:4px 8px">＋ Thêm</button>` : ""}
+    </div>`).join("");
+
+  return `
+  <div class="section-title">
+    <h2>3. Điểm nghẽn hiện tại</h2>
+    <span>Phân loại theo mức ảnh hưởng và hướng xử lý</span>
+  </div>
+  <section class="grid-2">
+    <div class="card">
+      <div class="bottleneck-list">${bns}</div>
+      <button class="add-btn" onclick="addBottleneck()">＋ Thêm điểm nghẽn</button>
+    </div>
+    <div class="card">
+      <div class="risk-matrix">${riskHtml}</div>
+    </div>
+  </section>`;
+}
+
+function renderTaskTable() {
+  const E = editing;
+  const rows = DATA.tasks.map((t,i) => `
+    <tr>
+      <td><b>${etext("tasks."+i+".g", t.g)}</b></td>
+      <td>${etext("tasks."+i+".n", t.n)}</td>
+      <td>
+        ${E
+          ? `<input class="e-num" type="number" value="${t.l}" min="0" data-task="${i}" data-field="l"
+               oninput="onTaskNum(${i},'l',+this.value||0)">`
+          : `<b>${t.l}</b>`}
+      </td>
+      <td>
+        ${E
+          ? `<input class="e-num" type="number" value="${t.p}" min="0" step="0.1" data-task="${i}" data-field="p"
+               oninput="onTaskNum(${i},'p',+this.value||0)">`
+          : `<b style="color:var(--green)">${t.p}</b>`}
+      </td>
+      <td class="tbl-note">
+        ${E ? `<label style="font-size:11px;color:var(--muted);margin-right:4px">
+          <input type="checkbox" ${t.media?"checked":""} onchange="DATA.tasks[${i}].media=this.checked;updateCalcDisplay()">
+          multimedia</label>` : ""}
+        ${etext("tasks."+i+".note", t.note)}
+      </td>
+      ${E ? `<td><button class="del-btn" title="Xoá dòng" onclick="delTask(${i})">×</button></td>` : ""}
+    </tr>`).join("");
+
+  return `
+  <div class="section-title">
+    <h2>4. Chi tiết đầu việc theo nhóm</h2>
+    <span>Sản lượng và điểm trong tuần · KPI tự động cập nhật khi thay đổi số liệu</span>
+  </div>
+  <section class="card table-card">
+    <table>
+      <thead>
+        <tr>
+          <th>Nhóm</th>
+          <th>Đầu việc</th>
+          <th>Link &nbsp;<span class="auto-lbl">AUTO</span></th>
+          <th>Điểm &nbsp;<span class="auto-lbl">AUTO</span></th>
+          <th>Nhận xét nhanh</th>
+          ${E ? "<th></th>" : ""}
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <button class="add-btn" onclick="addTask()" style="margin:10px">＋ Thêm đầu việc</button>
+  </section>`;
+}
+
+function renderActions() {
+  const E = editing;
+  const items = DATA.actions.map((a,i) => `
+    <li style="display:flex;gap:8px;align-items:flex-start">
+      <span style="flex:1">${etext("actions."+i, a)}</span>
+      ${E ? `<button class="del-btn" title="Xoá action" onclick="delAction(${i})" style="flex-shrink:0">×</button>` : ""}
+    </li>`).join("");
+
+  return `
+  <div class="section-title">
+    <h2>5. Action plan tuần tới</h2>
+    <span>Đề xuất để gỡ điểm nghẽn</span>
+  </div>
+  <section class="recommend">
+    <h3>Ưu tiên xử lý theo thứ tự</h3>
+    <ol style="padding-left:20px">${items}</ol>
+    <button class="add-btn" onclick="addAction()">＋ Thêm action</button>
+  </section>`;
+}
+
+function renderFooter() {
+  return `<p class="footer">Long Châu Content Studio · Weekly Content Dashboard · Tự động tổng hợp số liệu từ bảng dữ liệu</p>`;
+}
+
+// ================================================================
+// FULL RENDER
+// ================================================================
+function render() {
+  const c = calc();
+  document.getElementById("root").innerHTML = [
+    renderHero(c),
+    renderKPIs(c),
+    renderProjects(),
+    renderBottlenecks(),
+    renderTaskTable(),
+    renderActions(),
+    renderFooter()
+  ].join("\n");
+  attachBlurEvents();
+}
+
+// ================================================================
+// LIVE / TARGETED UPDATES (avoid full re-render during typing)
+// ================================================================
+function updateCalcDisplay() {
+  const c = calc();
+  const $ = id => document.getElementById(id);
+  if($("h-total"))    $("h-total").textContent    = c.tl;
+  if($("h-pts"))      $("h-pts").textContent      = c.tp.toFixed(1)+"đ";
+  if($("k-tl"))       $("k-tl").textContent       = c.tl;
+  if($("k-tl-note"))  $("k-tl-note").textContent  = `${c.al} bài viết · ${c.ml} multimedia`;
+  if($("k-tp"))       $("k-tp").textContent       = c.tp.toFixed(1);
+  if($("k-avg"))      $("k-avg").textContent      = c.avg;
+  if($("k-risk"))     $("k-risk").textContent     = c.risk;
+}
+
+function updateProjectDisplay(i) {
+  const p = DATA.projects[i];
+  const s = pstatus(p);
+  const $ = id => document.getElementById(id);
+  if($("pm-"+i))   $("pm-"+i).textContent   = `${p.done}/${p.total} hạng mục hoàn thành`;
+  if($("pp-"+i))  { $("pp-"+i).textContent = s.label; $("pp-"+i).className = "pill "+s.cls; }
+  if($("pb-"+i))    $("pb-"+i).className    = "progress-line"+(s.bar?" "+s.bar:"");
+  if($("pbf-"+i))   $("pbf-"+i).style.width = s.pct+"%";
+  if($("ppct-"+i))  $("ppct-"+i).textContent = s.pct+"%";
+  if($("h-nproj"))  $("h-nproj").textContent  = DATA.projects.length;
+  updateCalcDisplay();
+}
+
+function onTaskNum(i, field, val) {
+  DATA.tasks[i][field] = val;
+  updateCalcDisplay();
+}
+
+function updateProject(i, field, val) {
+  DATA.projects[i][field] = val;
+  updateProjectDisplay(i);
+}
+
+// ================================================================
+// SETPATH HELPER (dot-path into nested object)
+// ================================================================
+function setPath(path, val) {
+  const parts = path.split(".");
+  let cur = DATA;
+  for (let i = 0; i < parts.length-1; i++) cur = cur[parts[i]];
+  cur[parts[parts.length-1]] = val;
+}
+
+// ================================================================
+// CONTENTEDITABLE BLUR → DATA SYNC
+// ================================================================
+function attachBlurEvents() {
+  document.querySelectorAll(".et[data-path]").forEach(el => {
+    el.addEventListener("blur", () => setPath(el.dataset.path, el.textContent));
+  });
+}
+
+// ================================================================
+// EDIT MODE
+// ================================================================
+function enterEdit() {
+  snapshot = JSON.parse(JSON.stringify(DATA));
+  editing = true;
+  document.body.classList.add("editing");
+  render();
+}
+
+function saveEdit() {
+  // Flush all contenteditable and inputs to DATA before saving
+  document.querySelectorAll(".et[data-path]").forEach(el => setPath(el.dataset.path, el.textContent));
+  document.querySelectorAll("input[data-path]").forEach(el => {
+    const v = el.type === "number" ? (+el.value||0) : el.value;
+    setPath(el.dataset.path, v);
+  });
+  editing = false;
+  document.body.classList.remove("editing");
+  localStorage.setItem("reportData_v1", JSON.stringify(DATA));
+  snapshot = null;
+  render();
+  showToast();
+}
+
+function cancelEdit() {
+  if (snapshot) { DATA = snapshot; snapshot = null; }
+  editing = false;
+  document.body.classList.remove("editing");
+  render();
+}
+
+// ================================================================
+// ADD / DELETE
+// ================================================================
+function addTask() {
+  DATA.tasks.push({ g:"Bài viết", n:"Đầu việc mới", l:0, p:0, media:false, note:"" });
+  render();
+}
+function delTask(i) { DATA.tasks.splice(i,1); render(); }
+
+function addProject() {
+  DATA.projects.push({ n:"Dự án mới", done:0, total:100, note:"", action:"Mô tả action cần làm..." });
+  render();
+}
+function delProject(i) { DATA.projects.splice(i,1); render(); }
+
+function addBottleneck() {
+  DATA.bottlenecks.push({ title:"Điểm nghẽn mới", desc:"Mô tả chi tiết...", tags:["Tag 1"] });
+  render();
+}
+function delBottleneck(i) { DATA.bottlenecks.splice(i,1); render(); }
+
+function addAction() { DATA.actions.push("Action mới..."); render(); }
+function delAction(i) { DATA.actions.splice(i,1); render(); }
+
+function addRiskItem(key) { DATA.risk[key].push("Thêm mục..."); render(); }
+
+// ================================================================
+// TOAST
+// ================================================================
+function showToast() {
+  const t = document.getElementById("toast");
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+// ================================================================
+// WARN UNSAVED
+// ================================================================
+window.addEventListener("beforeunload", e => {
+  if (editing) { e.preventDefault(); e.returnValue = ""; }
+});
+
+// ================================================================
+// INIT
+// ================================================================
+(function init() {
+  try {
+    const saved = localStorage.getItem("reportData_v1");
+    if (saved) DATA = JSON.parse(saved);
+  } catch(e) {}
+  render();
+})();
+</script>
+</body>
+</html>

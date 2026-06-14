@@ -255,6 +255,19 @@ export default function DashboardPage() {
     return { now: tNow, prev: tPrev, bonusNow: totalBonusNow, bonusPrev: totalBonusPrev };
   }, [thisMonthSubs, prevMonthSubs, totalBonusNow, totalBonusPrev, scaleConfig.pointPerHour]);
 
+  // ── Headcount cố định theo scope (không phụ thuộc ai submit tháng đó) ──
+  const scopedHeadcount = useMemo(() => {
+    if (!currentUser) return 1;
+    if (filterEmployee) return 1; // đang xem 1 người cụ thể
+    if (currentUser.role === 'Manager') return Math.max(members.length, 1);
+    if (currentUser.role === 'Leader') {
+      const me = members.find(m => m.name === currentUser.name || m.id === currentUser.id);
+      if (!me?.teamGroup) return 1;
+      return Math.max(members.filter(m => m.teamGroup === me.teamGroup).length, 1);
+    }
+    return 1; // Member: chỉ tính bản thân
+  }, [currentUser, members, filterEmployee]);
+
   // ── Doughnut: tỉ trọng 3 nhóm ──
   const teamData = useMemo(() => {
     const m: Record<string, number> = { 'Bài viết': 0, 'Sản phẩm': 0, 'Multimedia - Tin nhanh': 0 };
@@ -522,16 +535,15 @@ export default function DashboardPage() {
           text: `Số nhân viên hoạt động ${empPct >= 0 ? 'tăng' : 'giảm'} ${Math.abs(empPct)}% (${stats.now.employees} vs ${stats.prev.employees}).`,
         });
       }
-      // Target — tính đúng hệ số leader
-      const empCount = Math.max(stats.now.employees, 1);
-      let target = scaleConfig.memberTargetPoints * empCount;
+      // Target — dùng headcount cố định (không phụ thuộc ai submit tháng đó)
+      let target = scaleConfig.memberTargetPoints * scopedHeadcount;
       if (currentUser?.role === 'Leader' && !filterEmployee) {
         const me = members.find(m => m.name === currentUser.name);
         const myTeam = me?.teamGroup;
         const teamMembers = myTeam ? members.filter(m => m.teamGroup === myTeam) : [];
         const leaderCount = teamMembers.filter(m => m.kpiRole === 'leader').length;
-        const memberCount = empCount - leaderCount;
-        target = (memberCount * scaleConfig.memberTargetPoints) + 
+        const memberCount = scopedHeadcount - leaderCount;
+        target = (memberCount * scaleConfig.memberTargetPoints) +
                  (leaderCount * scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight);
       }
       const leaderTarget = Math.round(scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight);
@@ -655,8 +667,8 @@ export default function DashboardPage() {
           return scaleConfig.memberTargetPoints * empCount;
         };
 
-        const targetNow  = calcTarget(Math.max(stats.now.employees, 1));
-        const targetPrev = calcTarget(Math.max(stats.prev.employees, 1));
+        const targetNow  = calcTarget(scopedHeadcount);
+        const targetPrev = calcTarget(scopedHeadcount);
 
         // Leader management time info
         const mgmtWeight = 1 - scaleConfig.leaderProductionWeight;

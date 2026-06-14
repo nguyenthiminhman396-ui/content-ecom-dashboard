@@ -11,6 +11,7 @@ import type { WeeklyReport, WeeklyReportProject } from '@/shared/types';
 import { exportCsv, makeId } from '@/shared/utils/helpers';
 import { exportHtmlFile, buildReportHtml } from '@/shared/utils/exportHtml';
 import toast from 'react-hot-toast';
+import WeeklyReportViewer from './WeeklyReportViewer';
 
 /* ─────────────────────────────────────────────────────────── helpers ── */
 
@@ -55,6 +56,7 @@ export default function ReportsPage() {
   const [showForm, setShowForm]         = useState(false);
   const [editItem, setEditItem]         = useState<WeeklyReport | null>(null);
   const [expandedReport, setExpandedReport] = useState<string | null>(null);
+  const [viewingReport, setViewingReport]   = useState<WeeklyReport | null>(null);
   const [dateFrom, setDateFrom]         = useState('');
   const [dateTo,   setDateTo]           = useState('');
   const [hoveredBar, setHoveredBar]     = useState<string | null>(null);
@@ -312,6 +314,7 @@ export default function ReportsPage() {
                 linkDelta={linkDelta}
                 canEdit={canEdit}
                 onToggle={() => setExpandedReport(isExpanded ? null : report.id)}
+                onView={() => setViewingReport(report)}
                 onEdit={() => { setEditItem(report); setShowForm(true); }}
                 onDelete={() => { if (window.confirm('Xóa báo cáo này?')) { deleteWeeklyReport(report.id); toast.success('Đã xóa'); } }}
                 onCopy={() => handleExportText(report)}
@@ -336,6 +339,20 @@ export default function ReportsPage() {
               toast.success('Đã tạo báo cáo');
             }
             setShowForm(false); setEditItem(null);
+          }}
+        />
+      )}
+
+      {/* ── full-screen report viewer ── */}
+      {viewingReport && (
+        <WeeklyReportViewer
+          report={viewingReport}
+          canEdit={canEdit}
+          onClose={() => setViewingReport(null)}
+          onSave={updates => {
+            updateWeeklyReport(viewingReport.id, { ...updates, updatedAt: new Date().toISOString() });
+            setViewingReport(prev => prev ? { ...prev, ...updates } : prev);
+            toast.success('Đã lưu báo cáo');
           }}
         />
       )}
@@ -561,9 +578,9 @@ function TrendChart({ last8Weeks, weekDataMap, maxLinks, currentWeekStart, hover
 
 /* ─────────────────────────────────────────────── ReportCard ── */
 
-function ReportCard({ report, isExpanded, linkDelta, canEdit, onToggle, onEdit, onDelete, onCopy, onExportHtml }: {
+function ReportCard({ report, isExpanded, linkDelta, canEdit, onToggle, onView, onEdit, onDelete, onCopy, onExportHtml }: {
   report: WeeklyReport; isExpanded: boolean; linkDelta: number | null;
-  canEdit: boolean; onToggle: () => void; onEdit: () => void; onDelete: () => void;
+  canEdit: boolean; onToggle: () => void; onView: () => void; onEdit: () => void; onDelete: () => void;
   onCopy: () => void; onExportHtml: () => void;
 }) {
   const overallProgress = report.projectProgress.length > 0
@@ -627,6 +644,11 @@ function ReportCard({ report, isExpanded, linkDelta, canEdit, onToggle, onEdit, 
               <button className="btn btn-icon btn-ghost" onClick={onDelete} style={{ color: 'var(--danger)' }} title="Xóa"><Trash2 size={14} /></button>
             </>
           )}
+          <button className="btn btn-ghost" onClick={onView}
+            style={{ fontSize: '12px', padding: '4px 10px', color: 'var(--primary-600)', fontWeight: 600 }}
+            title="Xem báo cáo đẹp">
+            👁 Xem
+          </button>
           <button className="btn btn-icon btn-ghost" onClick={onCopy} title="Copy text"><Download size={14} /></button>
           <button className="btn btn-icon btn-ghost" onClick={onExportHtml} style={{ color: 'var(--primary-600)' }} title="Export HTML"><Globe size={14} /></button>
         </div>

@@ -36,11 +36,14 @@ export default function Projects() {
   const getProjectProgress = (projectId: string) => {
     const tasks = projectTasks.filter(t => t.projectId === projectId);
     if (tasks.length === 0) {
-      // Fallback: nếu không có task, dùng contents cũ
+      // Chưa có task nhỏ → dùng manualProgress nếu có, rồi mới fallback contents
+      const project = projects.find(p => p.id === projectId);
+      if (project?.manualProgress !== undefined) return project.manualProgress;
       const pContents = contents.filter(c => c.projectId === projectId);
       if (pContents.length === 0) return 0;
       return Math.round(pContents.reduce((s, c) => s + c.progress, 0) / pContents.length);
     }
+    // Có task nhỏ → auto-calc từ submissions (bỏ qua manualProgress)
     const projectSubs = submissions.filter(s => s.projectId === projectId);
     const progresses = tasks.map(t => {
       const matched = projectSubs.filter(s => {
@@ -282,6 +285,7 @@ export default function Projects() {
       {showForm && (
         <ProjectFormModal
           item={editItem}
+          hasTasks={editItem ? projectTasks.some(t => t.projectId === editItem.id) : false}
           onClose={() => { setShowForm(false); setEditItem(null); }}
           onSave={(data) => {
             let leaderChanged = false;
@@ -330,8 +334,9 @@ export default function Projects() {
   );
 }
 
-function ProjectFormModal({ item, onClose, onSave }: {
+function ProjectFormModal({ item, hasTasks = false, onClose, onSave }: {
   item: Project | null;
+  hasTasks?: boolean;
   onClose: () => void;
   onSave: (data: Partial<Project>) => void;
 }) {
@@ -422,6 +427,34 @@ function ProjectFormModal({ item, onClose, onSave }: {
               <label className="form-label">Mô tả dự án</label>
               <textarea className="form-textarea" value={form.description || ''} onChange={e => handleChange('description', e.target.value)} placeholder="Chi tiết, mục tiêu, link kế hoạch..." />
             </div>
+
+            {/* Manual progress — chỉ dùng khi chưa có task nhỏ */}
+            {!hasTasks && (
+              <div className="form-group">
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span>Tiến độ thủ công</span>
+                  <span style={{ fontWeight: 700, color: 'var(--primary-600)', fontSize: '0.95rem' }}>
+                    {form.manualProgress ?? 0}%
+                  </span>
+                </label>
+                <input
+                  type="range"
+                  min={0} max={100} step={5}
+                  value={form.manualProgress ?? 0}
+                  onChange={e => handleChange('manualProgress', parseInt(e.target.value))}
+                  style={{ width: '100%', accentColor: 'var(--primary-500)', cursor: 'pointer' }}
+                />
+                <p style={{ fontSize: '0.77rem', color: 'var(--text-tertiary)', marginTop: '5px' }}>
+                  💡 Chỉ dùng khi dự án chưa có task nhỏ. Khi bạn thêm task vào, tiến độ sẽ <b>tự động chuyển sang tính từ submissions</b> và bỏ qua giá trị này.
+                </p>
+              </div>
+            )}
+            {hasTasks && (
+              <div style={{ padding: '10px 12px', borderRadius: '8px', background: 'var(--success-bg)',
+                fontSize: '0.8rem', color: '#166534', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                ✅ Dự án đã có task nhỏ — tiến độ đang được <b>tính tự động từ submissions</b>. Tiến độ thủ công không dùng.
+              </div>
+            )}
           </div>
 
           <div className="modal-footer">

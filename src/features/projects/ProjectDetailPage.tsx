@@ -22,7 +22,7 @@ export default function ProjectDetailPage() {
   const {
     projects, clients, members, expenses, submissions, projectTasks,
     addProjectTask, updateProjectTask, deleteProjectTask,
-    addExpense, updateExpense, deleteExpense, currentUser, addTodo, todos,
+    addExpense, updateExpense, deleteExpense, updateProject, currentUser, addTodo, todos,
   } = useAppStore();
 
   const project = projects.find(p => p.id === id);
@@ -104,14 +104,16 @@ export default function ProjectDetailPage() {
   }, [tasks, projectSubs]);
 
   // ── Tổng tiến độ project ────────────────────────────────────────────────
+  const hasTasks = taskProgress.length > 0;
   const overallProgress = useMemo(() => {
     if (taskProgress.length === 0) {
-      // Fallback: count submissions
-      return projectSubs.length > 0 ? 50 : 0;
+      // Không có task nhỏ → dùng manualProgress nếu được set
+      return project?.manualProgress ?? 0;
     }
+    // Có task nhỏ → auto-calc (bỏ qua manualProgress)
     const total = taskProgress.reduce((s, x) => s + x.progress, 0);
     return Math.round(total / taskProgress.length);
-  }, [taskProgress, projectSubs]);
+  }, [taskProgress, project?.manualProgress]);
 
   // ── Chi phí ─────────────────────────────────────────────────────────────
   const totalExpense = projectExpenses.reduce((s, e) => s + e.amount, 0);
@@ -162,25 +164,63 @@ export default function ProjectDetailPage() {
           </span>
         </div>
 
-        {/* Auto progress bar */}
+        {/* Progress bar — auto khi có task, manual khi chưa có */}
         <div style={{ marginTop: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
             <span style={{ fontSize: '0.82rem', fontWeight: 600,
                            display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Sparkles size={13} color="var(--primary-500)" />
-              Tiến độ tự động ({tasks.length} task · {projectSubs.length} submission)
+              {hasTasks ? (
+                <><Sparkles size={13} color="var(--primary-500)" />
+                Tiến độ tự động ({tasks.length} task · {projectSubs.length} submission)</>
+              ) : (
+                <><Target size={13} color="var(--warning)" />
+                Tiến độ thủ công</>
+              )}
             </span>
             <span style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--primary-600)' }}>
               {overallProgress}%
             </span>
           </div>
           <div className="progress-bar-bg" style={{ height: 10 }}>
-            <div className={`progress-bar-fill ${overallProgress >= 100 ? 'complete' : 'high'}`}
+            <div className={`progress-bar-fill ${overallProgress >= 100 ? 'complete' : hasTasks ? 'high' : 'medium'}`}
               style={{ width: `${overallProgress}%` }}></div>
           </div>
-          <p style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
-            Tự cập nhật từ submission của member — không cần kéo tay.
-          </p>
+
+          {/* Khi chưa có task: hiện slider chỉnh tay + note */}
+          {!hasTasks && isManagerOrLeader && (
+            <div style={{ marginTop: '10px', padding: '12px 14px', borderRadius: '10px',
+              background: 'var(--warning-bg)', border: '1px solid #fde68a' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#92400e', marginBottom: '8px' }}>
+                ✏️ Chỉnh tiến độ thủ công — chưa có task nhỏ nào
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <input
+                  type="range" min={0} max={100} step={5}
+                  value={project.manualProgress ?? 0}
+                  onChange={e => updateProject(project.id, { manualProgress: parseInt(e.target.value) })}
+                  style={{ flex: 1, accentColor: 'var(--warning)', cursor: 'pointer' }}
+                />
+                <span style={{ fontWeight: 700, color: '#b45309', minWidth: '36px', textAlign: 'right' }}>
+                  {project.manualProgress ?? 0}%
+                </span>
+              </div>
+              <p style={{ fontSize: '0.72rem', color: '#b45309', marginTop: '6px', lineHeight: 1.5 }}>
+                💡 Khi bạn thêm task nhỏ vào dự án, tiến độ sẽ <strong>tự động chuyển sang tính từ submissions</strong> — slider này sẽ không còn hiệu lực.
+              </p>
+            </div>
+          )}
+
+          {/* Khi có task: hiện trạng thái auto */}
+          {hasTasks && (
+            <p style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+              Tự cập nhật từ submission của member — không cần kéo tay.
+              {project.manualProgress !== undefined && (
+                <span style={{ color: 'var(--success)', marginLeft: '6px' }}>
+                  (Tiến độ thủ công trước đó {project.manualProgress}% đã được bỏ qua)
+                </span>
+              )}
+            </p>
+          )}
         </div>
       </div>
 
