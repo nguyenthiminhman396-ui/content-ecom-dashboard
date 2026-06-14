@@ -656,26 +656,31 @@ export default function DashboardPage() {
 
       {/* Stats cards — hiển thị cho tất cả roles */}
       {(() => {
-        // Tính target có tính đến hệ số Leader
         const calcTarget = (empCount: number) => {
           if (!currentUser) return scaleConfig.memberTargetPoints;
-          const isLeaderSelf = currentUser.role === 'Leader' && !filterEmployee;
-          const isFilteredLeader = filterEmployee && members.find(m => m.name === filterEmployee)?.kpiRole === 'leader';
           
-          if (isLeaderSelf) {
-            // Leader xem team: mỗi member = full target, leader bản thân = 60%
+          if (filterEmployee) {
+            const isFilteredLeader = members.find(m => m.name === filterEmployee)?.kpiRole === 'leader';
+            return isFilteredLeader 
+              ? scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight 
+              : scaleConfig.memberTargetPoints;
+          }
+
+          let relevantMembers = members.filter(m => m.name !== 'manntm3');
+          if (currentUser.role === 'Leader') {
             const me = members.find(m => m.name === currentUser.name);
-            const myTeam = me?.teamGroup;
-            const teamMembers = myTeam ? members.filter(m => m.teamGroup === myTeam && m.name !== 'manntm3') : [];
-            const leaderCount = teamMembers.filter(m => m.kpiRole === 'leader').length;
-            const memberCount = empCount - leaderCount;
-            return (memberCount * scaleConfig.memberTargetPoints) + 
-                   (leaderCount * scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight);
+            if (me?.teamGroup) {
+              relevantMembers = relevantMembers.filter(m => m.teamGroup === me.teamGroup);
+            } else {
+              relevantMembers = relevantMembers.filter(m => m.name === currentUser.name);
+            }
           }
-          if (isFilteredLeader) {
-            return scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight;
-          }
-          return scaleConfig.memberTargetPoints * empCount;
+
+          const leaderCount = relevantMembers.filter(m => m.kpiRole === 'leader').length;
+          const memberCount = Math.max(0, empCount - leaderCount);
+
+          return (memberCount * scaleConfig.memberTargetPoints) + 
+                 (leaderCount * scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight);
         };
 
         const targetNow  = calcTarget(scopedHeadcount);
