@@ -806,16 +806,32 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
           if (t.taskDetail && s.taskDetail !== t.taskDetail) return false;
           return !!t.taskType || !!t.taskDetail;
         });
-        const completed = matched.reduce((sum, s) => sum + s.links.length, 0);
+        // Đồng bộ với ProjectDetailPage: tính theo trackingMode
+        const mode = t.trackingMode || 'link';
+        let completed = 0;
+        let target = 1;
+        let progress = 0;
+        if (mode === 'quantity' && t.targetQuantity && t.targetQuantity > 0) {
+          completed = matched.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
+          target = t.targetQuantity;
+          progress = Math.min(100, Math.round((completed / target) * 100));
+        } else {
+          completed = matched.reduce((sum, s) => sum + s.links.length, 0);
+          target = Math.max(t.targetLinks, 1);
+          progress = Math.min(100, Math.round((completed / target) * 100));
+        }
         return {
-          taskName: t.name, targetLinks: t.targetLinks, completedLinks: completed,
-          progress: Math.min(100, Math.round((completed / Math.max(t.targetLinks, 1)) * 100)),
+          taskName: t.name,
+          targetLinks: target,      // giữ field name để tương thích type
+          completedLinks: completed, // giữ field name để tương thích type
+          progress,
         };
       });
       const tasksTotal     = breakdown.reduce((s, x) => s + x.targetLinks, 0);
       const tasksCompleted = breakdown.reduce((s, x) => s + x.completedLinks, 0);
       const progress       = breakdown.length > 0
-        ? Math.round(breakdown.reduce((s, x) => s + x.progress, 0) / breakdown.length) : 0;
+        ? Math.round(breakdown.reduce((s, x) => s + x.progress, 0) / breakdown.length)
+        : (p.manualProgress ?? 0);
       return { projectId: p.id, projectName: p.name, progress, tasksCompleted, tasksTotal, notes: '', taskBreakdown: breakdown };
     });
 
