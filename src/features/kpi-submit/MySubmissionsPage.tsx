@@ -550,17 +550,36 @@ function EditSubmissionModal({ item, taskPointRules, onClose, onSave }: {
   const [projectId,      setProjectId]      = useState(item.projectId ?? '');
   const [projectTaskId,  setProjectTaskId]  = useState(item.projectTaskId ?? '');
 
+  // Quantity & direct-point fields (for non-link tracking)
+  const [quantity,       setQuantity]       = useState<number>(item.quantity ?? 0);
+  const [manualPoints,   setManualPoints]   = useState<number>(item.totalPoints);
+  const [useManualPts,   setUseManualPts]   = useState(false);
+
   // Tasks filtered by selected project
   const availableTasks = projectId
     ? projectTasks.filter(t => t.projectId === projectId)
     : [];
+
+  // Detect selected task's tracking mode
+  const selectedTask = projectTaskId
+    ? projectTasks.find(t => t.id === projectTaskId)
+    : null;
+  const isQuantityMode = selectedTask?.trackingMode === 'quantity';
 
   // Auto-recalc pointPerLink khi taskDetail thay đổi
   const matchedRule = taskPointRules.find(
     r => r.active && (r.taskLabel === taskDetail || r.taskLabel === taskType)
   );
   const newPointPerLink = matchedRule?.pointPerLink ?? item.pointPerLink;
-  const newTotalPoints  = parseFloat((newPointPerLink * links.filter(l => l.trim()).length).toFixed(2));
+  const cleanLinks      = links.filter(l => l.trim());
+  const autoPoints      = parseFloat((newPointPerLink * cleanLinks.length).toFixed(2));
+
+  // Final totalPoints: quantity-mode → manualPoints, link-mode → auto (or manualOverride if toggled)
+  const finalTotalPoints = isQuantityMode
+    ? manualPoints
+    : useManualPts
+      ? manualPoints
+      : autoPoints;
 
   const handleLinkChange = (i: number, val: string) => {
     const next = [...links];
@@ -571,19 +590,35 @@ function EditSubmissionModal({ item, taskPointRules, onClose, onSave }: {
   const removeLink = (i: number) => setLinks(l => l.filter((_, idx) => idx !== i));
 
   const handleSave = () => {
-    const cleanLinks = links.filter(l => l.trim());
-    if (cleanLinks.length === 0) { toast.error('Phải có ít nhất 1 link'); return; }
-    onSave({
-      taskType,
-      taskDetail,
-      teamGroup,
-      links: cleanLinks,
-      notes: auditNote ? `[Sửa bởi Manager: ${auditNote}] ${notes}`.trim() : notes || undefined,
-      pointPerLink: newPointPerLink,
-      totalPoints:  newTotalPoints,
-      projectId:     projectId || undefined,
-      projectTaskId: projectTaskId || undefined,
-    });
+    if (isQuantityMode) {
+      if (quantity <= 0) { toast.error('Số lượng phải lớn hơn 0'); return; }
+      if (manualPoints < 0) { toast.error('Số điểm không được âm'); return; }
+      onSave({
+        taskType,
+        taskDetail,
+        teamGroup,
+        quantity,
+        totalPoints: manualPoints,
+        // keep links as-is (possibly empty for quantity-only tasks)
+        links: item.links,
+        notes: auditNote ? `[Sửa bởi Manager: ${auditNote}] ${notes}`.trim() : notes || undefined,
+        projectId:     projectId || undefined,
+        projectTaskId: projectTaskId || undefined,
+      });
+    } else {
+      if (cleanLinks.length === 0) { toast.error('Phải có ít nhất 1 link'); return; }
+      onSave({
+        taskType,
+        taskDetail,
+        teamGroup,
+        links: cleanLinks,
+        notes: auditNote ? `[Sửa bởi Manager: ${auditNote}] ${notes}`.trim() : notes || undefined,
+        pointPerLink: newPointPerLink,
+        totalPoints:  finalTotalPoints,
+        projectId:     projectId || undefined,
+        projectTaskId: projectTaskId || undefined,
+      });
+    }
   };
 
   return (
@@ -607,7 +642,10 @@ function EditSubmissionModal({ item, taskPointRules, onClose, onSave }: {
         {/* warning banner */}
         <div style={{ padding: '10px 16px', background: '#fef3c7', borderBottom: '1px solid #fde68a', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: '#92400e' }}>
           <AlertCircle size={14} style={{ flexShrink: 0 }} />
-          Chỉ Manager mới có quyền sửa. Điểm sẽ tự tính lại theo số link mới và rule hiện tại.
+          Chỉ Manager mới có quyền sửa.{' '}
+          {isQuantityMode
+            ? 'Task này theo dõi bằng số lượng — nhập số lượng và điểm trực tiếp.'
+            : 'Điểm sẽ tự tính lại theo số link mới và rule hiện tại.'}
         </div>
 
         <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -622,7 +660,7 @@ function EditSubmissionModal({ item, taskPointRules, onClose, onSave }: {
           {/* taskDetail */}
           <div className="form-group" style={{ margin: 0 }}>
             <label className="form-label">Chi tiết đầu việc (taskDetail)
-              {matchedRule && (
+              {matchedRule && !isQuantityMode && (
                 <span style={{ fontSize: '0.7rem', color: 'var(--primary-600)', fontWeight: 400, marginLeft: '8px' }}>
                   → {newPointPerLink}đ/link (rule: {matchedRule.taskLabel})
                 </span>
@@ -679,39 +717,108 @@ function EditSubmissionModal({ item, taskPointRules, onClose, onSave }: {
                     style={{ fontSize: '0.85rem' }}>
                     <option value="">— Không chọn task cụ thể —</option>
                     {availableTasks.map(t => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
+                      <option key={t.id} value={t.id}>
+                        {t.name}{t.trackingMode === 'quantity' ? ' 📦 (Số lượng)' : ' 🔗 (Link)'}
+                      </option>
                     ))}
                   </select>
+                )}
+                {selectedTask && (
+                  <div style={{ marginTop: '6px', fontSize: '0.74rem', color: 'var(--text-tertiary)', display: 'flex', gap: '12px' }}>
+                    <span>Chế độ: <strong style={{ color: isQuantityMode ? 'var(--primary-600)' : 'var(--success)' }}>
+                      {isQuantityMode ? '📦 Số lượng' : '🔗 Link'}
+                    </strong></span>
+                    {isQuantityMode
+                      ? <span>Target: <strong>{selectedTask.targetQuantity ?? selectedTask.targetLinks} đơn vị</strong></span>
+                      : <span>Target: <strong>{selectedTask.targetLinks} link</strong></span>
+                    }
+                  </div>
                 )}
               </div>
             )}
           </div>
 
-          {/* links */}
-          <div className="form-group" style={{ margin: 0 }}>
-            <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span>Danh sách link <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}>({links.filter(l=>l.trim()).length} link hợp lệ)</span></span>
-              <button type="button" onClick={addLink}
-                style={{ fontSize: '0.75rem', padding: '2px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--primary-300)', background: 'var(--primary-50)', color: 'var(--primary-700)', cursor: 'pointer' }}>
-                + Thêm link
-              </button>
-            </label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: 240, overflowY: 'auto', paddingRight: '4px' }}>
-              {links.map((l, i) => (
-                <div key={i} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', minWidth: '18px', textAlign: 'right' }}>{i + 1}.</span>
-                  <input className="form-input" value={l} onChange={e => handleLinkChange(i, e.target.value)}
-                    placeholder="https://..." style={{ flex: 1, fontSize: '0.82rem' }} />
-                  {links.length > 1 && (
-                    <button type="button" onClick={() => removeLink(i)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: '4px', flexShrink: 0 }}>
-                      <X size={13} />
-                    </button>
+          {/* ── QUANTITY MODE: số lượng + điểm trực tiếp ── */}
+          {isQuantityMode ? (
+            <div style={{ padding: '14px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg,#eff6ff,#dbeafe)', border: '2px solid #93c5fd', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                📦 Task theo dõi bằng số lượng — không dùng link
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Số lượng hoàn thành *</label>
+                  <input className="form-input" type="number" min="0" step="1"
+                    value={quantity}
+                    onChange={e => setQuantity(Math.max(0, parseInt(e.target.value) || 0))}
+                    style={{ fontSize: '1rem', fontWeight: 700, textAlign: 'center' }} />
+                  {selectedTask && (
+                    <div style={{ fontSize: '0.72rem', color: '#1e40af', marginTop: '4px' }}>
+                      Target: {selectedTask.targetQuantity ?? selectedTask.targetLinks} đơn vị
+                    </div>
                   )}
                 </div>
-              ))}
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Số điểm KPI *</label>
+                  <input className="form-input" type="number" min="0" step="0.5"
+                    value={manualPoints}
+                    onChange={e => setManualPoints(Math.max(0, parseFloat(e.target.value) || 0))}
+                    style={{ fontSize: '1rem', fontWeight: 700, textAlign: 'center', color: 'var(--success)' }} />
+                  <div style={{ fontSize: '0.72rem', color: '#1e40af', marginTop: '4px' }}>
+                    Điểm cũ: {item.totalPoints.toFixed(1)}đ
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <>
+              {/* ── LINK MODE: danh sách link ── */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span>Danh sách link <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}>({cleanLinks.length} link hợp lệ)</span></span>
+                  <button type="button" onClick={addLink}
+                    style={{ fontSize: '0.75rem', padding: '2px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--primary-300)', background: 'var(--primary-50)', color: 'var(--primary-700)', cursor: 'pointer' }}>
+                    + Thêm link
+                  </button>
+                </label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: 240, overflowY: 'auto', paddingRight: '4px' }}>
+                  {links.map((l, i) => (
+                    <div key={i} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', minWidth: '18px', textAlign: 'right' }}>{i + 1}.</span>
+                      <input className="form-input" value={l} onChange={e => handleLinkChange(i, e.target.value)}
+                        placeholder="https://..." style={{ flex: 1, fontSize: '0.82rem' }} />
+                      {links.length > 1 && (
+                        <button type="button" onClick={() => removeLink(i)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: '4px', flexShrink: 0 }}>
+                          <X size={13} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Manual points override — cho task không có rule */}
+              <div style={{ padding: '10px 12px', borderRadius: 'var(--radius-md)', background: 'var(--bg-secondary)', border: '1px solid var(--border-light)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}>
+                  <input type="checkbox" checked={useManualPts} onChange={e => { setUseManualPts(e.target.checked); if (!e.target.checked) setManualPoints(autoPoints); }}
+                    style={{ accentColor: 'var(--primary-500)', width: 14, height: 14 }} />
+                  Ghi đè điểm thủ công (thay vì tự tính theo rule)
+                </label>
+                {useManualPts && (
+                  <div style={{ marginTop: '10px' }}>
+                    <label className="form-label">Số điểm KPI *</label>
+                    <input className="form-input" type="number" min="0" step="0.5"
+                      value={manualPoints}
+                      onChange={e => setManualPoints(Math.max(0, parseFloat(e.target.value) || 0))}
+                      style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--success)' }} />
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+                      Điểm tự động (rule): {autoPoints.toFixed(1)}đ → Sẽ lưu: {manualPoints.toFixed(1)}đ
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
           {/* notes */}
           <div className="form-group" style={{ margin: 0 }}>
@@ -729,21 +836,36 @@ function EditSubmissionModal({ item, taskPointRules, onClose, onSave }: {
 
           {/* recalc preview */}
           <div style={{ padding: '12px 14px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', border: '1px solid #86efac', display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontWeight: 800, fontSize: '1.3rem', color: '#16a34a' }}>{links.filter(l=>l.trim()).length}</div>
-              <div style={{ fontSize: '0.7rem', color: '#166534' }}>Link</div>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontWeight: 800, fontSize: '1.3rem', color: '#16a34a' }}>{newPointPerLink}</div>
-              <div style={{ fontSize: '0.7rem', color: '#166534' }}>đ/link</div>
-            </div>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontWeight: 800, fontSize: '1.3rem', color: '#16a34a' }}>{newTotalPoints.toFixed(1)}</div>
-              <div style={{ fontSize: '0.7rem', color: '#166534' }}>Tổng điểm</div>
-            </div>
-            {newTotalPoints !== item.totalPoints && (
+            {isQuantityMode ? (
+              <>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontWeight: 800, fontSize: '1.3rem', color: '#16a34a' }}>{quantity}</div>
+                  <div style={{ fontSize: '0.7rem', color: '#166534' }}>Số lượng</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontWeight: 800, fontSize: '1.3rem', color: '#16a34a' }}>{manualPoints.toFixed(1)}</div>
+                  <div style={{ fontSize: '0.7rem', color: '#166534' }}>Tổng điểm</div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontWeight: 800, fontSize: '1.3rem', color: '#16a34a' }}>{cleanLinks.length}</div>
+                  <div style={{ fontSize: '0.7rem', color: '#166534' }}>Link</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontWeight: 800, fontSize: '1.3rem', color: '#16a34a' }}>{newPointPerLink}</div>
+                  <div style={{ fontSize: '0.7rem', color: '#166534' }}>đ/link</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontWeight: 800, fontSize: '1.3rem', color: '#16a34a' }}>{finalTotalPoints.toFixed(1)}</div>
+                  <div style={{ fontSize: '0.7rem', color: '#166534' }}>Tổng điểm{useManualPts ? ' (thủ công)' : ''}</div>
+                </div>
+              </>
+            )}
+            {finalTotalPoints !== item.totalPoints && (
               <div style={{ alignSelf: 'center', fontSize: '0.78rem', color: '#92400e', background: '#fef3c7', padding: '3px 10px', borderRadius: '999px' }}>
-                Trước: {item.totalPoints.toFixed(1)}đ → Sau: {newTotalPoints.toFixed(1)}đ
+                Trước: {item.totalPoints.toFixed(1)}đ → Sau: {finalTotalPoints.toFixed(1)}đ
               </div>
             )}
           </div>
