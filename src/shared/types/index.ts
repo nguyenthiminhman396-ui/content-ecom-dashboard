@@ -740,6 +740,12 @@ export interface WeeklyReport {
   bottlenecks?: string;
   /** Chi tiết đầu việc theo nhóm (JSON) */
   taskBreakdownByTeam?: Array<{ team: string; color: string; items: Array<{ label: string; links: number; points: number }> }>;
+  /** KPI Tuần - Mục tiêu số link */
+  kpiTargetLinks?: number;
+  /** KPI Tuần - Mục tiêu số điểm */
+  kpiTargetPoints?: number;
+  /** KPI Tuần - Chất lượng (%) */
+  kpiQuality?: number;
   /** Đã chốt (không sửa được) */
   locked: boolean;
 }

@@ -69,6 +69,8 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave }:
   const bottleneckLines = val('bottlenecks').split('\n\n').filter(Boolean);
   const actionLines     = val('nextWeekPlan').split('\n').filter(Boolean);
 
+  const pctTarget = (act: number, tgt: number | undefined) => tgt ? Math.round((act / tgt) * 100) : 0;
+
   // ── styles ─────────────────────────────────────────────────────────────
   const overlay: React.CSSProperties = {
     position: 'fixed', inset: 0, zIndex: 9000,
@@ -214,12 +216,13 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave }:
         </section>
 
         {/* ─ KPI cards ─ */}
+        {sectionTitle('1. KPI Tuần & Chất lượng', 'Thực tế so với mục tiêu đặt ra')}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '14px', marginBottom: '24px' }}>
           {([
-            { icon: '🔗', label: 'Tổng link',     value: totalLinks,            note: `${articleLinks} bài viết · ${mediaLinks} media`, iconBg: '#eff6ff',  iconC: '#2563eb', auto: true },
-            { icon: '🏁', label: 'Tổng điểm',     value: totalPoints.toFixed(1),note: 'Điểm tuần này',                                  iconBg: '#ecfdf5',  iconC: '#16a34a', auto: true },
-            { icon: '📦', label: 'Dự án',          value: report.projectProgress.length, note: `${riskCount} cần chú ý`,               iconBg: '#f5f3ff',  iconC: '#7c3aed', auto: true },
-            { icon: '🚧', label: 'Dự án rủi ro',   value: riskCount,             note: 'Dưới 30% tiến độ',                              iconBg: '#fef2f2',  iconC: '#dc2626', auto: true },
+            { icon: '🔗', label: 'Tổng link',     value: `${totalLinks}/${report.kpiTargetLinks || 0}`, note: `Đạt ${pctTarget(totalLinks, report.kpiTargetLinks)}% target`, iconBg: '#eff6ff',  iconC: '#2563eb', auto: true },
+            { icon: '🏁', label: 'Tổng điểm',     value: `${totalPoints.toFixed(0)}/${report.kpiTargetPoints || 0}`, note: `Đạt ${pctTarget(totalPoints, report.kpiTargetPoints)}% target`, iconBg: '#ecfdf5',  iconC: '#16a34a', auto: true },
+            { icon: '✨', label: 'Chất lượng',    value: `${report.kpiQuality ?? 100}%`, note: 'Tỉ lệ bài viết Pass',               iconBg: '#f5f3ff',  iconC: '#7c3aed', auto: false },
+            { icon: '🚧', label: 'Dự án rủi ro',  value: riskCount,             note: 'Dưới 30% tiến độ',                              iconBg: '#fef2f2',  iconC: '#dc2626', auto: true },
           ] as const).map((k, i) => (
             <div key={i} style={{ background: 'rgba(255,255,255,.92)', border: '1px solid #e2e8f0',
               borderRadius: '20px', padding: '18px', boxShadow: '0 6px 20px rgba(15,23,42,.05)' }}>
@@ -230,10 +233,10 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave }:
               <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px', display: 'flex', alignItems: 'center' }}>
                 {k.label}{k.auto ? AUTO : null}
               </div>
-              <div style={{ fontSize: '32px', fontWeight: 900, letterSpacing: '-1px', color: '#0f172a', lineHeight: 1 }}>
+              <div style={{ fontSize: '24px', fontWeight: 900, letterSpacing: '-1px', color: '#0f172a', lineHeight: 1 }}>
                 {k.value}
               </div>
-              <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '6px' }}>{k.note}</div>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: k.iconC, marginTop: '8px' }}>{k.note}</div>
             </div>
           ))}
         </div>
@@ -241,17 +244,19 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave }:
         {/* ─ project progress ─ */}
         {report.projectProgress.length > 0 && (
           <>
-            {sectionTitle('2. Tiến độ dự án', 'Tự động tính từ dữ liệu dự án')}
+            {sectionTitle('2. Tiến độ dự án & Backlog', 'Tự động tính từ dữ liệu dự án')}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '12px', marginBottom: '24px' }}>
               {report.projectProgress.map((p, i) => {
                 const s = pStatus(p.progress);
+                const backlog = Math.max(0, p.tasksTotal - p.tasksCompleted);
                 return (
                   <div key={i} style={{ border: '1px solid #e2e8f0', borderRadius: '16px', padding: '14px', background: '#fff' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                       <div>
                         <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>{p.projectName}</div>
-                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
-                          {p.tasksCompleted}/{p.tasksTotal} hạng mục
+                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', display: 'flex', gap: '8px' }}>
+                          <span style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>Hoàn thành: <b>{p.tasksCompleted}/{p.tasksTotal}</b></span>
+                          {backlog > 0 && <span style={{ background: '#fff1f2', color: '#e11d48', padding: '2px 6px', borderRadius: '4px' }}>Tồn đọng (Backlog): <b>{backlog}</b></span>}
                         </div>
                       </div>
                       <span style={{ display: 'inline-flex', alignItems: 'center', borderRadius: '999px',
@@ -278,53 +283,40 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave }:
         {/* ─ task breakdown table ─ */}
         {(report.taskBreakdownByTeam ?? []).length > 0 && (
           <>
-            {sectionTitle('4. Chi tiết đầu việc', 'Sản lượng và điểm trong tuần')}
-            {card(
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>
-                    {['Nhóm', 'Đầu việc', 'Link', 'Điểm'].map(h => (
-                      <th key={h} style={{ padding: '11px 14px', background: '#f8fafc', color: '#475569',
-                        fontSize: '11px', textTransform: 'uppercase', letterSpacing: '.5px',
-                        textAlign: 'left', fontWeight: 700, borderBottom: '1px solid #e2e8f0' }}>
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.taskBreakdownByTeam!.flatMap(team =>
-                    team.items.map((item, j) => (
-                      <tr key={`${team.team}-${j}`}>
-                        {j === 0 && (
-                          <td rowSpan={team.items.length}
-                            style={{ padding: '12px 14px', borderBottom: '1px solid #f1f5f9',
-                              fontWeight: 700, color: '#0f172a', verticalAlign: 'top', fontSize: '13px' }}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                              <span style={{ width: '8px', height: '8px', borderRadius: '50%',
-                                background: team.color, display: 'inline-block', flexShrink: 0 }} />
-                              {team.team}
-                            </span>
-                          </td>
-                        )}
-                        <td style={{ padding: '12px 14px', borderBottom: '1px solid #f1f5f9', fontSize: '13px', color: '#334155' }}>
-                          {item.label}
-                        </td>
-                        <td style={{ padding: '12px 14px', borderBottom: '1px solid #f1f5f9',
-                          fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>
-                          {item.links}
-                        </td>
-                        <td style={{ padding: '12px 14px', borderBottom: '1px solid #f1f5f9',
-                          fontWeight: 700, color: '#16a34a', fontSize: '14px' }}>
-                          {item.points.toFixed(1)}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>,
-              { padding: 0, overflow: 'hidden', marginBottom: '24px' }
-            )}
+            {sectionTitle('3. Chi tiết đầu việc', 'Sản lượng và điểm gộp theo Team')}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+              {report.taskBreakdownByTeam!.map((team, idx) => {
+                const teamTotalLinks = team.items.reduce((s, i) => s + i.links, 0);
+                const teamTotalPoints = team.items.reduce((s, i) => s + i.points, 0);
+                return (
+                  <div key={idx} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden' }}>
+                    <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: team.color }} />
+                        <b style={{ fontSize: '14px', color: '#0f172a' }}>{team.team}</b>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <b style={{ fontSize: '15px', color: '#0f172a' }}>{teamTotalLinks} <span style={{ fontSize: '12px', fontWeight: 400 }}>link</span></b>
+                        <span style={{ margin: '0 6px', color: '#cbd5e1' }}>|</span>
+                        <b style={{ fontSize: '15px', color: '#16a34a' }}>{teamTotalPoints.toFixed(0)} <span style={{ fontSize: '12px', fontWeight: 400 }}>điểm</span></b>
+                      </div>
+                    </div>
+                    <div style={{ padding: '8px 16px', maxHeight: '180px', overflowY: 'auto' }}>
+                      {team.items.map((item, j) => (
+                        <div key={j} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: j < team.items.length - 1 ? '1px dashed #e2e8f0' : 'none' }}>
+                          <span style={{ fontSize: '13px', color: '#475569' }}>{item.label}</span>
+                          <div style={{ fontSize: '13px', fontWeight: 600 }}>
+                            <span style={{ color: '#0f172a' }}>{item.links}</span>
+                            <span style={{ margin: '0 4px', color: '#cbd5e1', fontWeight: 400 }}>·</span>
+                            <span style={{ color: '#16a34a' }}>{item.points.toFixed(1)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </>
         )}
 
@@ -332,9 +324,9 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave }:
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
           {/* bottlenecks */}
           <div>
-            {sectionTitle('3. Điểm nghẽn', 'Phân loại theo mức độ ảnh hưởng')}
+            {sectionTitle('4. Điểm nghẽn & Rủi ro', 'Phân loại theo mức độ ảnh hưởng')}
             {card(
-              editing ? editArea('bottlenecks', 7, 'Mỗi điểm nghẽn trên một dòng...') :
+              editing ? editArea('bottlenecks', 7, 'Mỗi điểm nghẽn cách nhau một dòng trống...') :
               bottleneckLines.length > 0 ? (
                 <div style={{ display: 'grid', gap: '10px' }}>
                   {bottleneckLines.map((line, i) => (

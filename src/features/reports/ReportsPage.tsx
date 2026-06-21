@@ -898,7 +898,13 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
       ? slowTasks.slice(0, 3).map(t => `[High] Đẩy tiến độ task "${t.taskName}" | Target: 100% | Owner: [Tên] | Deadline: Thứ 6`).join('\n')
       : '[Medium] Duy trì nhịp độ hiện tại | Target: Đạt KPI | Owner: Cả team | Deadline: Cuối tuần\n[High] Kiểm tra chất lượng nội dung | Target: Pass 100% | Owner: [Leader] | Deadline: Thứ 4';
 
-    return { totalLinks, totalPoints, totalTasksCompleted: inRange.length, projectProgress: pp, taskBreakdownByTeam, insights, bottlenecks, autoSummary, autoNextPlan };
+    return {
+      totalLinks, totalPoints, totalTasksCompleted: inRange.length, projectProgress: pp, taskBreakdownByTeam, insights, bottlenecks, autoSummary, autoNextPlan,
+      // Default KPI targets to the actuals for the first run, the user can edit them
+      kpiTargetLinks: totalLinks > 0 ? totalLinks : 0,
+      kpiTargetPoints: totalPoints > 0 ? totalPoints : 0,
+      kpiQuality: 100, // Default to 100%
+    };
   };
 
   /* ── initial state: auto-fill when opening ── */
@@ -913,6 +919,9 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
       totalTasksCompleted: auto.totalTasksCompleted,
       totalLinks: auto.totalLinks,
       totalPoints: auto.totalPoints,
+      kpiTargetLinks: auto.kpiTargetLinks,
+      kpiTargetPoints: auto.kpiTargetPoints,
+      kpiQuality: auto.kpiQuality,
       summary: auto.autoSummary,
       aiAssessment: '',
       managerAssessment: '',
@@ -1033,24 +1042,41 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
                 </div>
 
                 {/* stats cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-                  {[
-                    { label: 'Link', icon: '🔗', field: 'totalLinks' as const,  color: '#6366f1', value: form.totalLinks ?? 0 },
-                    { label: 'Điểm', icon: '⭐', field: 'totalPoints' as const, color: '#f59e0b', value: Math.round((form.totalPoints ?? 0) * 10) / 10 },
-                    { label: 'Submit', icon: '📥', field: 'totalTasksCompleted' as const, color: '#10b981', value: form.totalTasksCompleted ?? 0 },
-                  ].map(({ label, icon, field, color, value }) => (
-                    <div key={field} style={{ padding: '14px', borderRadius: 'var(--radius-lg)',
-                      background: `linear-gradient(135deg,${color}12,${color}06)`,
-                      border: `1px solid ${color}22`, textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>{icon}</div>
-                      <input type="number" min="0" step={field === 'totalPoints' ? '0.1' : '1'} value={value}
-                        onChange={e => setForm(f => ({ ...f, [field]: parseFloat(e.target.value) || 0 }))}
-                        style={{ width: '80px', textAlign: 'center', fontWeight: 800, fontSize: '1.4rem',
-                          color: color, border: 'none', background: 'transparent', padding: '0',
-                          margin: '0 auto', display: 'block', outline: 'none' }} />
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>{label}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                  <div style={{ padding: '14px', borderRadius: 'var(--radius-lg)', background: `linear-gradient(135deg,#6366f112,#6366f106)`, border: `1px solid #6366f122`, textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>🔗</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                      <input type="number" min="0" value={form.totalLinks ?? 0} onChange={e => setForm(f => ({ ...f, totalLinks: parseFloat(e.target.value) || 0 }))} style={{ width: '45px', textAlign: 'center', fontWeight: 800, fontSize: '1.2rem', color: '#6366f1', border: 'none', background: 'transparent', padding: '0', outline: 'none' }} />
+                      <span style={{ color: 'var(--text-tertiary)', fontSize: '1.1rem' }}>/</span>
+                      <input type="number" min="0" value={form.kpiTargetLinks ?? 0} onChange={e => setForm(f => ({ ...f, kpiTargetLinks: parseFloat(e.target.value) || 0 }))} style={{ width: '45px', textAlign: 'center', fontWeight: 800, fontSize: '1.2rem', color: '#6366f1', border: 'none', background: 'transparent', padding: '0', outline: 'none' }} />
                     </div>
-                  ))}
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>Link (Thực tế/Target)</div>
+                  </div>
+                  
+                  <div style={{ padding: '14px', borderRadius: 'var(--radius-lg)', background: `linear-gradient(135deg,#f59e0b12,#f59e0b06)`, border: `1px solid #f59e0b22`, textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>⭐</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                      <input type="number" min="0" step="0.1" value={Math.round((form.totalPoints ?? 0) * 10) / 10} onChange={e => setForm(f => ({ ...f, totalPoints: parseFloat(e.target.value) || 0 }))} style={{ width: '45px', textAlign: 'center', fontWeight: 800, fontSize: '1.2rem', color: '#f59e0b', border: 'none', background: 'transparent', padding: '0', outline: 'none' }} />
+                      <span style={{ color: 'var(--text-tertiary)', fontSize: '1.1rem' }}>/</span>
+                      <input type="number" min="0" step="0.1" value={Math.round((form.kpiTargetPoints ?? 0) * 10) / 10} onChange={e => setForm(f => ({ ...f, kpiTargetPoints: parseFloat(e.target.value) || 0 }))} style={{ width: '45px', textAlign: 'center', fontWeight: 800, fontSize: '1.2rem', color: '#f59e0b', border: 'none', background: 'transparent', padding: '0', outline: 'none' }} />
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>Điểm (Thực tế/Target)</div>
+                  </div>
+
+                  <div style={{ padding: '14px', borderRadius: 'var(--radius-lg)', background: `linear-gradient(135deg,#10b98112,#10b98106)`, border: `1px solid #10b98122`, textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>📥</div>
+                    <input type="number" min="0" value={form.totalTasksCompleted ?? 0} onChange={e => setForm(f => ({ ...f, totalTasksCompleted: parseFloat(e.target.value) || 0 }))} style={{ width: '80px', textAlign: 'center', fontWeight: 800, fontSize: '1.4rem', color: '#10b981', border: 'none', background: 'transparent', padding: '0', margin: '0 auto', display: 'block', outline: 'none' }} />
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>Lượt Submit</div>
+                  </div>
+
+                  <div style={{ padding: '14px', borderRadius: 'var(--radius-lg)', background: `linear-gradient(135deg,#8b5cf612,#8b5cf606)`, border: `1px solid #8b5cf622`, textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>✨</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <input type="number" min="0" max="100" value={form.kpiQuality ?? 100} onChange={e => setForm(f => ({ ...f, kpiQuality: parseFloat(e.target.value) || 0 }))} style={{ width: '50px', textAlign: 'center', fontWeight: 800, fontSize: '1.4rem', color: '#8b5cf6', border: 'none', background: 'transparent', padding: '0', outline: 'none' }} />
+                      <span style={{ fontWeight: 800, fontSize: '1.2rem', color: '#8b5cf6' }}>%</span>
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>Chất lượng (Pass)</div>
+                  </div>
                 </div>
 
                 {/* project progress */}
