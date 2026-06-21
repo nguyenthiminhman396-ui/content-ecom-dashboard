@@ -66,7 +66,7 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave }:
   const weekLabel    = formatWeekLabel(report.weekStart);
 
   // ── parse free-text fields ─────────────────────────────────────────────
-  const bottleneckLines = val('bottlenecks').split('\n').filter(Boolean);
+  const bottleneckLines = val('bottlenecks').split('\n\n').filter(Boolean);
   const actionLines     = val('nextWeekPlan').split('\n').filter(Boolean);
 
   // ── styles ─────────────────────────────────────────────────────────────
@@ -343,7 +343,7 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave }:
                       <div style={{ width: '32px', height: '32px', borderRadius: '10px',
                         display: 'grid', placeItems: 'center', background: '#fef2f2',
                         color: '#dc2626', fontWeight: 900, fontSize: '13px' }}>{i+1}</div>
-                      <p style={{ fontSize: '13px', color: '#475569', margin: 0, lineHeight: 1.65 }}>{line}</p>
+                      <p style={{ fontSize: '13px', color: '#475569', margin: 0, lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{line}</p>
                     </div>
                   ))}
                 </div>
@@ -383,10 +383,10 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave }:
           <div style={{ padding: '16px 18px', borderRadius: '16px', background: '#fffbeb',
             border: '1px solid #fde68a', marginBottom: '20px' }}>
             <div style={{ fontWeight: 700, color: '#b45309', marginBottom: '8px', fontSize: '14px' }}>
-              ⚠️ Vấn đề cần lưu ý
+              ⚠️ Việc cần chốt / Cần hỗ trợ
             </div>
-            {editing ? editArea('issues', 3, 'Ghi chú các vấn đề cần theo dõi...') :
-              <p style={{ fontSize: '13px', color: '#92400e', lineHeight: 1.7 }}>{val('issues')}</p>}
+            {editing ? editArea('issues', 3, 'Ghi chú các vấn đề cần chốt, người cần chốt...') :
+              <p style={{ fontSize: '13px', color: '#92400e', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{val('issues')}</p>}
           </div>
         )}
 
@@ -409,7 +409,7 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave }:
             <div style={{ fontWeight: 700, color: '#6d28d9', marginBottom: '8px', fontSize: '14px' }}>
               ✨ Đánh giá AI
             </div>
-            <p style={{ fontSize: '13px', color: '#4c1d95', lineHeight: 1.7 }}>{val('aiAssessment')}</p>
+            <p style={{ fontSize: '13px', color: '#4c1d95', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{val('aiAssessment')}</p>
           </div>
         )}
 

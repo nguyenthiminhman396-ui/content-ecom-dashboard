@@ -867,13 +867,21 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
     const bottleneckItems: string[] = [];
     pp.forEach(p => {
       p.taskBreakdown?.forEach(t => {
-        if (t.progress < 30 && t.targetLinks > 0) bottleneckItems.push(`${p.projectName} › ${t.taskName}: chỉ ${t.progress}%`);
+        if (t.progress < 30 && t.targetLinks > 0) {
+          bottleneckItems.push(
+            `- Vấn đề: Tiến độ task "${t.taskName}" dự án ${p.projectName} quá chậm (${t.progress}%).\n` +
+            `  Ảnh hưởng: Chậm tiến độ chung dự án.\n` +
+            `  Mức độ: Cao\n` +
+            `  Owner: [Tên người phụ trách]\n` +
+            `  Hướng xử lý: [Ghi đề xuất giải quyết tại đây]`
+          );
+        }
       });
     });
-    if (totalLinks === 0) bottleneckItems.push('Không có link nào được submit trong tuần.');
+    if (totalLinks === 0) bottleneckItems.push('- Vấn đề: Không có link nào được submit trong tuần.');
     const lowEmps = topEmp.filter(([, p]) => p < avgPts * 0.5);
-    if (lowEmps.length > 0) bottleneckItems.push(`Sản lượng thấp: ${lowEmps.map(([n]) => n).join(', ')}`);
-    const bottlenecks = bottleneckItems.join('\n');
+    if (lowEmps.length > 0) bottleneckItems.push(`- Vấn đề: Sản lượng thấp ở một số nhân sự: ${lowEmps.map(([n]) => n).join(', ')}`);
+    const bottlenecks = bottleneckItems.join('\n\n');
 
     /* auto summary */
     const summaryParts = [`Tuần ${formatWeek(weekStart)}: ${totalLinks} link, ${totalPoints.toFixed(0)} điểm.`];
@@ -885,10 +893,10 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
     const autoSummary = summaryParts.join(' ');
 
     /* auto next week plan */
-    const slowTasks = bottleneckItems.filter(b => b.includes('›'));
+    const slowTasks = pp.flatMap(p => (p.taskBreakdown || []).filter(t => t.progress < 30 && t.targetLinks > 0));
     const autoNextPlan = slowTasks.length > 0
-      ? `Ưu tiên đẩy tiến độ: ${slowTasks.slice(0, 2).map(b => b.split('›')[1]?.trim().split(':')[0] || b).join(', ')}. Duy trì nhịp độ các task đang tốt.`
-      : 'Duy trì nhịp độ hiện tại. Kiểm tra chất lượng nội dung đầu tuần.';
+      ? slowTasks.slice(0, 3).map(t => `[High] Đẩy tiến độ task "${t.taskName}" | Target: 100% | Owner: [Tên] | Deadline: Thứ 6`).join('\n')
+      : '[Medium] Duy trì nhịp độ hiện tại | Target: Đạt KPI | Owner: Cả team | Deadline: Cuối tuần\n[High] Kiểm tra chất lượng nội dung | Target: Pass 100% | Owner: [Leader] | Deadline: Thứ 4';
 
     return { totalLinks, totalPoints, totalTasksCompleted: inRange.length, projectProgress: pp, taskBreakdownByTeam, insights, bottlenecks, autoSummary, autoNextPlan };
   };
@@ -934,10 +942,9 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
     setTimeout(() => {
       const progresses = (form.projectProgress || []).map(p => `${p.projectName}: ${p.progress}%`).join(', ');
       const assessment =
-        `Tuần này đạt ${form.totalLinks || 0} link (${form.totalPoints?.toFixed(0) || 0} điểm). ` +
-        `Tiến độ dự án: ${progresses || 'chưa cập nhật'}. ` +
-        (form.totalLinks && form.totalLinks > 500 ? 'Sản lượng tốt, duy trì nhịp độ. ' : 'Cần tăng tốc sản lượng. ') +
-        'Đề xuất: Ưu tiên các task trễ hạn, phân bổ lại nhân sự nếu cần.';
+        `• Nhận định chính: Đạt ${form.totalLinks || 0} link (${form.totalPoints?.toFixed(0) || 0} điểm). Tiến độ dự án: ${progresses || 'chưa cập nhật'}.\n` +
+        `• Rủi ro tiềm ẩn: ` + (form.totalLinks && form.totalLinks < 200 ? 'Sản lượng đang thấp, nguy cơ trễ KPI cuối tháng.' : 'Hiện tại duy trì tốt, rủi ro thấp.') + `\n` +
+        `• Đề xuất hành động: Tập trung xử lý dứt điểm các dự án dưới 30%, điều phối thêm nguồn lực nếu cần.`;
       setForm(f => ({ ...f, aiAssessment: assessment }));
       setAiLoading(false);
       toast.success('AI đã gợi ý đánh giá!');
@@ -1158,7 +1165,7 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
                 </div>
 
                 <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">⚠️ Vấn đề cần lưu ý</label>
+                  <label className="form-label">⚠️ Việc cần chốt / Cần hỗ trợ</label>
                   <textarea className="form-textarea" value={form.issues || ''} onChange={e => setForm(f => ({ ...f, issues: e.target.value }))}
                     rows={2} style={{ background: 'linear-gradient(135deg,#fff7ed,#fed7aa)', borderColor: '#fdba74' }} />
                 </div>
