@@ -343,7 +343,7 @@ export default function DashboardPage() {
       const links = subs.reduce((sum, x) => sum + x.links.length, 0);
       const points = subs.reduce((sum, x) => sum + x.totalPoints, 0);
 
-      // Tiến độ task cứng: avg(taskProgress)
+      // Tiến độ task cứng: avg(taskProgress) — đồng bộ với ProjectDetailPage
       const tasks = projectTasks.filter(t => t.projectId === p.id);
       let taskProgress = 0;
       if (tasks.length > 0) {
@@ -357,15 +357,25 @@ export default function DashboardPage() {
             if (t.assignees && t.assignees.length > 0 && !t.assignees.includes(s.employeeName)) return false;
             return !!t.taskType || !!t.taskDetail;
           });
-          const linkCount = matched.reduce((sum, s) => sum + s.links.length, 0);
-          return acc + Math.min(100, Math.round((linkCount / Math.max(t.targetLinks, 1)) * 100));
+          // Tính tiến độ đúng theo trackingMode — giống ProjectDetailPage
+          const mode = t.trackingMode || 'link';
+          let tPct = 0;
+          if (mode === 'quantity' && t.targetQuantity && t.targetQuantity > 0) {
+            const qty = matched.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
+            tPct = Math.min(100, Math.round((qty / t.targetQuantity) * 100));
+          } else if (t.targetLinks > 0) {
+            const linkCount = matched.reduce((sum, s) => sum + s.links.length, 0);
+            tPct = Math.min(100, Math.round((linkCount / t.targetLinks) * 100));
+          }
+          return acc + tPct;
         }, 0);
         taskProgress = Math.round(total / tasks.length);
-      } else if (links > 0) {
-        taskProgress = 50;
+      } else {
+        // Không có task nhỏ → dùng manualProgress nếu được set (giống ProjectDetailPage)
+        taskProgress = p.manualProgress ?? 0;
       }
       return { project: p, links, points, taskProgress, taskCount: tasks.length };
-    }).sort((a, b) => b.links - a.links);
+    }).sort((a, b) => b.taskProgress - a.taskProgress);
   }, [projects, thisMonthSubs, projectTasks, submissions]);
 
   // ── Chi tiết đầu việc — kỳ này vs cùng kỳ tháng trước ──
