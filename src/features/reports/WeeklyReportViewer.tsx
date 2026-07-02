@@ -58,10 +58,8 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave }:
   // ── auto-calculated values ─────────────────────────────────────────────
   const totalLinks   = report.totalLinks;
   const totalPoints  = report.totalPoints;
-  const mediaLinks   = (report.taskBreakdownByTeam ?? [])
-    .filter(t => /multi|video|hình|ảnh/i.test(t.team))
-    .reduce((s, t) => s + t.items.reduce((ss, i) => ss + i.links, 0), 0);
-  const articleLinks = totalLinks - mediaLinks;
+
+
   const riskCount    = report.projectProgress.filter(p => p.progress < 30).length;
   const weekLabel    = formatWeekLabel(report.weekStart);
 
