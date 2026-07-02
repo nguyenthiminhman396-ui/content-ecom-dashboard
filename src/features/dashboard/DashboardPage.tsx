@@ -682,6 +682,14 @@ export default function DashboardPage() {
               : scaleConfig.memberTargetPoints;
           }
 
+          // Member/Client: chỉ tính target của chính mình (1 người)
+          if (currentUser.role === 'Member' || currentUser.role === 'Client') {
+            const me = members.find(m => m.name === currentUser.name);
+            return me?.kpiRole === 'leader'
+              ? scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight
+              : scaleConfig.memberTargetPoints;
+          }
+
           let relevantMembers = activeMembers;
           if (currentUser.role === 'Leader') {
             const me = members.find(m => m.name === currentUser.name);
