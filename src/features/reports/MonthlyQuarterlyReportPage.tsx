@@ -2,11 +2,11 @@ import { useState, useMemo, useRef, useCallback } from 'react';
 import { useAppStore } from '@/shared/store/appStore';
 import {
   CalendarRange, Calendar, TrendingUp, TrendingDown, Minus,
-  Download, FileText, PieChart, BarChart3, Users, Target,
+  FileText, PieChart, BarChart3, Users, Target,
   ChevronLeft, ChevronRight, Sparkles, Presentation, FileDown,
-  Printer, ArrowRight, Flame, Hash, Edit3, Save, AlertTriangle,
-  CheckCircle, MessageSquare, Activity, ShieldCheck, Zap,
-  Settings, Eye, EyeOff, LayoutTemplate, ExternalLink, X
+  ArrowRight, Flame, Hash, Edit3, Save, AlertTriangle,
+  CheckCircle, Activity, ShieldCheck,
+  Eye, EyeOff, LayoutTemplate, ExternalLink, X
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -91,7 +91,7 @@ function DeltaBadge({ value }: { value: number }) {
 /* ═════════════════════════════════════════════════════ MAIN ═════ */
 
 export default function MonthlyQuarterlyReportPage() {
-  const { currentUser, submissions, weeklyReports, projects, projectTasks } = useAppStore();
+  const { currentUser, submissions, projects, projectTasks } = useAppStore();
   const reportRef = useRef<HTMLDivElement>(null);
 
   const isManager = currentUser?.role === 'Manager';
@@ -1534,6 +1534,7 @@ function buildPresentationHtml(data: {
   projectProgress: { name: string; progress: number; periodLinks: number }[];
   topicsFocus: { name: string; tags: string[]; links: number; pct: number; projectNames: string[] }[];
   insights: string;
+  bottleneck: string;
 }): string {
   const deltaBadge = (v: number) => v > 0 ? `<span style="color:#16a34a;font-size:0.9rem">▲ +${v}%</span>` : v < 0 ? `<span style="color:#dc2626;font-size:0.9rem">▼ ${v}%</span>` : '';
 
