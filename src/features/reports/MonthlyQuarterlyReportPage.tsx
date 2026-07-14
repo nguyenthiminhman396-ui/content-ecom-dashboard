@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '@/shared/store/appStore';
 import {
@@ -162,6 +162,31 @@ export default function MonthlyQuarterlyReportPage() {
 
   const periodLabel = mode === 'month' ? getMonthLabel(selectedMonth) : getQuarterLabel(selectedQuarter, selectedYear);
 
+  /* ── load/save config ── */
+  const storageKey = `report_config_${periodLabel}`;
+  
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.summaryText) setSummaryText(parsed.summaryText);
+        if (parsed.recommendationText) setRecommendationText(parsed.recommendationText);
+        if (parsed.bottleneckText) setBottleneckText(parsed.bottleneckText);
+        if (parsed.metricOverrides) setMetricOverrides(parsed.metricOverrides);
+        if (parsed.selectedFocusProjects) setSelectedFocusProjects(parsed.selectedFocusProjects);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [storageKey]);
+
+  const handleSaveConfig = () => {
+    const config = { summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects };
+    localStorage.setItem(storageKey, JSON.stringify(config));
+    toast.success('Đã lưu cấu hình báo cáo cho kỳ này!');
+  };
+
   /* ── filter submissions by period ── */
   const filterByMonths = useCallback((months: string[]) => {
     return submissions.filter(s => {
@@ -183,8 +208,12 @@ export default function MonthlyQuarterlyReportPage() {
   const stats = useMemo(() => {
     // Categorize by exact match or substring in taskType / teamGroup
     const cat = (s: typeof prodSubs[0]) => {
+      const t = (s.taskType || '').toLowerCase();
+      const d = (s.taskDetail || '').toLowerCase();
       const g = (s.teamGroup || '').toLowerCase();
-      if (g.includes('tối ưu')) return 'toiUu';
+      const combined = `${t} ${d} ${g}`;
+      
+      if (combined.includes('tối ưu') || combined.includes('cập nhật')) return 'toiUu';
       if (g.includes('bài viết')) return 'baiMoi';
       if (g.includes('sản phẩm') || g.includes('sku')) return 'sku';
       if (g.includes('multimedia')) return 'multimedia';
@@ -196,8 +225,17 @@ export default function MonthlyQuarterlyReportPage() {
     const multimedia = prodSubs.filter(s => cat(s) === 'multimedia').reduce((sum, s) => sum + s.links.length, 0);
     const toiUu = prodSubs.filter(s => cat(s) === 'toiUu').reduce((sum, s) => sum + s.links.length, 0);
     
-    const toiUu_SP = prodSubs.filter(s => cat(s) === 'toiUu' && (s.teamGroup || '').toLowerCase().includes('sản phẩm')).reduce((sum, s) => sum + s.links.length, 0);
-    const toiUu_BV = prodSubs.filter(s => cat(s) === 'toiUu' && (s.teamGroup || '').toLowerCase().includes('bài viết')).reduce((sum, s) => sum + s.links.length, 0);
+    const toiUu_SP = prodSubs.filter(s => {
+      if (cat(s) !== 'toiUu') return false;
+      const combined = `${s.taskType || ''} ${s.taskDetail || ''} ${s.teamGroup || ''}`.toLowerCase();
+      return combined.includes('sản phẩm') || combined.includes('sku');
+    }).reduce((sum, s) => sum + s.links.length, 0);
+    
+    const toiUu_BV = prodSubs.filter(s => {
+      if (cat(s) !== 'toiUu') return false;
+      const combined = `${s.taskType || ''} ${s.taskDetail || ''} ${s.teamGroup || ''}`.toLowerCase();
+      return combined.includes('bài viết') || combined.includes('tin bài');
+    }).reduce((sum, s) => sum + s.links.length, 0);
 
     const totalLinks = prodSubs.reduce((s, x) => s + x.links.length, 0);
     const totalPoints = prodSubs.reduce((s, x) => s + x.totalPoints, 0);
@@ -667,6 +705,11 @@ export default function MonthlyQuarterlyReportPage() {
             style={{ border: isEditingMetrics ? '1px solid #8b5cf6' : '', background: isEditingMetrics ? '#f5f3ff' : '', color: isEditingMetrics ? '#7c3aed' : '' }}>
             <Edit3 size={14} /> Chỉnh sửa số liệu
           </button>
+          {isEditingMetrics && (
+            <button className="btn" onClick={handleSaveConfig} style={{ background: '#10b981', color: '#fff', border: 'none' }}>
+              <Save size={14} /> Lưu báo cáo
+            </button>
+          )}
           <button className="btn btn-secondary" onClick={() => setShowBlockSettings(!showBlockSettings)}>
             <LayoutTemplate size={14} /> Tuỳ chỉnh hiển thị
           </button>
