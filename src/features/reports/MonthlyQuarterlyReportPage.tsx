@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAppStore } from '@/shared/store/appStore';
 import {
   CalendarRange, Calendar, TrendingUp, TrendingDown, Minus,
-  FileText, PieChart, BarChart3, Target,
+  FileText, BarChart3, Target,
   ChevronLeft, ChevronRight, Sparkles, Presentation, FileDown,
   ArrowRight, Flame, Hash, Edit3, Save, AlertTriangle,
   CheckCircle, Activity, ShieldCheck, MessageSquare,
@@ -405,7 +405,7 @@ export default function MonthlyQuarterlyReportPage() {
         id: p.id,
         name: p.name,
         type: p.type,
-        links: pSubs.reduce((s, x) => s + x.links.length, 0),
+        links: pSubs.reduce((s, x) => s + ((x.quantity && x.quantity > 0) ? x.quantity : x.links.length), 0),
         points: pSubs.reduce((s, x) => s + x.totalPoints, 0),
       };
     }).sort((a, b) => b.links - a.links);
@@ -438,7 +438,7 @@ export default function MonthlyQuarterlyReportPage() {
 
       if (!projWeekMap.has(s.projectId)) projWeekMap.set(s.projectId, new Map());
       const wm = projWeekMap.get(s.projectId)!;
-      wm.set(weekKey, (wm.get(weekKey) || 0) + s.links.length);
+      wm.set(weekKey, (wm.get(weekKey) || 0) + ((s.quantity && s.quantity > 0) ? s.quantity : s.links.length));
     });
 
     const weeks = Array.from(weekSet.entries()).sort(([a], [b]) => a.localeCompare(b));
@@ -969,10 +969,10 @@ export default function MonthlyQuarterlyReportPage() {
       {visibleBlocks.teamTasks && tasksBreakdown.length > 0 && (
         <div className="card" style={{ padding: '20px', marginBottom: '20px' }}>
           <ChartHeader icon={<LayoutTemplate size={14} color="#fff" />} title="Bảng chi tiết đầu việc" color="#14b8a6" />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', alignItems: 'flex-start' }}>
-            <div style={{ overflowX: 'auto' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'flex-start' }}>
+            <div style={{ flex: '1.5 1 500px', maxHeight: '450px', overflowY: 'auto', border: '1px solid var(--border-light)', borderRadius: '12px' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '400px' }}>
-                <thead>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-primary)', zIndex: 1, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
                   <tr>
                     <th style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', color: 'var(--text-tertiary)', fontWeight: 600, fontSize: '0.82rem' }}>Đầu việc</th>
                     <th style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', color: 'var(--text-tertiary)', fontWeight: 600, fontSize: '0.82rem' }}>Chi tiết đầu việc</th>
@@ -999,45 +999,92 @@ export default function MonthlyQuarterlyReportPage() {
                     ))
                   ))}
                 </tbody>
+                <tfoot style={{ position: 'sticky', bottom: 0, background: 'var(--bg-primary)', zIndex: 1, boxShadow: '0 -1px 2px rgba(0,0,0,0.05)' }}>
+                  <tr>
+                    <td colSpan={2} style={{ padding: '12px', fontWeight: 800, borderTop: '1px solid var(--border-light)', textAlign: 'right' }}>Tổng cộng</td>
+                    <td style={{ padding: '12px', textAlign: 'center', fontWeight: 800, borderTop: '1px solid var(--border-light)' }}>
+                      {tasksBreakdown.reduce((s, t) => s + t.details.reduce((ss, d) => ss + d.links, 0), 0)}
+                      <div style={{ marginTop: '4px' }}><DeltaBadge value={stats.deltaLinks} /></div>
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'center', fontWeight: 800, color: '#6366f1', borderTop: '1px solid var(--border-light)' }}>
+                      {tasksBreakdown.reduce((s, t) => s + t.details.reduce((ss, d) => ss + d.points, 0), 0).toFixed(1)}
+                      <div style={{ marginTop: '4px' }}><DeltaBadge value={stats.deltaPoints} /></div>
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
             
-            {/* Pie chart for work volume (links) */}
-            <div style={{ padding: '10px', background: 'var(--bg-secondary)', borderRadius: '12px' }}>
-              <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '16px', textAlign: 'center' }}>Khối lượng công việc theo Đầu việc (Link)</h4>
-              <div style={{ height: '240px', display: 'flex', justifyContent: 'center' }}>
-                <Doughnut
-                  data={{
-                    labels: (() => {
-                      const allTasks = tasksBreakdown.flatMap(t => t.details).sort((a, b) => b.links - a.links);
-                      const topTasks = allTasks.slice(0, 8);
-                      const otherLinks = allTasks.slice(8).reduce((s, x) => s + x.links, 0);
-                      return [...topTasks.map(t => t.name.length > 20 ? t.name.slice(0, 18) + '...' : t.name), ...(otherLinks > 0 ? ['Khác'] : [])];
-                    })(),
-                    datasets: [{
-                      data: (() => {
+            <div style={{ flex: '1 1 280px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Pie 1: Phân bổ nhóm nội dung */}
+              <div style={{ padding: '16px', background: 'var(--bg-secondary)', borderRadius: '12px' }}>
+                <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '16px', textAlign: 'center' }}>Phân bổ nhóm nội dung</h4>
+                <div style={{ height: '220px', display: 'flex', justifyContent: 'center' }}>
+                  <Doughnut
+                    data={{
+                      labels: teamBreakdown.map(([t]) => t),
+                      datasets: [{
+                        data: teamBreakdown.map(([, v]) => v.points),
+                        backgroundColor: teamBreakdown.map(([t]) => TEAM_COLORS[t] || '#64748b'),
+                        borderWidth: 2,
+                      }],
+                    }}
+                    options={{
+                      responsive: true, maintainAspectRatio: false,
+                      plugins: {
+                        legend: { position: 'bottom', labels: { usePointStyle: true, font: { size: 11 } } },
+                        tooltip: {
+                          backgroundColor: 'rgba(15,23,42,.92)', padding: 12, cornerRadius: 8,
+                          callbacks: {
+                            label: (ctx) => {
+                              const [, data] = teamBreakdown[ctx.dataIndex];
+                              return ` ${data.links} Lượt · ${data.points.toFixed(1)} Điểm`;
+                            }
+                          }
+                        }
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Pie 2: Khối lượng công việc theo Đầu việc */}
+              <div style={{ padding: '16px', background: 'var(--bg-secondary)', borderRadius: '12px' }}>
+                <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '16px', textAlign: 'center' }}>Khối lượng công việc (Link)</h4>
+                <div style={{ height: '220px', display: 'flex', justifyContent: 'center' }}>
+                  <Doughnut
+                    data={{
+                      labels: (() => {
                         const allTasks = tasksBreakdown.flatMap(t => t.details).sort((a, b) => b.links - a.links);
                         const topTasks = allTasks.slice(0, 8);
                         const otherLinks = allTasks.slice(8).reduce((s, x) => s + x.links, 0);
-                        return [...topTasks.map(t => t.links), ...(otherLinks > 0 ? [otherLinks] : [])];
+                        return [...topTasks.map(t => t.name.length > 20 ? t.name.slice(0, 18) + '...' : t.name), ...(otherLinks > 0 ? ['Khác'] : [])];
                       })(),
-                      backgroundColor: (() => {
-                        const allTasks = tasksBreakdown.flatMap(t => t.details).sort((a, b) => b.links - a.links);
-                        const topTasks = allTasks.slice(0, 8);
-                        const otherLinks = allTasks.slice(8).reduce((s, x) => s + x.links, 0);
-                        return [...topTasks.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]), ...(otherLinks > 0 ? ['#94a3b8'] : [])];
-                      })(),
-                      borderWidth: 2,
-                    }]
-                  }}
-                  options={{
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: {
-                      legend: { position: 'bottom', labels: { usePointStyle: true, font: { size: 11 } } },
-                      tooltip: { backgroundColor: 'rgba(15,23,42,.92)', padding: 12, cornerRadius: 8 }
-                    }
-                  }}
-                />
+                      datasets: [{
+                        data: (() => {
+                          const allTasks = tasksBreakdown.flatMap(t => t.details).sort((a, b) => b.links - a.links);
+                          const topTasks = allTasks.slice(0, 8);
+                          const otherLinks = allTasks.slice(8).reduce((s, x) => s + x.links, 0);
+                          return [...topTasks.map(t => t.links), ...(otherLinks > 0 ? [otherLinks] : [])];
+                        })(),
+                        backgroundColor: (() => {
+                          const allTasks = tasksBreakdown.flatMap(t => t.details).sort((a, b) => b.links - a.links);
+                          const topTasks = allTasks.slice(0, 8);
+                          const otherLinks = allTasks.slice(8).reduce((s, x) => s + x.links, 0);
+                          return [...topTasks.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]), ...(otherLinks > 0 ? ['#94a3b8'] : [])];
+                        })(),
+                        borderWidth: 2,
+                      }]
+                    }}
+                    options={{
+                      responsive: true, maintainAspectRatio: false,
+                      plugins: {
+                        legend: { position: 'bottom', labels: { usePointStyle: true, font: { size: 10 } } },
+                        tooltip: { backgroundColor: 'rgba(15,23,42,.92)', padding: 12, cornerRadius: 8 }
+                      }
+                    }}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -1146,7 +1193,6 @@ export default function MonthlyQuarterlyReportPage() {
                           <span style={{ fontWeight: 800, fontSize: '0.95rem', color: CHART_PALETTE[i % CHART_PALETTE.length] }}>
                             {proj.links}
                           </span>
-                          <span style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', fontWeight: 600 }}>link</span>
                         </div>
                       </div>
                       <div style={{ height: '8px', borderRadius: '999px', background: 'var(--border-light)', overflow: 'hidden' }}>
@@ -1165,10 +1211,10 @@ export default function MonthlyQuarterlyReportPage() {
         </>
       )}
 
-      {/* ── NEW: Heat Chart — chủ đề × tuần ── */}
+      {/* ── NEW: Heat Chart — dự án × tuần ── */}
       {visibleBlocks.topics && heatmapData.topics.length > 0 && heatmapData.weeks.length > 0 && (
         <div className="card" style={{ padding: '20px', marginBottom: '14px', overflowX: 'auto' }}>
-          <ChartHeader icon={<Hash size={14} color="#fff" />} title="Mức độ hoạt động theo chủ đề × tuần" color="#534AB7" />
+          <ChartHeader icon={<Hash size={14} color="#fff" />} title="Mức độ hoạt động theo dự án × tuần" color="#534AB7" />
           <div style={{ minWidth: `${180 + heatmapData.weeks.length * 80}px` }}>
             {/* Header row — week labels */}
             <div style={{
@@ -1176,7 +1222,7 @@ export default function MonthlyQuarterlyReportPage() {
               gridTemplateColumns: `180px repeat(${heatmapData.weeks.length}, 1fr)`,
               gap: '3px', marginBottom: '3px',
             }}>
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-tertiary)', padding: '4px 8px' }}>Chủ đề</div>
+              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-tertiary)', padding: '4px 8px' }}>Dự án</div>
               {heatmapData.weeks.map(([wk, label]) => (
                 <div key={wk} style={{
                   fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-tertiary)',
@@ -1232,7 +1278,7 @@ export default function MonthlyQuarterlyReportPage() {
                 <div key={i} style={{ width: 20, height: 14, borderRadius: 3, background: `rgba(83, 74, 183, ${op})` }} />
               ))}
               <span style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>Nhiều</span>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginLeft: 'auto' }}>Số = link output trong tuần</span>
+              <span style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem', fontWeight: 600 }}>Số lượng output trong tuần</span>
             </div>
           </div>
         </div>
@@ -1241,53 +1287,6 @@ export default function MonthlyQuarterlyReportPage() {
       {/* ── 6. Phân bổ Team & So sánh kỳ ── */}
       {visibleBlocks.teamAndProject && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '14px', marginBottom: '14px' }}>
-          {/* Doughnut — team breakdown */}
-          <div className="card" style={{ padding: '20px' }}>
-            <ChartHeader icon={<PieChart size={14} color="#fff" />} title="Phân bổ theo team" color="#8b5cf6" />
-            {teamBreakdown.length > 0 ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '20px', height: '320px' }}>
-                <div style={{ flex: '0 0 180px', height: '180px' }}>
-                  <Doughnut
-                    data={{
-                      labels: teamBreakdown.map(([t]) => t),
-                      datasets: [{
-                        data: teamBreakdown.map(([, v]) => v.points),
-                        backgroundColor: teamBreakdown.map(([t]) => TEAM_COLORS[t] || '#64748b'),
-                        borderColor: 'var(--bg-primary)',
-                        borderWidth: 3,
-                        hoverOffset: 8,
-                      }],
-                    }}
-                    options={{
-                      responsive: true, maintainAspectRatio: false,
-                      cutout: '62%',
-                      plugins: {
-                        legend: { display: false },
-                        tooltip: { backgroundColor: 'rgba(15,23,42,.92)', padding: 10, cornerRadius: 8 },
-                      },
-                    }}
-                  />
-                </div>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {teamBreakdown.map(([team, data]) => {
-                    const totalPts = teamBreakdown.reduce((s, [, v]) => s + v.points, 0);
-                    const pctVal = totalPts > 0 ? Math.round((data.points / totalPts) * 100) : 0;
-                    return (
-                      <div key={team} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: TEAM_COLORS[team] || '#64748b', flexShrink: 0 }} />
-                        <span style={{ fontSize: '0.82rem', fontWeight: 600, flex: 1 }}>{team}</span>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: '0.82rem', fontWeight: 800, color: TEAM_COLORS[team] || '#64748b' }}>{pctVal}%</div>
-                          <div style={{ fontSize: '0.68rem', color: 'var(--text-tertiary)' }}>{data.links}L · {data.points.toFixed(0)}đ</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : <EmptyChart />}
-          </div>
-
           {/* Radar — comparison vs prev period */}
           <div className="card" style={{ padding: '20px' }}>
             <ChartHeader icon={<BarChart3 size={14} color="#fff" />} title={`So sánh với kỳ trước`} color="#3b82f6" />
