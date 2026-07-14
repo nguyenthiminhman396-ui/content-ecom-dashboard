@@ -1020,45 +1020,47 @@ export default function MonthlyQuarterlyReportPage() {
         <div className="card" style={{ padding: '20px', marginBottom: '20px' }}>
           <ChartHeader icon={<LayoutTemplate size={14} color="#fff" />} title="Bảng chi tiết đầu việc" color="#14b8a6" />
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'flex-start' }}>
-            <div style={{ flex: '1.5 1 500px', maxHeight: '450px', overflowY: 'auto', border: '1px solid var(--border-light)', borderRadius: '12px' }}>
+            <div style={{ flex: '1.5 1 500px', maxHeight: '594px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '16px', boxShadow: '0 10px 25px rgba(0,0,0,0.05)', background: '#fff' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '400px' }}>
-                <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-primary)', zIndex: 1, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 2, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
                   <tr>
-                    <th style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', color: 'var(--text-tertiary)', fontWeight: 600, fontSize: '0.82rem' }}>Đầu việc</th>
-                    <th style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', color: 'var(--text-tertiary)', fontWeight: 600, fontSize: '0.82rem' }}>Chi tiết đầu việc</th>
-                    <th style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', color: 'var(--text-tertiary)', fontWeight: 600, fontSize: '0.82rem', textAlign: 'center' }}>Số lượng</th>
-                    <th style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', color: 'var(--text-tertiary)', fontWeight: 600, fontSize: '0.82rem', textAlign: 'center' }}>Tổng điểm</th>
+                    <th style={{ padding: '16px 14px', borderBottom: '2px solid #cbd5e1', color: '#334155', fontWeight: 800, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Đầu việc</th>
+                    <th style={{ padding: '16px 14px', borderBottom: '2px solid #cbd5e1', color: '#334155', fontWeight: 800, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Chi tiết đầu việc</th>
+                    <th style={{ padding: '16px 14px', borderBottom: '2px solid #cbd5e1', color: '#334155', fontWeight: 800, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Số lượng</th>
+                    <th style={{ padding: '16px 14px', borderBottom: '2px solid #cbd5e1', color: '#334155', fontWeight: 800, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'center' }}>Tổng điểm</th>
                   </tr>
                 </thead>
                 <tbody>
                   {tasksBreakdown.map((t, typeIdx) => (
                     t.details.map((detail, idx) => (
-                      <tr key={`${t.type}-${detail.name}`}>
+                      <tr key={`${t.type}-${detail.name}`} style={{ transition: 'background 0.2s', cursor: 'default' }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                         {idx === 0 && (
-                          <td rowSpan={t.details.length} style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', fontWeight: 700, verticalAlign: 'top', borderRight: '1px solid var(--border-light)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: CHART_PALETTE[typeIdx % CHART_PALETTE.length] }}></span>
+                          <td rowSpan={t.details.length} style={{ padding: '14px', borderBottom: '1px solid #e2e8f0', fontWeight: 700, verticalAlign: 'middle', borderRight: '1px solid #e2e8f0', background: `${CHART_PALETTE[typeIdx % CHART_PALETTE.length]}10`, color: '#0f172a', fontSize: '0.95rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ width: 12, height: 12, borderRadius: '50%', background: CHART_PALETTE[typeIdx % CHART_PALETTE.length], boxShadow: '0 0 0 2px rgba(255,255,255,0.8)' }}></span>
                               {t.type}
                             </div>
                           </td>
                         )}
-                        <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', fontSize: '0.88rem' }}>{detail.name}</td>
-                        <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', fontSize: '0.88rem', fontWeight: 600, textAlign: 'center' }}>{detail.links}</td>
-                        <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', fontSize: '0.88rem', fontWeight: 600, textAlign: 'center', color: '#6366f1' }}>{detail.points.toFixed(1)}</td>
+                        <td style={{ padding: '14px', borderBottom: '1px solid #f1f5f9', fontSize: '0.95rem', color: '#334155', fontWeight: 500 }}>{detail.name}</td>
+                        <td style={{ padding: '14px', borderBottom: '1px solid #f1f5f9', fontSize: '1rem', fontWeight: 700, textAlign: 'center', color: '#0f172a' }}>{detail.links}</td>
+                        <td style={{ padding: '14px', borderBottom: '1px solid #f1f5f9', fontSize: '1rem', fontWeight: 800, textAlign: 'center', color: '#4f46e5' }}>{detail.points.toFixed(1)}</td>
                       </tr>
                     ))
                   ))}
                 </tbody>
-                <tfoot style={{ position: 'sticky', bottom: 0, background: 'var(--bg-primary)', zIndex: 1, boxShadow: '0 -1px 2px rgba(0,0,0,0.05)' }}>
+                <tfoot style={{ position: 'sticky', bottom: 0, background: '#f8fafc', zIndex: 2, boxShadow: '0 -2px 10px rgba(0,0,0,0.06)' }}>
                   <tr>
-                    <td colSpan={2} style={{ padding: '12px', fontWeight: 800, borderTop: '1px solid var(--border-light)', textAlign: 'right' }}>Tổng cộng</td>
-                    <td style={{ padding: '12px', textAlign: 'center', fontWeight: 800, borderTop: '1px solid var(--border-light)' }}>
+                    <td colSpan={2} style={{ padding: '18px 14px', fontWeight: 800, borderTop: '2px solid #cbd5e1', textAlign: 'right', fontSize: '1.05rem', color: '#0f172a' }}>TỔNG CỘNG</td>
+                    <td style={{ padding: '18px 14px', textAlign: 'center', fontWeight: 800, borderTop: '2px solid #cbd5e1', fontSize: '1.15rem', color: '#0f172a' }}>
                       {tasksBreakdown.reduce((s, t) => s + t.details.reduce((ss, d) => ss + d.links, 0), 0)}
-                      <div style={{ marginTop: '4px' }}><DeltaBadge value={stats.deltaLinks} /></div>
+                      <div style={{ marginTop: '6px' }}><DeltaBadge value={stats.deltaLinks} /></div>
                     </td>
-                    <td style={{ padding: '12px', textAlign: 'center', fontWeight: 800, color: '#6366f1', borderTop: '1px solid var(--border-light)' }}>
+                    <td style={{ padding: '18px 14px', textAlign: 'center', fontWeight: 800, color: '#4f46e5', borderTop: '2px solid #cbd5e1', fontSize: '1.15rem' }}>
                       {tasksBreakdown.reduce((s, t) => s + t.details.reduce((ss, d) => ss + d.points, 0), 0).toFixed(1)}
-                      <div style={{ marginTop: '4px' }}><DeltaBadge value={stats.deltaPoints} /></div>
+                      <div style={{ marginTop: '6px' }}><DeltaBadge value={stats.deltaPoints} /></div>
                     </td>
                   </tr>
                 </tfoot>
