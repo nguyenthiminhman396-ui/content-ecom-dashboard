@@ -497,8 +497,15 @@ export default function MonthlyQuarterlyReportPage() {
   const autoInsights = useMemo(() => {
     const lines: string[] = [];
     lines.push(`📊 ${periodLabel}: ${stats.totalLinks} link, ${stats.totalPoints.toFixed(0)} điểm từ ${stats.employeeCount} nhân viên.`);
-    if (stats.deltaLinks !== 0) lines.push(`${stats.deltaLinks > 0 ? '📈' : '📉'} Link ${stats.deltaLinks > 0 ? 'tăng' : 'giảm'} ${Math.abs(stats.deltaLinks)}% so với kỳ trước.`);
-    if (stats.deltaPoints !== 0) lines.push(`${stats.deltaPoints > 0 ? '📈' : '📉'} Điểm ${stats.deltaPoints > 0 ? 'tăng' : 'giảm'} ${Math.abs(stats.deltaPoints)}% so với kỳ trước.`);
+    
+    const dL = stats.deltaLinks;
+    const dP = stats.deltaPoints;
+    if (dL > 0 && dP > 0) lines.push(`🌟 So với kỳ trước: Vùng phủ hoạt động đang mở rộng tích cực. Cả khối lượng công việc (+${dL}%) và điểm số (+${dP}%) đều đà tăng.`);
+    else if (dL <= 0 && dP > 0) lines.push(`🌟 So với kỳ trước: Số lượng link giảm (${dL}%), nhưng điểm lại tăng (+${dP}%), team đang tập trung task khó, nhiều chất xám.`);
+    else if (dL > 0 && dP <= 0) lines.push(`🌟 So với kỳ trước: Số lượng link tăng (+${dL}%), nhưng điểm lại giảm (${dP}%), team đang làm nhiều việc dễ, trọng số thấp.`);
+    else if (dL < 0 && dP < 0) lines.push(`🌟 So với kỳ trước: Cả số lượng (${dL}%) và điểm số (${dP}%) đều sụt giảm. Cần rà soát lại nguyên nhân.`);
+    else lines.push(`🌟 So với kỳ trước: Nhịp độ hoạt động đang được duy trì ổn định ngang bằng với kỳ trước.`);
+
     if (topEmployees.length > 0) {
       lines.push(`🏆 Top 3: ${topEmployees.slice(0, 3).map(e => `${e.name} (${e.points.toFixed(0)}đ)`).join(', ')}.`);
     }
@@ -1382,6 +1389,22 @@ export default function MonthlyQuarterlyReportPage() {
                   }}
                 />
               </div>
+            </div>
+            
+            {/* Auto Insight for Radar */}
+            <div style={{ marginTop: '16px', padding: '12px 16px', background: 'var(--bg-secondary)', borderRadius: '8px', borderLeft: '3px solid #3b82f6' }}>
+              <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                <span style={{ fontWeight: 600, color: '#3b82f6', marginRight: '4px' }}>💡 Nhận xét:</span>
+                {(() => {
+                  const dL = stats.deltaLinks;
+                  const dP = stats.deltaPoints;
+                  if (dL > 0 && dP > 0) return `Vùng phủ hoạt động đang mở rộng tích cực so với kỳ trước. Cả khối lượng công việc (+${dL}%) và chất lượng điểm số (+${dP}%) đều trên đà tăng.`;
+                  if (dL <= 0 && dP > 0) return `Số lượng link giảm (${dL}%), nhưng tổng điểm lại tăng (+${dP}%), cho thấy team đang tập trung xử lý các task khó, đòi hỏi nhiều chất xám hơn thay vì chạy số lượng.`;
+                  if (dL > 0 && dP <= 0) return `Số lượng link tăng (+${dL}%), nhưng tổng điểm lại giảm (${dP}%), cho thấy team đang làm nhiều công việc dễ và có trọng số điểm thấp.`;
+                  if (dL < 0 && dP < 0) return `Vùng phủ hoạt động đang bị thu hẹp. Cả số lượng (${dL}%) và điểm số (${dP}%) đều sụt giảm so với kỳ trước. Cần rà soát lại nguyên nhân.`;
+                  return `Nhìn chung, vùng phủ hoạt động của team đang được duy trì ở mức độ ổn định so với kỳ trước.`;
+                })()}
+              </p>
             </div>
           </div>
         </div>
