@@ -1,11 +1,12 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useAppStore } from '@/shared/store/appStore';
 import {
   CalendarRange, Calendar, TrendingUp, TrendingDown, Minus,
-  FileText, PieChart, BarChart3, Users, Target,
+  FileText, PieChart, BarChart3, Target,
   ChevronLeft, ChevronRight, Sparkles, Presentation, FileDown,
   ArrowRight, Flame, Hash, Edit3, Save, AlertTriangle,
-  CheckCircle, Activity, ShieldCheck,
+  CheckCircle, Activity, ShieldCheck, MessageSquare,
   Eye, EyeOff, LayoutTemplate, ExternalLink, X
 } from 'lucide-react';
 import {
@@ -121,6 +122,7 @@ export default function MonthlyQuarterlyReportPage() {
   const [bottleneckText, setBottleneckText] = useState('Khâu duyệt nội dung y khoa của team nhà thuốc đang chậm 1-2 ngày so với dự kiến. Cần có quy trình duyệt nhanh hơn cho các dạng tin ngắn.');
   const [isEditingBottleneck, setIsEditingBottleneck] = useState(false);
   const [isEditingRec, setIsEditingRec] = useState(false);
+  const [selectedFocusProjects, setSelectedFocusProjects] = useState<string[]>([]);
 
   // Visibility toggle
   const [visibleBlocks, setVisibleBlocks] = useState({
@@ -229,43 +231,53 @@ export default function MonthlyQuarterlyReportPage() {
     const withQc = currentSubs.filter(s => s.qualityCheck != null);
     const qcScores = withQc.map(s => s.qualityCheck!.score);
     
-    // avg /10 (score is 1-5, so multiply by 2)
-    const avgScore = qcScores.length > 0 ? (qcScores.reduce((a, b) => a + b, 0) / qcScores.length) * 2 : 0;
+    const totalReviews = withQc.length;
     
-    // pass rate (score >= 4 -> >= 8/10)
-    const passCount = qcScores.filter(s => s >= 4).length;
-    const passRate = qcScores.length > 0 ? Math.round((passCount / qcScores.length) * 100) : 0;
+    // avg /10 (score is 1-5, so multiply by 2)
+    const avgScore = totalReviews > 0 ? (qcScores.reduce((a, b) => a + b, 0) / totalReviews) * 2 : 0;
 
-    // compliance and spot check errors (simulated from notes or hardcoded if missing)
-    let complianceBlocked = 0;
-    let spotCheckErrors = 0;
-    withQc.forEach(s => {
-      const note = (s.qualityCheck!.note || '').toLowerCase();
-      if (note.includes('compliance') || note.includes('cảnh báo') || note.includes('chặn')) complianceBlocked += 1;
-      if (note.includes('lỗi') || note.includes('sai')) spotCheckErrors += 1;
+    const comments = withQc.filter(s => s.qualityCheck!.note && s.qualityCheck!.note.trim().length > 0);
+    const totalComments = comments.length;
+
+    let positiveCount = 0;
+    let negativeCount = 0;
+
+    comments.forEach(s => {
+      const note = s.qualityCheck!.note!.toLowerCase();
+      // Positive words
+      if (/(tốt|ok|duyệt|hay|xuất sắc|đạt)/i.test(note)) {
+        positiveCount++;
+      }
+      // Negative words
+      else if (/(lỗi|sai|chậm|thiếu|chưa đạt|vi phạm|sửa|cảnh báo|chặn)/i.test(note)) {
+        negativeCount++;
+      }
     });
 
-    const hasQualityData = withQc.length > 0;
-    return { avgScore, passRate, complianceBlocked, spotCheckErrors, hasQualityData };
+    const pctPositive = totalComments > 0 ? Math.round((positiveCount / totalComments) * 100) : 0;
+    const pctNegative = totalComments > 0 ? Math.round((negativeCount / totalComments) * 100) : 0;
+
+    const hasQualityData = totalReviews > 0;
+    return { avgScore, totalReviews, totalComments, pctPositive, pctNegative, hasQualityData };
   }, [currentSubs]);
 
-  /* ── team tasks breakdown ── */
-  const teamTasksBreakdown = useMemo(() => {
+  /* ── tasks breakdown ── */
+  const tasksBreakdown = useMemo(() => {
     const map = new Map<string, Map<string, { links: number; points: number }>>();
     currentSubs.forEach(s => {
-      const team = s.teamGroup || 'Khác';
-      const task = s.taskType || s.taskDetail || 'Khác';
-      if (!map.has(team)) map.set(team, new Map());
-      const teamMap = map.get(team)!;
-      const prev = teamMap.get(task) || { links: 0, points: 0 };
-      teamMap.set(task, { links: prev.links + s.links.length, points: prev.points + s.totalPoints });
+      const type = s.taskType || 'Khác';
+      const detail = s.taskDetail || s.taskType || 'Khác';
+      if (!map.has(type)) map.set(type, new Map());
+      const typeMap = map.get(type)!;
+      const prev = typeMap.get(detail) || { links: 0, points: 0 };
+      typeMap.set(detail, { links: prev.links + s.links.length, points: prev.points + s.totalPoints });
     });
-    return Array.from(map.entries()).map(([team, tasks]) => ({
-      team,
-      tasks: Array.from(tasks.entries())
-        .map(([task, data]) => ({ name: task, links: data.links, points: data.points }))
+    return Array.from(map.entries()).map(([type, details]) => ({
+      type,
+      details: Array.from(details.entries())
+        .map(([name, data]) => ({ name, links: data.links, points: data.points }))
         .sort((a, b) => b.points - a.points)
-    })).sort((a, b) => a.team.localeCompare(b.team));
+    })).sort((a, b) => a.type.localeCompare(b.type));
   }, [currentSubs]);
 
   /* ── weekly trend data (using prodSubs for filtering) ── */
@@ -378,52 +390,42 @@ export default function MonthlyQuarterlyReportPage() {
     };
   }, [currentSubs, prevSubs]);
 
-  /* ── top topics focus ── */
-  const topicsFocus = useMemo(() => {
-    // Group by taskDetail (or taskType if taskDetail is empty) to find top content topics
-    const topicMap = new Map<string, { count: number; links: number; points: number; projectNames: Set<string>; projectTypes: Set<string> }>();
-    currentSubs.forEach(s => {
-      const topic = s.taskDetail || s.taskType || 'Khác';
-      const prev = topicMap.get(topic) || { count: 0, links: 0, points: 0, projectNames: new Set(), projectTypes: new Set() };
-      prev.count += 1;
-      prev.links += s.links.length;
-      prev.points += s.totalPoints;
-      if (s.projectId) {
-        const proj = projects.find(p => p.id === s.projectId);
-        if (proj) {
-          prev.projectNames.add(proj.name);
-          prev.projectTypes.add(proj.type);
-        }
-      }
-      topicMap.set(topic, prev);
-    });
-    const total = currentSubs.reduce((s, x) => s + x.links.length, 0);
-    return Array.from(topicMap.entries())
-      .map(([name, data]) => ({
-        name,
-        count: data.count,
-        links: data.links,
-        points: data.points,
-        pct: total > 0 ? Math.round((data.links / total) * 100) : 0,
-        projectNames: Array.from(data.projectNames),
-        tags: Array.from(data.projectTypes),
-      }))
-      .sort((a, b) => b.links - a.links)
-      .slice(0, 8);
-  }, [currentSubs, projects]);
+  /* ── top projects focus ── */
+  const projectsFocus = useMemo(() => {
+    const activeProjects = projects.filter(p => p.status === 'Đang chạy');
+    
+    let focusProjects = activeProjects;
+    if (selectedFocusProjects.length > 0) {
+      focusProjects = activeProjects.filter(p => selectedFocusProjects.includes(p.id));
+    }
 
-  /* ── heatmap: topic × week matrix ── */
+    const projData = focusProjects.map(p => {
+      const pSubs = currentSubs.filter(s => s.projectId === p.id);
+      return {
+        id: p.id,
+        name: p.name,
+        type: p.type,
+        links: pSubs.reduce((s, x) => s + x.links.length, 0),
+        points: pSubs.reduce((s, x) => s + x.totalPoints, 0),
+      };
+    }).sort((a, b) => b.links - a.links);
+
+    if (selectedFocusProjects.length === 0) {
+      return projData.slice(0, 5); // default to top 5
+    }
+    return projData;
+  }, [currentSubs, projects, selectedFocusProjects]);
+
+  /* ── heatmap: project × week matrix ── */
   const heatmapData = useMemo(() => {
     // Get all weeks in period
     const weekSet = new Map<string, string>(); // key -> label
-    const topicWeekMap = new Map<string, Map<string, number>>(); // topic -> (weekKey -> count)
+    const projWeekMap = new Map<string, Map<string, number>>(); // projId -> (weekKey -> count)
 
-    // Use top 6 topics from topicsFocus
-    const topTopics = topicsFocus.slice(0, 6).map(t => t.name);
+    const topProjs = projectsFocus.slice(0, 6).map(p => p.id);
 
     currentSubs.forEach(s => {
-      const topic = s.taskDetail || s.taskType || 'Khác';
-      if (!topTopics.includes(topic)) return;
+      if (!s.projectId || !topProjs.includes(s.projectId)) return;
 
       const d = new Date(s.submittedAt);
       const day = d.getDay();
@@ -434,24 +436,24 @@ export default function MonthlyQuarterlyReportPage() {
       const weekLabel = `${monday.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} — ${end.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}`;
       weekSet.set(weekKey, weekLabel);
 
-      if (!topicWeekMap.has(topic)) topicWeekMap.set(topic, new Map());
-      const wm = topicWeekMap.get(topic)!;
+      if (!projWeekMap.has(s.projectId)) projWeekMap.set(s.projectId, new Map());
+      const wm = projWeekMap.get(s.projectId)!;
       wm.set(weekKey, (wm.get(weekKey) || 0) + s.links.length);
     });
 
     const weeks = Array.from(weekSet.entries()).sort(([a], [b]) => a.localeCompare(b));
-    const maxVal = Math.max(1, ...Array.from(topicWeekMap.values()).flatMap(wm => Array.from(wm.values())));
+    const maxVal = Math.max(1, ...Array.from(projWeekMap.values()).flatMap(wm => Array.from(wm.values())));
 
     return {
-      topics: topTopics,
+      topics: topProjs.map(id => projectsFocus.find(p => p.id === id)?.name || id),
       weeks,
-      matrix: topTopics.map(topic => {
-        const wm = topicWeekMap.get(topic) || new Map();
+      matrix: topProjs.map(id => {
+        const wm = projWeekMap.get(id) || new Map();
         return weeks.map(([wk]) => wm.get(wk) || 0);
       }),
       maxVal,
     };
-  }, [currentSubs, topicsFocus]);
+  }, [currentSubs, projectsFocus]);
 
   /* ── auto insights ── */
   const autoInsights = useMemo(() => {
@@ -465,15 +467,15 @@ export default function MonthlyQuarterlyReportPage() {
     if (teamBreakdown.length > 0) {
       lines.push(`👥 Phân bổ: ${teamBreakdown.map(([t, v]) => `${t}: ${v.links} link`).join(' | ')}`);
     }
-    if (topicsFocus.length > 0) {
-      lines.push(`🔥 Chủ đề focus: ${topicsFocus.slice(0, 3).map(t => `${t.name} (${t.pct}%)`).join(', ')}`);
+    if (projectsFocus.length > 0) {
+      lines.push(`🔥 Dự án focus: ${projectsFocus.slice(0, 3).map(p => `${p.name}`).join(', ')}`);
     }
     const slowProjects = projectProgress.filter(p => p.progress < 30 && p.totalTarget > 0);
     if (slowProjects.length > 0) {
       lines.push(`⚠️ Dự án chậm tiến độ: ${slowProjects.map(p => `${p.name} (${p.progress}%)`).join(', ')}`);
     }
     return lines.join('\n');
-  }, [periodLabel, stats, topEmployees, teamBreakdown, topicsFocus, projectProgress]);
+  }, [periodLabel, stats, topEmployees, teamBreakdown, projectsFocus, projectProgress]);
 
   /* ── navigation helpers ── */
   const goNext = () => {
@@ -506,32 +508,32 @@ export default function MonthlyQuarterlyReportPage() {
     if (metricOverrides['toiUu']) ovStats.toiUu = Number(metricOverrides['toiUu']);
 
     const ovQuality = { ...qualityStats };
+    if (metricOverrides['qc_totalReviews']) ovQuality.totalReviews = Number(metricOverrides['qc_totalReviews']);
     if (metricOverrides['qc_avgScore']) ovQuality.avgScore = Number(metricOverrides['qc_avgScore']);
-    if (metricOverrides['qc_passRate']) ovQuality.passRate = Number(metricOverrides['qc_passRate']);
-    if (metricOverrides['qc_compliance']) ovQuality.complianceBlocked = Number(metricOverrides['qc_compliance']);
-    if (metricOverrides['qc_spotCheck']) ovQuality.spotCheckErrors = Number(metricOverrides['qc_spotCheck']);
+    if (metricOverrides['qc_totalComments']) ovQuality.totalComments = Number(metricOverrides['qc_totalComments']);
+    if (metricOverrides['qc_pctPositive']) ovQuality.pctPositive = Number(metricOverrides['qc_pctPositive']);
+    if (metricOverrides['qc_pctNegative']) ovQuality.pctNegative = Number(metricOverrides['qc_pctNegative']);
 
-    const ovTopics = topicsFocus.map(t => {
-      const key = `topic_links_${t.name}`;
-      if (metricOverrides[key] !== undefined) {
-        return { ...t, links: Number(metricOverrides[key]) };
-      }
-      return t;
-    });
+    const ovProjects = projectsFocus.map(p => ({
+      name: p.name, type: p.type, links: Number(metricOverrides[`topic_links_${p.name}`] || p.links)
+    }));
 
-    return { ovStats, ovQuality, ovTopics };
+    const driveLink = metricOverrides['qc_driveLink'] || '';
+
+    return { ovStats, ovQuality, ovProjects, driveLink };
   };
 
   const handleExportHTML = () => {
-    const { ovStats, ovQuality, ovTopics } = getOverriddenData();
+    const { ovStats, ovQuality, ovProjects, driveLink } = getOverriddenData();
     const html = buildPeriodicReportHtml({
       title: `Báo cáo ${periodLabel}`,
       periodLabel,
       stats: ovStats, qualityStats: ovQuality,
-      teamBreakdown, teamTasksBreakdown,
-      topEmployees, projectProgress, topicsFocus: ovTopics,
+      teamBreakdown, tasksBreakdown,
+      topEmployees, projectProgress, projectsFocus: ovProjects,
       insights: autoInsights,
       bottleneck: bottleneckText,
+      driveLink,
     });
     const blob = new Blob([html], { type: 'text/html;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -563,16 +565,17 @@ export default function MonthlyQuarterlyReportPage() {
   };
 
   const handleExportPPTX = () => {
-    const { ovStats, ovQuality, ovTopics } = getOverriddenData();
+    const { ovStats, ovQuality, ovProjects, driveLink } = getOverriddenData();
     // Build a multi-slide HTML that mimics PPTX presentation style
     const html = buildPresentationHtml({
       title: `Báo cáo ${periodLabel}`,
       periodLabel,
       stats: ovStats, qualityStats: ovQuality,
-      teamBreakdown, teamTasksBreakdown,
-      topEmployees, projectProgress, topicsFocus: ovTopics,
+      teamBreakdown, tasksBreakdown,
+      topEmployees, projectProgress, projectsFocus: ovProjects,
       insights: autoInsights,
       bottleneck: bottleneckText,
+      driveLink,
     });
     const blob = new Blob([html], { type: 'text/html;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -766,6 +769,61 @@ export default function MonthlyQuarterlyReportPage() {
               onClickDetails={() => setDrillDownData({ title: 'Chi tiết Tối ưu nội dung', subs: prodSubs.filter(s => (s.teamGroup || '').toLowerCase().includes('tối ưu')) })} />
           </div>
 
+          {/* ── NEW: Target vs Actual ── */}
+          <div className="card" style={{ padding: '20px', marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <ChartHeader icon={<Target size={14} color="#fff" />} title="Mục tiêu vs Thực tế (Target vs Actual)" color="#ec4899" />
+            
+            {/* Target Links */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.9rem', fontWeight: 600 }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Tổng Link hoàn thành</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: '#6366f1', fontWeight: 800 }}>{displayVal('totalLinks', stats.totalLinks)}</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>/</span>
+                  {isEditingMetrics ? (
+                    <input type="text" value={metricOverrides['target_links'] || ''} placeholder="Set target..."
+                      onChange={e => setOverride('target_links', e.target.value)}
+                      style={{ width: '80px', textAlign: 'right', border: '1px solid var(--border-light)', borderRadius: '4px', padding: '2px 4px', fontSize: '0.9rem' }} />
+                  ) : (
+                    <span style={{ color: 'var(--text-primary)' }}>{metricOverrides['target_links'] || '2000'}</span>
+                  )}
+                </div>
+              </div>
+              <div style={{ height: '10px', borderRadius: '999px', background: 'var(--border-light)', overflow: 'hidden' }}>
+                <div style={{ 
+                  height: '100%', 
+                  width: `${Math.min(100, (stats.totalLinks / (Number(metricOverrides['target_links']) || 2000)) * 100)}%`, 
+                  background: '#6366f1', borderRadius: '999px', transition: 'width 0.5s' 
+                }} />
+              </div>
+            </div>
+
+            {/* Target Points */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.9rem', fontWeight: 600 }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Tổng Điểm hoàn thành</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: '#f59e0b', fontWeight: 800 }}>{displayVal('totalPoints', stats.totalPoints.toFixed(0))}</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>/</span>
+                  {isEditingMetrics ? (
+                    <input type="text" value={metricOverrides['target_points'] || ''} placeholder="Set target..."
+                      onChange={e => setOverride('target_points', e.target.value)}
+                      style={{ width: '80px', textAlign: 'right', border: '1px solid var(--border-light)', borderRadius: '4px', padding: '2px 4px', fontSize: '0.9rem' }} />
+                  ) : (
+                    <span style={{ color: 'var(--text-primary)' }}>{metricOverrides['target_points'] || '5000'}</span>
+                  )}
+                </div>
+              </div>
+              <div style={{ height: '10px', borderRadius: '999px', background: 'var(--border-light)', overflow: 'hidden' }}>
+                <div style={{ 
+                  height: '100%', 
+                  width: `${Math.min(100, (stats.totalPoints / (Number(metricOverrides['target_points']) || 5000)) * 100)}%`, 
+                  background: '#f59e0b', borderRadius: '999px', transition: 'width 0.5s' 
+                }} />
+              </div>
+            </div>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '14px', marginBottom: '24px' }}>
             {/* Grouped Bar chart */}
             <div className="card" style={{ padding: '20px' }}>
@@ -863,112 +921,134 @@ export default function MonthlyQuarterlyReportPage() {
               <AlertTriangle size={12} /> Rủi ro quản trị
             </span>
           </div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: '16px' }}>Mỗi ca compliance chặn được = 1 rủi ro pháp lý/thương hiệu tránh được.</p>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', margin: 0 }}>Mỗi ca compliance chặn được = 1 rủi ro pháp lý/thương hiệu tránh được.</p>
+            {isEditingMetrics ? (
+              <input
+                type="text"
+                placeholder="Dán link quản lý (Google Drive, Docs...)"
+                value={metricOverrides['qc_driveLink'] ?? ''}
+                onChange={e => setOverride('qc_driveLink', e.target.value)}
+                style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--border-light)', fontSize: '0.85rem', width: '280px', outline: 'none' }}
+              />
+            ) : (
+              metricOverrides['qc_driveLink'] && (
+                <a href={metricOverrides['qc_driveLink']} target="_blank" rel="noreferrer" style={{ fontSize: '0.85rem', color: '#0ea5e9', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', background: '#f0f9ff', padding: '6px 12px', borderRadius: '6px' }}>
+                  <ExternalLink size={14} /> Mở file quản lý
+                </a>
+              )
+            )}
+          </div>
           
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
-            <StatCard icon={<ShieldCheck size={24} color="#0f766e" />} label="Điểm QC trung bình" 
+            <StatCard icon={<ShieldCheck size={24} color="#0f766e" />} label="Số lượt đánh giá" 
+              value={qualityStats.hasQualityData ? displayVal('qc_totalReviews', qualityStats.totalReviews) : 'N/A'} 
+              gradient="#f0fdf4" accent="#0f766e" border="#bbf7d0" subtitle="Đánh giá từ khách hàng"
+              isEditing={isEditingMetrics} onValueChange={v => setOverride('qc_totalReviews', v)} />
+            <StatCard icon={<CheckCircle size={24} color="#0f766e" />} label="Tổng điểm trung bình" 
               value={qualityStats.hasQualityData ? displayVal('qc_avgScore', qualityStats.avgScore.toFixed(1)) + '/10' : 'N/A'} 
-              gradient="#f0fdf4" accent="#0f766e" border="#bbf7d0" subtitle="Đánh giá bởi Lead/Manager"
+              gradient="#f0fdf4" accent="#0f766e" border="#bbf7d0" subtitle="Điểm số chất lượng"
               isEditing={isEditingMetrics} onValueChange={v => setOverride('qc_avgScore', v.replace('/10', ''))} />
-            <StatCard icon={<CheckCircle size={24} color="#0f766e" />} label="Pass HĐYK ngay lần 1" 
-              value={qualityStats.hasQualityData ? displayVal('qc_passRate', qualityStats.passRate) + '%' : 'N/A'} 
-              gradient="#f0fdf4" accent="#0f766e" border="#bbf7d0" subtitle="Tỷ lệ duyệt không cần sửa"
-              isEditing={isEditingMetrics} onValueChange={v => setOverride('qc_passRate', v.replace('%', ''))} />
-            <StatCard icon={<AlertTriangle size={24} color="#b91c1c" />} label="Ca compliance chặn được" 
-              value={qualityStats.hasQualityData ? displayVal('qc_compliance', qualityStats.complianceBlocked) : 'N/A'} 
-              gradient="#fef2f2" accent="#b91c1c" border="#fecaca" subtitle="Nhắc brand Rx, sai liều"
-              isEditing={isEditingMetrics} onValueChange={v => setOverride('qc_compliance', v)} />
-            <StatCard icon={<Activity size={24} color="#475569" />} label="Lỗi Spot Check (sau publish)" 
-              value={qualityStats.hasQualityData ? displayVal('qc_spotCheck', qualityStats.spotCheckErrors) : 'N/A'} 
-              gradient="#f8fafc" accent="#475569" border="#e2e8f0" subtitle="Phát hiện hậu kiểm"
-              isEditing={isEditingMetrics} onValueChange={v => setOverride('qc_spotCheck', v)} />
+            <StatCard icon={<MessageSquare size={24} color="#475569" />} label="Tổng lượt comment" 
+              value={qualityStats.hasQualityData ? displayVal('qc_totalComments', qualityStats.totalComments) : 'N/A'} 
+              gradient="#f8fafc" accent="#475569" border="#e2e8f0" subtitle="Nhận xét từ khách hàng"
+              isEditing={isEditingMetrics} onValueChange={v => setOverride('qc_totalComments', v)} />
+            <StatCard icon={<Activity size={24} color="#b91c1c" />} label="Comment Tích cực/Tiêu cực" 
+              value={qualityStats.hasQualityData ? `${displayVal('qc_pctPositive', qualityStats.pctPositive)}% / ${displayVal('qc_pctNegative', qualityStats.pctNegative)}%` : 'N/A'} 
+              gradient="#fef2f2" accent="#b91c1c" border="#fecaca" subtitle="Đánh giá tự động qua từ khoá"
+              isEditing={isEditingMetrics} onValueChange={v => {
+                const parts = v.replace(/%/g, '').split('/');
+                setOverride('qc_pctPositive', parts[0]?.trim() || '');
+                setOverride('qc_pctNegative', parts[1]?.trim() || '');
+              }} />
           </div>
         </div>
       )}
 
-      {/* ── Block 4: Team Tasks Breakdown ── */}
-      {visibleBlocks.teamTasks && teamTasksBreakdown.length > 0 && (
-        <div className="card" style={{ padding: '20px', marginBottom: '20px', overflowX: 'auto' }}>
-          <ChartHeader icon={<LayoutTemplate size={14} color="#fff" />} title="Bảng chi tiết đầu việc theo Team" color="#14b8a6" />
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '500px' }}>
-            <thead>
-              <tr>
-                <th style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', color: 'var(--text-tertiary)', fontWeight: 600, fontSize: '0.82rem' }}>Team</th>
-                <th style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', color: 'var(--text-tertiary)', fontWeight: 600, fontSize: '0.82rem' }}>Đầu việc / Task</th>
-                <th style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', color: 'var(--text-tertiary)', fontWeight: 600, fontSize: '0.82rem', textAlign: 'center' }}>Số lượng</th>
-                <th style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', color: 'var(--text-tertiary)', fontWeight: 600, fontSize: '0.82rem', textAlign: 'center' }}>Tổng điểm</th>
-              </tr>
-            </thead>
-            <tbody>
-              {teamTasksBreakdown.map((t) => (
-                t.tasks.map((task, idx) => (
-                  <tr key={`${t.team}-${task.name}`}>
-                    {idx === 0 && (
-                      <td rowSpan={t.tasks.length} style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', fontWeight: 700, verticalAlign: 'top', borderRight: '1px solid var(--border-light)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: TEAM_COLORS[t.team] || '#64748b' }}></span>
-                          {t.team}
-                        </div>
-                      </td>
-                    )}
-                    <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', fontSize: '0.88rem' }}>{task.name}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', fontSize: '0.88rem', fontWeight: 600, textAlign: 'center' }}>{task.links}</td>
-                    <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', fontSize: '0.88rem', fontWeight: 600, textAlign: 'center', color: '#6366f1' }}>{task.points.toFixed(1)}</td>
+      {/* ── Block 4: Tasks Breakdown ── */}
+      {visibleBlocks.teamTasks && tasksBreakdown.length > 0 && (
+        <div className="card" style={{ padding: '20px', marginBottom: '20px' }}>
+          <ChartHeader icon={<LayoutTemplate size={14} color="#fff" />} title="Bảng chi tiết đầu việc" color="#14b8a6" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', alignItems: 'flex-start' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '400px' }}>
+                <thead>
+                  <tr>
+                    <th style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', color: 'var(--text-tertiary)', fontWeight: 600, fontSize: '0.82rem' }}>Đầu việc</th>
+                    <th style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', color: 'var(--text-tertiary)', fontWeight: 600, fontSize: '0.82rem' }}>Chi tiết đầu việc</th>
+                    <th style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', color: 'var(--text-tertiary)', fontWeight: 600, fontSize: '0.82rem', textAlign: 'center' }}>Số lượng</th>
+                    <th style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', color: 'var(--text-tertiary)', fontWeight: 600, fontSize: '0.82rem', textAlign: 'center' }}>Tổng điểm</th>
                   </tr>
-                ))
-              ))}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {tasksBreakdown.map((t, typeIdx) => (
+                    t.details.map((detail, idx) => (
+                      <tr key={`${t.type}-${detail.name}`}>
+                        {idx === 0 && (
+                          <td rowSpan={t.details.length} style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', fontWeight: 700, verticalAlign: 'top', borderRight: '1px solid var(--border-light)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: CHART_PALETTE[typeIdx % CHART_PALETTE.length] }}></span>
+                              {t.type}
+                            </div>
+                          </td>
+                        )}
+                        <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', fontSize: '0.88rem' }}>{detail.name}</td>
+                        <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', fontSize: '0.88rem', fontWeight: 600, textAlign: 'center' }}>{detail.links}</td>
+                        <td style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', fontSize: '0.88rem', fontWeight: 600, textAlign: 'center', color: '#6366f1' }}>{detail.points.toFixed(1)}</td>
+                      </tr>
+                    ))
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            
+            {/* Pie chart for work volume (links) */}
+            <div style={{ padding: '10px', background: 'var(--bg-secondary)', borderRadius: '12px' }}>
+              <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '16px', textAlign: 'center' }}>Khối lượng công việc theo Đầu việc (Link)</h4>
+              <div style={{ height: '240px', display: 'flex', justifyContent: 'center' }}>
+                <Doughnut
+                  data={{
+                    labels: (() => {
+                      const allTasks = tasksBreakdown.flatMap(t => t.details).sort((a, b) => b.links - a.links);
+                      const topTasks = allTasks.slice(0, 8);
+                      const otherLinks = allTasks.slice(8).reduce((s, x) => s + x.links, 0);
+                      return [...topTasks.map(t => t.name.length > 20 ? t.name.slice(0, 18) + '...' : t.name), ...(otherLinks > 0 ? ['Khác'] : [])];
+                    })(),
+                    datasets: [{
+                      data: (() => {
+                        const allTasks = tasksBreakdown.flatMap(t => t.details).sort((a, b) => b.links - a.links);
+                        const topTasks = allTasks.slice(0, 8);
+                        const otherLinks = allTasks.slice(8).reduce((s, x) => s + x.links, 0);
+                        return [...topTasks.map(t => t.links), ...(otherLinks > 0 ? [otherLinks] : [])];
+                      })(),
+                      backgroundColor: (() => {
+                        const allTasks = tasksBreakdown.flatMap(t => t.details).sort((a, b) => b.links - a.links);
+                        const topTasks = allTasks.slice(0, 8);
+                        const otherLinks = allTasks.slice(8).reduce((s, x) => s + x.links, 0);
+                        return [...topTasks.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]), ...(otherLinks > 0 ? ['#94a3b8'] : [])];
+                      })(),
+                      borderWidth: 2,
+                    }]
+                  }}
+                  options={{
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                      legend: { position: 'bottom', labels: { usePointStyle: true, font: { size: 11 } } },
+                      tooltip: { backgroundColor: 'rgba(15,23,42,.92)', padding: 12, cornerRadius: 8 }
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
       {/* ── Block 5: Team & Project ── */}
       {visibleBlocks.teamAndProject && (
         <>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: '24px 0 16px 0' }}>Dự án & Phân bổ theo người</h3>
+          <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: '24px 0 16px 0' }}>Dự án</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '14px', marginBottom: '14px' }}>
-            <div className="card" style={{ padding: '20px' }}>
-              <ChartHeader icon={<Users size={14} color="#fff" />} title="Phân bổ năng suất & chất lượng" color="#ec4899" />
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginBottom: '12px' }}>Chữ viền là điểm QC trung bình (/10).</p>
-              {topEmployees.length > 0 ? (
-                <div style={{ height: `${Math.max(200, topEmployees.length * 36 + 40)}px` }}>
-                  <Bar
-                    data={{
-                      labels: topEmployees.map(e => e.name.length > 18 ? e.name.slice(0, 16) + '...' : e.name),
-                      datasets: [{
-                        label: 'Output (Điểm)',
-                        data: topEmployees.map(e => e.points),
-                        backgroundColor: topEmployees.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length] + '99'),
-                        borderColor: topEmployees.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
-                        borderWidth: 1.5,
-                        borderRadius: 6,
-                      }],
-                    }}
-                    options={{
-                      responsive: true, maintainAspectRatio: false,
-                      indexAxis: 'y' as const,
-                      plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                          backgroundColor: 'rgba(15,23,42,.92)', padding: 10, cornerRadius: 8,
-                          callbacks: {
-                            label: (ctx) => {
-                              const emp = topEmployees[ctx.dataIndex];
-                              return emp ? `${emp.points.toFixed(1)}đ · ${emp.links} link · QC: ${emp.qcAvg.toFixed(1)}/10` : '';
-                            },
-                          },
-                        },
-                      },
-                      scales: {
-                        x: { grid: { color: chartGridColor }, ticks: { color: chartTextColor, font: { size: 10 } } },
-                        y: { grid: { display: false }, ticks: { color: chartTextColor, font: { size: 11, weight: 'bold' } } },
-                      },
-                    }}
-                  />
-                </div>
-              ) : <EmptyChart />}
-            </div>
-
             <div className="card" style={{ padding: '20px' }}>
               <ChartHeader icon={<Target size={14} color="#fff" />} title="Tiến độ dự án" color="#10b981" />
               {projectProgress.length > 0 ? (
@@ -1020,61 +1100,69 @@ export default function MonthlyQuarterlyReportPage() {
                 </div>
               ) : <EmptyChart />}
             </div>
-          </div>
-        </>
-      )}
 
-      {/* ── Block: Top chủ đề đang focus ── */}
-      {visibleBlocks.topics && (
-        <div className="card" style={{ padding: '20px', marginBottom: '14px' }}>
-          <ChartHeader icon={<Flame size={14} color="#fff" />} title="Top chủ đề đang focus" color="#D85A30" />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {topicsFocus.map((topic, i) => (
-              <div key={topic.name}
-                onClick={!isEditingMetrics ? () => setDrillDownData({ title: `Chi tiết chủ đề: ${topic.name}`, subs: currentSubs.filter(s => s.taskDetail === topic.name || s.taskType === topic.name) }) : undefined}
-                style={{
-                  padding: '12px 16px', borderRadius: 'var(--radius-md)',
-                  background: 'var(--bg-secondary)', borderLeft: `4px solid ${CHART_PALETTE[i % CHART_PALETTE.length]}`,
-                  cursor: !isEditingMetrics ? 'pointer' : 'default', transition: 'all 0.2s',
-                }}
-                onMouseEnter={e => { if (!isEditingMetrics) e.currentTarget.style.transform = 'translateY(-2px)' }}
-                onMouseLeave={e => { if (!isEditingMetrics) e.currentTarget.style.transform = 'translateY(0)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                  <span style={{ fontWeight: 700, fontSize: '0.9rem', flex: 1, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {topic.name}
-                    {!isEditingMetrics && <ExternalLink size={14} style={{ opacity: 0.4 }} />}
-                  </span>
-                  <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    {isEditingMetrics ? (
-                      <input type="text" value={displayVal(`topic_links_${topic.name}`, topic.links)} 
-                        onChange={e => setOverride(`topic_links_${topic.name}`, e.target.value)} 
-                        onClick={e => e.stopPropagation()}
-                        style={{ width: '50px', textAlign: 'right', fontWeight: 800, color: CHART_PALETTE[i % CHART_PALETTE.length], border: `1px solid ${CHART_PALETTE[i % CHART_PALETTE.length]}`, borderRadius: '4px', padding: '0 4px', fontSize: '0.95rem' }} />
-                    ) : (
-                      <span style={{ fontWeight: 800, fontSize: '0.95rem', color: CHART_PALETTE[i % CHART_PALETTE.length] }}>
-                        {displayVal(`topic_links_${topic.name}`, topic.links)}
-                      </span>
-                    )}
-                    <span style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', fontWeight: 600 }}>link</span>
-                  </div>
-                </div>
-                <div style={{ height: '8px', borderRadius: '999px', background: 'var(--border-light)', overflow: 'hidden' }}>
-                  <div style={{
-                    height: '100%', width: `${topic.pct}%`, borderRadius: '999px',
-                    background: `linear-gradient(90deg, ${CHART_PALETTE[i % CHART_PALETTE.length]}cc, ${CHART_PALETTE[i % CHART_PALETTE.length]})`,
-                    transition: 'width .5s ease',
-                  }} />
-                </div>
-                {/* Row 3: project names */}
-                {topic.projectNames.length > 0 && (
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: '6px' }}>
-                    📦 Dự án: {topic.projectNames.join(', ')}
+            {visibleBlocks.topics && (
+              <div className="card" style={{ padding: '20px' }}>
+                <ChartHeader icon={<Flame size={14} color="#fff" />} title="Top dự án focus trong tháng" color="#D85A30" />
+                
+                {isEditingMetrics && (
+                  <div style={{ marginBottom: '16px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '8px', color: 'var(--text-secondary)' }}>Chọn dự án xuất hiện:</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxHeight: '150px', overflowY: 'auto' }}>
+                      {projects.filter(p => p.status === 'Đang chạy').map(p => (
+                        <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem', cursor: 'pointer' }}>
+                          <input type="checkbox" 
+                            checked={selectedFocusProjects.includes(p.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedFocusProjects([...selectedFocusProjects, p.id]);
+                              else setSelectedFocusProjects(selectedFocusProjects.filter(id => id !== p.id));
+                            }}
+                          />
+                          {p.name}
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {projectsFocus.map((proj, i) => (
+                    <div key={proj.id}
+                      style={{
+                        padding: '12px 16px', borderRadius: 'var(--radius-md)',
+                        background: 'var(--bg-secondary)', borderLeft: `4px solid ${CHART_PALETTE[i % CHART_PALETTE.length]}`,
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={e => { if (!isEditingMetrics) e.currentTarget.style.transform = 'translateY(-2px)' }}
+                      onMouseLeave={e => { if (!isEditingMetrics) e.currentTarget.style.transform = 'translateY(0)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                        <span style={{ fontWeight: 700, fontSize: '0.9rem', flex: 1, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Link to={`/projects/${proj.id}`} style={{ color: 'inherit', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            {proj.name}
+                            {!isEditingMetrics && <ExternalLink size={14} style={{ opacity: 0.4 }} />}
+                          </Link>
+                        </span>
+                        <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span style={{ fontWeight: 800, fontSize: '0.95rem', color: CHART_PALETTE[i % CHART_PALETTE.length] }}>
+                            {proj.links}
+                          </span>
+                          <span style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', fontWeight: 600 }}>link</span>
+                        </div>
+                      </div>
+                      <div style={{ height: '8px', borderRadius: '999px', background: 'var(--border-light)', overflow: 'hidden' }}>
+                        <div style={{
+                          height: '100%', width: `${Math.min(100, proj.links / (Math.max(...projectsFocus.map(p => p.links), 1)) * 100)}%`, borderRadius: '999px',
+                          background: `linear-gradient(90deg, ${CHART_PALETTE[i % CHART_PALETTE.length]}cc, ${CHART_PALETTE[i % CHART_PALETTE.length]})`,
+                          transition: 'width .5s ease',
+                        }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
+            )}
           </div>
-        </div>
+        </>
       )}
 
       {/* ── NEW: Heat Chart — chủ đề × tuần ── */}
@@ -1382,17 +1470,21 @@ function EmptyChart() {
 
 /* ═════════════════════════════════ HTML Exports ═════════════════ */
 
-function buildPeriodicReportHtml(data: {
+interface ReportHtmlData {
   title: string; periodLabel: string;
   stats: any; qualityStats: any;
   teamBreakdown: [string, { links: number; points: number }][];
-  teamTasksBreakdown: { team: string; tasks: { name: string; links: number; points: number }[] }[];
+  tasksBreakdown: { type: string; details: { name: string; links: number; points: number }[] }[];
   topEmployees: { name: string; links: number; points: number; qcAvg: number }[];
   projectProgress: { name: string; progress: number; periodLinks: number }[];
-  topicsFocus: { name: string; tags: string[]; links: number; pct: number; projectNames: string[] }[];
+  projectsFocus: { name: string; type: string; links: number }[];
   insights: string;
   bottleneck: string;
-}): string {
+  driveLink?: string;
+  qc_driveLink?: string;
+}
+
+function buildPeriodicReportHtml(data: ReportHtmlData): string {
   const deltaIcon = (v: number) => v > 0 ? `<span style="color:#16a34a;font-weight:700">▲ +${v}%</span>` : v < 0 ? `<span style="color:#dc2626;font-weight:700">▼ ${v}%</span>` : `<span style="color:#64748b">— 0%</span>`;
 
   const statCard = (icon: string, label: string, value: string | number, delta?: number, color = '#6366f1') =>
@@ -1440,21 +1532,20 @@ function buildPeriodicReportHtml(data: {
     </div>`
   ).join('');
 
-  const teamTaskRows = data.teamTasksBreakdown.flatMap(t => 
-    t.tasks.map((task, idx) => `<tr>
-      ${idx === 0 ? `<td rowspan="${t.tasks.length}" style="padding:10px;border-bottom:1px solid #f1f5f9;border-right:1px solid #f1f5f9;font-weight:700;vertical-align:top"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${TEAM_COLORS[t.team] || '#64748b'};margin-right:8px"></span>${t.team}</td>` : ''}
-      <td style="padding:10px;border-bottom:1px solid #f1f5f9">${task.name}</td>
-      <td style="padding:10px;text-align:center;border-bottom:1px solid #f1f5f9;font-weight:700">${task.links}</td>
-      <td style="padding:10px;text-align:center;border-bottom:1px solid #f1f5f9;font-weight:700;color:#6366f1">${task.points.toFixed(1)}</td>
+  const taskRows = data.tasksBreakdown.flatMap((t, typeIdx) => 
+    t.details.map((detail, idx) => `<tr>
+      ${idx === 0 ? `<td rowspan="${t.details.length}" style="padding:10px;border-bottom:1px solid #f1f5f9;border-right:1px solid #f1f5f9;font-weight:700;vertical-align:top"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${CHART_PALETTE[typeIdx % CHART_PALETTE.length]};margin-right:8px"></span>${t.type}</td>` : ''}
+      <td style="padding:10px;border-bottom:1px solid #f1f5f9">${detail.name}</td>
+      <td style="padding:10px;text-align:center;border-bottom:1px solid #f1f5f9;font-weight:700">${detail.links}</td>
+      <td style="padding:10px;text-align:center;border-bottom:1px solid #f1f5f9;font-weight:700;color:#6366f1">${detail.points.toFixed(1)}</td>
     </tr>`)
   ).join('');
 
-  const topicsRows = data.topicsFocus.map(t => 
+  const projFocusRows = data.projectsFocus.map(p => 
     `<tr>
-      <td style="padding:10px;border-bottom:1px solid #f1f5f9;font-weight:600">${t.name}</td>
-      <td style="padding:10px;border-bottom:1px solid #f1f5f9;color:#64748b;font-size:0.8rem">${t.tags.join(', ')}</td>
-      <td style="padding:10px;text-align:center;border-bottom:1px solid #f1f5f9;font-weight:700">${t.links}</td>
-      <td style="padding:10px;text-align:center;border-bottom:1px solid #f1f5f9;font-weight:700;color:#6366f1">${t.pct}%</td>
+      <td style="padding:10px;border-bottom:1px solid #f1f5f9;font-weight:600">${p.name}</td>
+      <td style="padding:10px;border-bottom:1px solid #f1f5f9;font-size:0.8rem;color:#64748b">${p.type}</td>
+      <td style="padding:10px;text-align:center;border-bottom:1px solid #f1f5f9;font-weight:700">${p.links}</td>
     </tr>`
   ).join('');
 
@@ -1496,16 +1587,29 @@ function buildPeriodicReportHtml(data: {
   <tbody>${empRows}</tbody>
 </table>
 
-<h2>📋 Chi tiết đầu việc Team</h2>
+<h2>🛡️ Đánh giá Chất lượng & Compliance</h2>
+${data.driveLink ? `<div style="margin-bottom:16px"><a href="${data.driveLink}" target="_blank" style="color:#0ea5e9;font-weight:600;text-decoration:none">🔗 Xem file Quản lý Chi tiết (Google Drive/Excel)</a></div>` : ''}
+${data.qc_driveLink ? `<div style="margin-bottom:16px"><a href="${data.qc_driveLink}" target="_blank" style="color:#0ea5e9;font-weight:600;text-decoration:none">🔗 Xem file QC Chi tiết</a></div>` : ''}
 <table style="margin-bottom:28px">
-  <thead><tr><th>Team</th><th>Đầu việc</th><th style="text-align:center;width:80px">Link</th><th style="text-align:center;width:80px">Điểm</th></tr></thead>
-  <tbody>${teamTaskRows || '<tr><td colspan="4" style="text-align:center;color:#94a3b8">Không có dữ liệu</td></tr>'}</tbody>
+  <thead><tr><th>Chỉ số</th><th style="text-align:center;width:150px">Kết quả</th></tr></thead>
+  <tbody>
+    <tr><td style="padding:10px;border-bottom:1px solid #f1f5f9;font-weight:600">Số lượt đánh giá</td><td style="padding:10px;text-align:center;border-bottom:1px solid #f1f5f9;font-weight:700">${data.qualityStats.totalReviews}</td></tr>
+    <tr><td style="padding:10px;border-bottom:1px solid #f1f5f9;font-weight:600">Tổng điểm trung bình</td><td style="padding:10px;text-align:center;border-bottom:1px solid #f1f5f9;font-weight:700">${data.qualityStats.avgScore.toFixed(1)}/10</td></tr>
+    <tr><td style="padding:10px;border-bottom:1px solid #f1f5f9;font-weight:600">Tổng lượt comment</td><td style="padding:10px;text-align:center;border-bottom:1px solid #f1f5f9;font-weight:700">${data.qualityStats.totalComments}</td></tr>
+    <tr><td style="padding:10px;border-bottom:1px solid #f1f5f9;font-weight:600">% Tích cực / Tiêu cực</td><td style="padding:10px;text-align:center;border-bottom:1px solid #f1f5f9;font-weight:700">${data.qualityStats.pctPositive}% / ${data.qualityStats.pctNegative}%</td></tr>
+  </tbody>
 </table>
 
-<h2>🔥 Top chủ đề đang focus</h2>
+<h2>📋 Chi tiết đầu việc</h2>
 <table style="margin-bottom:28px">
-  <thead><tr><th>Chủ đề</th><th>Tag</th><th style="text-align:center;width:80px">Link</th><th style="text-align:center;width:80px">Tỷ trọng</th></tr></thead>
-  <tbody>${topicsRows || '<tr><td colspan="4" style="text-align:center;color:#94a3b8">Không có dữ liệu</td></tr>'}</tbody>
+  <thead><tr><th>Đầu việc</th><th>Chi tiết đầu việc</th><th style="text-align:center;width:80px">Link</th><th style="text-align:center;width:80px">Điểm</th></tr></thead>
+  <tbody>${taskRows || '<tr><td colspan="4" style="text-align:center;color:#94a3b8">Không có dữ liệu</td></tr>'}</tbody>
+</table>
+
+<h2>🔥 Top dự án focus trong tháng</h2>
+<table style="margin-bottom:28px">
+  <thead><tr><th>Dự án</th><th>Type</th><th style="text-align:center;width:80px">Link</th></tr></thead>
+  <tbody>${projFocusRows || '<tr><td colspan="3" style="text-align:center;color:#94a3b8">Không có dữ liệu</td></tr>'}</tbody>
 </table>
 
 <h2>📦 Tiến độ dự án</h2>
@@ -1525,17 +1629,7 @@ ${data.insights}
 
 /* ── Presentation-style HTML (landscape slides) ── */
 
-function buildPresentationHtml(data: {
-  title: string; periodLabel: string;
-  stats: any; qualityStats: any;
-  teamBreakdown: [string, { links: number; points: number }][];
-  teamTasksBreakdown: { team: string; tasks: { name: string; links: number; points: number }[] }[];
-  topEmployees: { name: string; links: number; points: number; qcAvg: number }[];
-  projectProgress: { name: string; progress: number; periodLinks: number }[];
-  topicsFocus: { name: string; tags: string[]; links: number; pct: number; projectNames: string[] }[];
-  insights: string;
-  bottleneck: string;
-}): string {
+function buildPresentationHtml(data: ReportHtmlData): string {
   const deltaBadge = (v: number) => v > 0 ? `<span style="color:#16a34a;font-size:0.9rem">▲ +${v}%</span>` : v < 0 ? `<span style="color:#dc2626;font-size:0.9rem">▼ ${v}%</span>` : '';
 
   const slide = (content: string, bg = '#fff') =>
@@ -1621,8 +1715,15 @@ function buildPresentationHtml(data: {
   ).join('');
 
   const s4 = slide(`
-    <h2 style="font-size:1.8rem;font-weight:800;margin-bottom:40px;color:#0f172a">🏆 Top nhân viên & Chất lượng</h2>
+    <h2 style="font-size:1.8rem;font-weight:800;margin-bottom:40px;color:#0f172a">🏆 Top nhân viên</h2>
     ${empRows}
+    <h2 style="font-size:1.8rem;font-weight:800;margin-bottom:20px;margin-top:40px;color:#0f172a">🛡️ Chất lượng & Compliance</h2>
+    <div style="display:flex;gap:20px">
+      <div style="flex:1;background:#f8fafc;padding:20px;border-radius:12px;text-align:center;border:1px solid #e2e8f0"><div style="font-size:1.2rem;color:#64748b">Số lượt đánh giá</div><div style="font-size:1.8rem;font-weight:800;color:#0f766e">${data.qualityStats.totalReviews}</div></div>
+      <div style="flex:1;background:#f8fafc;padding:20px;border-radius:12px;text-align:center;border:1px solid #e2e8f0"><div style="font-size:1.2rem;color:#64748b">Điểm trung bình</div><div style="font-size:1.8rem;font-weight:800;color:#0f766e">${data.qualityStats.avgScore.toFixed(1)}/10</div></div>
+      <div style="flex:1;background:#f8fafc;padding:20px;border-radius:12px;text-align:center;border:1px solid #e2e8f0"><div style="font-size:1.2rem;color:#64748b">Tổng comment</div><div style="font-size:1.8rem;font-weight:800;color:#475569">${data.qualityStats.totalComments}</div></div>
+      <div style="flex:1;background:#f8fafc;padding:20px;border-radius:12px;text-align:center;border:1px solid #e2e8f0"><div style="font-size:1.2rem;color:#64748b">Tích cực / Tiêu cực</div><div style="font-size:1.8rem;font-weight:800;color:#b91c1c">${data.qualityStats.pctPositive}% / ${data.qualityStats.pctNegative}%</div></div>
+    </div>
   `);
 
   // Slide 5: Project progress
@@ -1639,35 +1740,34 @@ function buildPresentationHtml(data: {
     ${projRows || '<p style="color:#94a3b8;font-size:1.1rem">Không có dự án đang chạy</p>'}
   `);
 
-  // Slide 5.1: Team Tasks
-  const teamTaskRows = data.teamTasksBreakdown.flatMap(t => 
-    t.tasks.map((task, idx) => `<div style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #f1f5f9">
-      <span style="font-weight:700;min-width:180px;font-size:1.1rem;color:${idx === 0 ? (TEAM_COLORS[t.team] || '#64748b') : 'transparent'}">${idx === 0 ? t.team : ''}</span>
-      <span style="flex:1;font-size:1.05rem;color:#475569">${task.name}</span>
-      <span style="font-weight:600;min-width:100px;text-align:right">${task.links} link</span>
-      <span style="font-weight:800;color:#6366f1;font-size:1.1rem;min-width:100px;text-align:right">${task.points.toFixed(1)}đ</span>
+  // Slide 5.1: Tasks Breakdown
+  const taskRows = data.tasksBreakdown.flatMap((t, typeIdx) => 
+    t.details.map((detail, idx) => `<div style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #f1f5f9">
+      <span style="font-weight:700;min-width:180px;font-size:1.1rem;color:${idx === 0 ? CHART_PALETTE[typeIdx % CHART_PALETTE.length] : 'transparent'}">${idx === 0 ? t.type : ''}</span>
+      <span style="flex:1;font-size:1.05rem;color:#475569">${detail.name}</span>
+      <span style="font-weight:600;min-width:100px;text-align:right">${detail.links} link</span>
+      <span style="font-weight:800;color:#6366f1;font-size:1.1rem;min-width:100px;text-align:right">${detail.points.toFixed(1)}đ</span>
     </div>`)
   ).join('');
 
   const s5_1 = slide(`
-    <h2 style="font-size:1.8rem;font-weight:800;margin-bottom:40px;color:#0f172a">📋 Chi tiết đầu việc Team</h2>
-    ${teamTaskRows || '<p style="color:#94a3b8;font-size:1.1rem">Không có dữ liệu</p>'}
+    <h2 style="font-size:1.8rem;font-weight:800;margin-bottom:40px;color:#0f172a">📋 Chi tiết đầu việc</h2>
+    ${taskRows || '<p style="color:#94a3b8;font-size:1.1rem">Không có dữ liệu</p>'}
   `);
 
-  // Slide 5.2: Topics Focus
-  const topicsRows = data.topicsFocus.slice(0, 8).map((t, i) => 
+  // Slide 5.2: Projects Focus
+  const projFocusRows = data.projectsFocus.slice(0, 8).map((p, i) => 
     `<div style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #f1f5f9">
       <span style="width:14px;height:14px;border-radius:50%;background:${CHART_PALETTE[i % CHART_PALETTE.length]}"></span>
-      <span style="font-weight:700;flex:1;font-size:1.1rem">${t.name}</span>
-      <span style="font-size:0.9rem;color:#64748b;min-width:140px">${t.tags.join(', ')}</span>
-      <span style="font-weight:600;min-width:100px;text-align:right">${t.links} link</span>
-      <span style="font-weight:800;color:${CHART_PALETTE[i % CHART_PALETTE.length]};font-size:1.1rem;min-width:80px;text-align:right">${t.pct}%</span>
+      <span style="font-weight:700;flex:1;font-size:1.1rem">${p.name}</span>
+      <span style="font-size:0.9rem;color:#64748b;min-width:140px">${p.type}</span>
+      <span style="font-weight:600;min-width:100px;text-align:right">${p.links} link</span>
     </div>`
   ).join('');
 
   const s5_2 = slide(`
-    <h2 style="font-size:1.8rem;font-weight:800;margin-bottom:40px;color:#0f172a">🔥 Top chủ đề đang focus</h2>
-    ${topicsRows || '<p style="color:#94a3b8;font-size:1.1rem">Không có dữ liệu</p>'}
+    <h2 style="font-size:1.8rem;font-weight:800;margin-bottom:40px;color:#0f172a">🔥 Top dự án focus trong tháng</h2>
+    ${projFocusRows || '<p style="color:#94a3b8;font-size:1.1rem">Không có dữ liệu</p>'}
   `);
 
   // Slide 6: Insights & Bottleneck
