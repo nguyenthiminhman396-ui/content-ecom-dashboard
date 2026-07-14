@@ -11,6 +11,7 @@ const pageTitles: Record<string, string> = {
   '/projects': 'Quản lý Dự án',
   '/contents': 'Sản phẩm dự án',
   '/reports': 'Báo cáo',
+  '/reports/periodic': 'Báo cáo tháng/quý',
   '/members': 'Thành viên',
   '/settings': 'Cài đặt',
 };

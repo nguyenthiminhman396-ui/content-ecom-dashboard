@@ -6,6 +6,7 @@ import ProjectDetailPage from '@/features/projects/ProjectDetailPage';
 import ContentsPage from '@/features/projects/ContentsPage';
 import DailyWorkPage from '@/features/daily-work/DailyWorkPage';
 import ReportsPage from '@/features/reports/ReportsPage';
+import MonthlyQuarterlyReportPage from '@/features/reports/MonthlyQuarterlyReportPage';
 import MembersPage from '@/features/members/MembersPage';
 import SettingsPage from '@/features/settings/SettingsPage';
 import PointConfigPage from '@/features/settings/PointConfigPage';
@@ -36,6 +37,7 @@ export default function AppRouter() {
         <Route path="/contents"       element={<ContentsPage />} />
         <Route path="/performance"    element={<PerformancePage />} />
         <Route path="/reports"        element={<ReportsPage />} />
+        <Route path="/reports/periodic" element={<MonthlyQuarterlyReportPage />} />
         <Route path="/members"        element={<MembersPage />} />
         <Route path="/point-config"   element={<PointConfigPage />} />
         <Route path="/settings"       element={<SettingsPage />} />
