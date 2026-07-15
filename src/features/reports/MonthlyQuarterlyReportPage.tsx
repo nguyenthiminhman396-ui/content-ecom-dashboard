@@ -812,19 +812,19 @@ export default function MonthlyQuarterlyReportPage() {
             <StatCard icon="📝" label="Bài mới" value={displayVal('baiMoi', stats.baiMoi)} subtitle={`NT: ${stats.baiMoi_NT} · TC: ${stats.baiMoi_TC}`}
               gradient="var(--bg-primary)" accent="#3b82f6" border="var(--border-light)"
               isEditing={isEditingMetrics} onValueChange={(v) => setOverride('baiMoi', v)}
-              onClickDetails={() => setDrillDownData({ title: 'Chi tiết Bài mới', subs: prodSubs.filter(s => s.teamGroup.includes('Bài viết')) })} />
+              onClickDetails={() => setDrillDownData({ title: 'Chi tiết Bài mới', subs: prodSubs.filter(s => categorizeSubmission(s) === 'baiMoi') })} />
             <StatCard icon="📦" label="Sản phẩm (SKU)" value={displayVal('sku', stats.sku)} subtitle={`NT: ${stats.sku_NT} · TC: ${stats.sku_TC}`}
               gradient="var(--bg-primary)" accent="#8b5cf6" border="var(--border-light)"
               isEditing={isEditingMetrics} onValueChange={(v) => setOverride('sku', v)}
-              onClickDetails={() => setDrillDownData({ title: 'Chi tiết Sản phẩm (SKU)', subs: prodSubs.filter(s => s.teamGroup.includes('Sản phẩm')) })} />
+              onClickDetails={() => setDrillDownData({ title: 'Chi tiết Sản phẩm (SKU)', subs: prodSubs.filter(s => categorizeSubmission(s) === 'sku') })} />
             <StatCard icon="🎨" label="Multimedia" value={displayVal('multimedia', stats.multimedia)} subtitle={`NT: ${stats.mm_NT} · TC: ${stats.mm_TC}`}
               gradient="var(--bg-primary)" accent="#f59e0b" border="var(--border-light)"
               isEditing={isEditingMetrics} onValueChange={(v) => setOverride('multimedia', v)}
-              onClickDetails={() => setDrillDownData({ title: 'Chi tiết Multimedia', subs: prodSubs.filter(s => s.teamGroup.includes('Multimedia')) })} />
-            <StatCard icon="🔧" label="Tối ưu nội dung" value={displayVal('toiUu', stats.toiUu)} subtitle={`SP: ${stats.toiUu_SP} · BV: ${stats.toiUu_BV}`}
+              onClickDetails={() => setDrillDownData({ title: 'Chi tiết Multimedia', subs: prodSubs.filter(s => categorizeSubmission(s) === 'multimedia') })} />
+            <StatCard icon="🔧" label="Tối ưu SP - Bài viết" value={displayVal('toiUu', stats.toiUu)} subtitle={`SP: ${stats.toiUu_SP} · BV: ${stats.toiUu_BV}`}
               gradient="var(--bg-primary)" accent="#10b981" border="var(--border-light)"
               isEditing={isEditingMetrics} onValueChange={(v) => setOverride('toiUu', v)}
-              onClickDetails={() => setDrillDownData({ title: 'Chi tiết Tối ưu nội dung', subs: prodSubs.filter(s => (s.teamGroup || '').toLowerCase().includes('tối ưu')) })} />
+              onClickDetails={() => setDrillDownData({ title: 'Chi tiết Tối ưu Sản phẩm - Bài viết', subs: prodSubs.filter(s => categorizeSubmission(s) === 'toiUu') })} />
           </div>
 
           {/* ── NEW: Target vs Actual ── */}
