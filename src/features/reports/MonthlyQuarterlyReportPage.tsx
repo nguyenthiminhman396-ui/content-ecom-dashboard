@@ -1,14 +1,13 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+
 import { useAppStore } from '@/shared/store/appStore';
 import {
   CalendarRange, Calendar, TrendingUp, TrendingDown, Minus,
   FileText, BarChart3, Target,
-  ChevronLeft, ChevronRight, Sparkles, Presentation, FileDown,
-  ArrowRight, Flame, Hash, Edit3, Save, AlertTriangle,
-  CheckCircle, Activity, ShieldCheck, MessageSquare,
-  Eye, EyeOff, LayoutTemplate, ExternalLink, X,
-  Compass, Package, Image, Bot, Settings, Loader2, Send, KeyRound
+  ChevronLeft, ChevronRight, Presentation, FileDown,
+  ArrowRight, Hash, Edit3, Save, ShieldCheck,
+  Eye, EyeOff, LayoutTemplate, ExternalLink, Package, Settings, KeyRound, PieChart,
+  Bot, Sparkles, AlertTriangle, Send, Loader2, X, Compass, MessageSquare, CheckCircle, Activity, Image
 } from 'lucide-react';
 import {
   generateFullReport, generateInsights, generateBottleneck,
@@ -22,7 +21,7 @@ import {
   PointElement, ArcElement, RadialLinearScale, Filler,
   Tooltip, Legend,
 } from 'chart.js';
-import { Line, Doughnut, Bar, Radar } from 'react-chartjs-2';
+import { Line, Doughnut, Bar, Radar, Pie } from 'react-chartjs-2';
 import toast from 'react-hot-toast';
 
 // Register Chart.js components
@@ -416,7 +415,7 @@ export default function MonthlyQuarterlyReportPage() {
       });
       const avgProgress = Math.round(progress.reduce((s, x) => s + x, 0) / progress.length);
       return { name: p.name, progress: avgProgress, periodLinks: periodSubs.reduce((s, x) => s + x.links.length, 0), totalTarget: tasks.reduce((s, t) => s + t.targetLinks, 0) };
-    }).sort((a, b) => b.progress - a.progress);
+    }).sort((a, b) => Math.max(b.totalTarget, b.periodLinks) - Math.max(a.totalTarget, a.periodLinks));
   }, [projects, projectTasks, submissions, currentSubs]);
 
   /* ── radar: current vs prev ── */
@@ -1352,7 +1351,7 @@ export default function MonthlyQuarterlyReportPage() {
           <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: '24px 0 16px 0' }}>Dự án</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '14px', marginBottom: '14px' }}>
             <div className="card" style={{ padding: '20px' }}>
-              <ChartHeader icon={<Target size={14} color="#fff" />} title="Tiến độ dự án" color="#10b981" />
+              <ChartHeader icon={<Target size={14} color="#fff" />} title="Tiến độ các dự án trọng điểm" color="#10b981" />
               {projectProgress.length > 0 ? (
                 <div style={{ height: `${Math.max(200, projectProgress.length * 32 + 40)}px` }}>
                   <Bar
@@ -1385,9 +1384,9 @@ export default function MonthlyQuarterlyReportPage() {
                         tooltip: {
                           backgroundColor: 'rgba(15,23,42,.92)', padding: 10, cornerRadius: 8,
                           callbacks: {
-                            label: (ctx) => {
+                            label: (ctx: any) => {
                               const p = projectProgress[ctx.dataIndex];
-                              if (ctx.datasetIndex === 0) return p ? `${p.progress}% hoàn thành (${p.periodLinks} link kỳ này)` : '';
+                              if (ctx.datasetIndex === 0) return p ? `${p.progress}% hoàn thành (${p.periodLinks}/${p.totalTarget} link)` : '';
                               return `${100 - (p?.progress ?? 0)}% còn lại`;
                             },
                           },
@@ -1405,11 +1404,11 @@ export default function MonthlyQuarterlyReportPage() {
 
             {visibleBlocks.topics && (
               <div className="card" style={{ padding: '20px' }}>
-                <ChartHeader icon={<Flame size={14} color="#fff" />} title="Top dự án focus trong tháng" color="#D85A30" />
+                <ChartHeader icon={<PieChart size={14} color="#fff" />} title="Tỷ trọng khối lượng theo dự án" color="#8b5cf6" />
                 
                 {isEditingMetrics && (
                   <div style={{ marginBottom: '16px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
-                    <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '8px', color: 'var(--text-secondary)' }}>Chọn dự án xuất hiện:</div>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '8px', color: 'var(--text-secondary)' }}>Chọn dự án xuất hiện trong biểu đồ:</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxHeight: '150px', overflowY: 'auto' }}>
                       {projects.filter(p => p.status === 'Đang chạy').map(p => (
                         <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem', cursor: 'pointer' }}>
@@ -1427,39 +1426,33 @@ export default function MonthlyQuarterlyReportPage() {
                   </div>
                 )}
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {projectsFocus.map((proj, i) => (
-                    <div key={proj.id}
-                      style={{
-                        padding: '12px 16px', borderRadius: 'var(--radius-md)',
-                        background: 'var(--bg-secondary)', borderLeft: `4px solid ${CHART_PALETTE[i % CHART_PALETTE.length]}`,
-                        transition: 'all 0.2s',
+                {projectsFocus.length > 0 ? (
+                  <div style={{ height: '320px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '16px' }}>
+                    <Pie
+                      data={{
+                        labels: projectsFocus.map(p => p.name.length > 20 ? p.name.slice(0, 18) + '...' : p.name),
+                        datasets: [{
+                          data: projectsFocus.map(p => p.links),
+                          backgroundColor: CHART_PALETTE,
+                          borderWidth: 0,
+                          hoverOffset: 4
+                        }]
                       }}
-                      onMouseEnter={e => { if (!isEditingMetrics) e.currentTarget.style.transform = 'translateY(-2px)' }}
-                      onMouseLeave={e => { if (!isEditingMetrics) e.currentTarget.style.transform = 'translateY(0)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                        <span style={{ fontWeight: 700, fontSize: '0.9rem', flex: 1, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <Link to={`/projects/${proj.id}`} style={{ color: 'inherit', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            {proj.name}
-                            {!isEditingMetrics && <ExternalLink size={14} style={{ opacity: 0.4 }} />}
-                          </Link>
-                        </span>
-                        <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <span style={{ fontWeight: 800, fontSize: '0.95rem', color: CHART_PALETTE[i % CHART_PALETTE.length] }}>
-                            {proj.links}
-                          </span>
-                        </div>
-                      </div>
-                      <div style={{ height: '8px', borderRadius: '999px', background: 'var(--border-light)', overflow: 'hidden' }}>
-                        <div style={{
-                          height: '100%', width: `${Math.min(100, proj.links / (Math.max(...projectsFocus.map(p => p.links), 1)) * 100)}%`, borderRadius: '999px',
-                          background: `linear-gradient(90deg, ${CHART_PALETTE[i % CHART_PALETTE.length]}cc, ${CHART_PALETTE[i % CHART_PALETTE.length]})`,
-                          transition: 'width .5s ease',
-                        }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      options={{
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: {
+                          legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, pointStyle: 'circle', font: { size: 11 } } },
+                          tooltip: {
+                            backgroundColor: 'rgba(15,23,42,.92)', padding: 10, cornerRadius: 8,
+                            callbacks: {
+                              label: (ctx: any) => ` ${ctx.raw} link (${Math.round((Number(ctx.raw) / projectsFocus.reduce((s,p) => s+p.links, 0)) * 100)}%)`
+                            }
+                          },
+                        }
+                      }}
+                    />
+                  </div>
+                ) : <EmptyChart />}
               </div>
             )}
           </div>
