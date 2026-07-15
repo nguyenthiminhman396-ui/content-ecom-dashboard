@@ -999,19 +999,31 @@ export default function MonthlyQuarterlyReportPage() {
           
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
             <StatCard icon={<ShieldCheck size={24} color="#0f766e" />} label="Số lượt đánh giá" 
-              value={qualityStats.hasQualityData ? displayVal('qc_totalReviews', qualityStats.totalReviews) : 'N/A'} 
+              value={displayVal('qc_totalReviews', qualityStats.hasQualityData ? qualityStats.totalReviews : 'N/A')} 
               gradient="#f0fdf4" accent="#0f766e" border="#bbf7d0" subtitle="Đánh giá từ khách hàng"
               isEditing={isEditingMetrics} onValueChange={v => setOverride('qc_totalReviews', v)} />
+            
             <StatCard icon={<CheckCircle size={24} color="#0f766e" />} label="Tổng điểm trung bình" 
-              value={qualityStats.hasQualityData ? displayVal('qc_avgScore', qualityStats.avgScore.toFixed(1)) + '/10' : 'N/A'} 
+              value={(() => {
+                const v = displayVal('qc_avgScore', qualityStats.hasQualityData ? qualityStats.avgScore.toFixed(1) : 'N/A');
+                if (isEditingMetrics) return v === 'N/A' ? '' : v;
+                return v === 'N/A' ? 'N/A' : `${v}/10`;
+              })()} 
               gradient="#f0fdf4" accent="#0f766e" border="#bbf7d0" subtitle="Điểm số chất lượng"
               isEditing={isEditingMetrics} onValueChange={v => setOverride('qc_avgScore', v.replace('/10', ''))} />
+              
             <StatCard icon={<MessageSquare size={24} color="#475569" />} label="Tổng lượt comment" 
-              value={qualityStats.hasQualityData ? displayVal('qc_totalComments', qualityStats.totalComments) : 'N/A'} 
+              value={displayVal('qc_totalComments', qualityStats.hasQualityData ? qualityStats.totalComments : 'N/A')} 
               gradient="#f8fafc" accent="#475569" border="#e2e8f0" subtitle="Nhận xét từ khách hàng"
               isEditing={isEditingMetrics} onValueChange={v => setOverride('qc_totalComments', v)} />
+              
             <StatCard icon={<Activity size={24} color="#b91c1c" />} label="Comment Tích cực/Tiêu cực" 
-              value={qualityStats.hasQualityData ? `${displayVal('qc_pctPositive', qualityStats.pctPositive)}% / ${displayVal('qc_pctNegative', qualityStats.pctNegative)}%` : 'N/A'} 
+              value={(() => {
+                const pos = displayVal('qc_pctPositive', qualityStats.hasQualityData ? qualityStats.pctPositive : 'N/A');
+                const neg = displayVal('qc_pctNegative', qualityStats.hasQualityData ? qualityStats.pctNegative : 'N/A');
+                if (isEditingMetrics) return (pos === 'N/A' && neg === 'N/A') ? '' : `${pos}/${neg}`;
+                return pos === 'N/A' ? 'N/A' : `${pos}% / ${neg}%`;
+              })()} 
               gradient="#fef2f2" accent="#b91c1c" border="#fecaca" subtitle="Đánh giá tự động qua từ khoá"
               isEditing={isEditingMetrics} onValueChange={v => {
                 const parts = v.replace(/%/g, '').split('/');
