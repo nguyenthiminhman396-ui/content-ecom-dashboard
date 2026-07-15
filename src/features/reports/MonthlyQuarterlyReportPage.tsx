@@ -8,8 +8,14 @@ import {
   ArrowRight, Flame, Hash, Edit3, Save, AlertTriangle,
   CheckCircle, Activity, ShieldCheck, MessageSquare,
   Eye, EyeOff, LayoutTemplate, ExternalLink, X,
-  Compass, Package, Image
+  Compass, Package, Image, Bot, Settings, Loader2, Send, KeyRound
 } from 'lucide-react';
+import {
+  generateFullReport, generateInsights, generateBottleneck,
+  generateRecommendation, generateNextPlan,
+  chatWithAI, getStoredModel, setStoredModel,
+  type ReportContext, type AIGeneratedReport, type ChatMessage
+} from '@/shared/services/aiService';
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -97,15 +103,6 @@ export default function MonthlyQuarterlyReportPage() {
   const reportRef = useRef<HTMLDivElement>(null);
 
   const isManager = currentUser?.role === 'Manager';
-  if (!isManager) {
-    return (
-      <div className="card" style={{ padding: '60px', textAlign: 'center', marginTop: '20px' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '12px' }}>🔒</div>
-        <h3 style={{ fontWeight: 700, marginBottom: '8px' }}>Không có quyền truy cập</h3>
-        <p style={{ color: 'var(--text-tertiary)' }}>Chỉ Manager mới xem được báo cáo tháng/quý.</p>
-      </div>
-    );
-  }
 
   /* ── state ── */
   const now = new Date();
@@ -124,6 +121,18 @@ export default function MonthlyQuarterlyReportPage() {
   const [isEditingBottleneck, setIsEditingBottleneck] = useState(false);
   const [isEditingRec, setIsEditingRec] = useState(false);
   const [selectedFocusProjects, setSelectedFocusProjects] = useState<string[]>([]);
+
+  // AI states
+  const [aiModel, setAiModel] = useState(() => getStoredModel());
+  const [showAISettings, setShowAISettings] = useState(false);
+  const [aiLoading, setAiLoading] = useState<string | null>(null); // block being loaded, or 'full'
+  const [showAIReview, setShowAIReview] = useState(false);
+  const [aiReviewData, setAiReviewData] = useState<AIGeneratedReport | null>(null);
+  const [showAIChat, setShowAIChat] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Visibility toggle
   const [visibleBlocks, setVisibleBlocks] = useState({
@@ -667,9 +676,139 @@ export default function MonthlyQuarterlyReportPage() {
     toast.success('Đã export Presentation HTML! Mở bằng trình duyệt → Ctrl+P để in slide.');
   };
 
+  /* ── AI helpers ── */
+  const buildReportContext = useCallback((): ReportContext => ({
+    periodLabel,
+    stats: {
+      totalLinks: stats.totalLinks,
+      totalPoints: stats.totalPoints,
+      totalSubmits: stats.totalSubmits,
+      baiMoi: stats.baiMoi,
+      sku: stats.sku,
+      multimedia: stats.multimedia,
+      toiUu: stats.toiUu,
+      employeeCount: stats.employeeCount,
+      avgPointsPerEmp: stats.avgPointsPerEmp,
+      deltaLinks: stats.deltaLinks,
+      deltaPoints: stats.deltaPoints,
+      deltaSubmits: stats.deltaSubmits,
+    },
+    teamBreakdown,
+    topEmployees,
+    qualityStats,
+    projectProgress,
+    projectsFocus,
+    tasksBreakdown,
+  }), [periodLabel, stats, teamBreakdown, topEmployees, qualityStats, projectProgress, projectsFocus, tasksBreakdown]);
+
+  const handleAIFullReport = async () => {
+    setAiLoading('full');
+    try {
+      const result = await generateFullReport(buildReportContext());
+      setAiReviewData(result);
+      setShowAIReview(true);
+      toast.success('AI đã phân tích xong!');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Lỗi không xác định');
+    } finally {
+      setAiLoading(null);
+    }
+  };
+
+  const handleAIBlock = async (block: 'insights' | 'bottleneck' | 'recommendation' | 'nextPlan') => {
+    setAiLoading(block);
+    try {
+      const ctx = buildReportContext();
+      if (block === 'insights') {
+        const result = await generateInsights(ctx);
+        setSummaryText(result);
+        toast.success('AI đã viết nhận xét!');
+      } else if (block === 'bottleneck') {
+        const result = await generateBottleneck(ctx);
+        setBottleneckText(result);
+        toast.success('AI đã phân tích điểm nghẽn!');
+      } else if (block === 'recommendation') {
+        const result = await generateRecommendation(ctx);
+        setRecommendationText(result);
+        toast.success('AI đã viết đề xuất!');
+      } else if (block === 'nextPlan') {
+        const result = await generateNextPlan(ctx);
+        setOverride('plan_general', result.general);
+        setOverride('plan_goals', result.goals);
+        setOverride('plan_topics', result.topics);
+        setOverride('plan_team', result.team);
+        setOverride('plan_team_baiviet', result.team_baiviet);
+        setOverride('plan_team_sanpham', result.team_sanpham);
+        setOverride('plan_team_multimedia', result.team_multimedia);
+        toast.success('AI đã gợi ý kế hoạch!');
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Lỗi không xác định');
+    } finally {
+      setAiLoading(null);
+    }
+  };
+
+  const applyAIReview = () => {
+    if (!aiReviewData) return;
+    setSummaryText(aiReviewData.insights);
+    setBottleneckText(aiReviewData.bottleneck);
+    setRecommendationText(aiReviewData.recommendation);
+    if (aiReviewData.nextPlan) {
+      setOverride('plan_general', aiReviewData.nextPlan.general);
+      setOverride('plan_goals', aiReviewData.nextPlan.goals);
+      setOverride('plan_topics', aiReviewData.nextPlan.topics);
+      setOverride('plan_team', aiReviewData.nextPlan.team);
+      setOverride('plan_team_baiviet', aiReviewData.nextPlan.team_baiviet);
+      setOverride('plan_team_sanpham', aiReviewData.nextPlan.team_sanpham);
+      setOverride('plan_team_multimedia', aiReviewData.nextPlan.team_multimedia);
+    }
+    setShowAIReview(false);
+    toast.success('Đã áp dụng kết quả AI vào báo cáo!');
+  };
+
+  const handleSendChat = async () => {
+    if (!chatInput.trim() || chatLoading) return;
+    const userMsg: ChatMessage = { role: 'user', text: chatInput.trim() };
+    const newMessages = [...chatMessages, userMsg];
+    setChatMessages(newMessages);
+    setChatInput('');
+    setChatLoading(true);
+    try {
+      const reply = await chatWithAI(newMessages, buildReportContext());
+      setChatMessages(prev => [...prev, { role: 'model', text: reply }]);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Lỗi chat');
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  const AIBlockButton = ({ block, label }: { block: 'insights' | 'bottleneck' | 'recommendation' | 'nextPlan'; label?: string }) => (
+    <button className="btn btn-ghost btn-icon" onClick={() => handleAIBlock(block)}
+      disabled={aiLoading !== null} title={label || 'AI gợi ý'}
+      style={{ color: '#10b981' }}>
+      {aiLoading === block ? <Loader2 size={16} className="spin" /> : <Bot size={16} />}
+    </button>
+  );
+
   /* ── chart configs (computed inside render to use theme) ── */
   const chartTextColor = 'var(--text-primary)';
   const chartGridColor = 'rgba(148,163,184,.15)';
+
+  if (!isManager) {
+    return (
+      <div className="card" style={{ padding: '60px', textAlign: 'center', marginTop: '20px' }}>
+        <div style={{ fontSize: '3rem', marginBottom: '12px' }}>🔒</div>
+        <h3 style={{ fontWeight: 700, marginBottom: '8px' }}>Không có quyền truy cập</h3>
+        <p style={{ color: 'var(--text-tertiary)' }}>Chỉ Manager mới xem được báo cáo tháng/quý.</p>
+      </div>
+    );
+  }
 
   /* ══════════════════════ RENDER ══════════════════════ */
   return (
@@ -683,6 +822,19 @@ export default function MonthlyQuarterlyReportPage() {
           <p className="page-subtitle">Tổng hợp tự động · Biểu đồ trực quan · Xuất HTML / PDF / Presentation</p>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button className="btn" onClick={handleAIFullReport}
+            disabled={aiLoading !== null}
+            style={{ background: 'linear-gradient(135deg,#10b981,#059669)', color: '#fff', border: 'none', fontWeight: 700, boxShadow: '0 2px 8px rgba(16,185,129,.3)' }}>
+            {aiLoading === 'full' ? <Loader2 size={14} className="spin" /> : <Bot size={14} />} ✨ Phân tích AI
+          </button>
+          <button className="btn btn-secondary" onClick={() => setShowAIChat(true)}
+            style={{ background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', border: '1px solid #86efac', color: '#15803d' }}>
+            <MessageSquare size={14} /> Chat AI
+          </button>
+          <button className="btn btn-icon btn-ghost" onClick={() => setShowAISettings(true)} title="Cài đặt AI">
+            <KeyRound size={14} />
+          </button>
+          <div style={{ width: '1px', background: 'var(--border-light)', margin: '0 4px' }} />
           <button className="btn btn-secondary" onClick={handleExportHTML} title="Export HTML">
             <FileText size={14} /> HTML
           </button>
@@ -800,9 +952,12 @@ export default function MonthlyQuarterlyReportPage() {
             <div style={{ padding: '8px', background: '#8b5cf6', borderRadius: '50%', color: '#fff' }}><Sparkles size={16} /></div>
             <h3 style={{ fontWeight: 800, fontSize: '1.2rem', color: '#4c1d95', margin: 0 }}>Tóm tắt điều hành</h3>
           </div>
-          <button className="btn btn-ghost btn-icon" onClick={() => setIsEditingSummary(!isEditingSummary)} style={{ color: '#6d28d9' }}>
-            {isEditingSummary ? <Save size={18} /> : <Edit3 size={18} />}
-          </button>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <AIBlockButton block="insights" label="AI viết nhận xét" />
+            <button className="btn btn-ghost btn-icon" onClick={() => setIsEditingSummary(!isEditingSummary)} style={{ color: '#6d28d9' }}>
+              {isEditingSummary ? <Save size={18} /> : <Edit3 size={18} />}
+            </button>
+          </div>
         </div>
         {isEditingSummary ? (
           <textarea className="form-input" value={summaryText} onChange={e => setSummaryText(e.target.value)} rows={3} style={{ width: '100%', fontSize: '1rem', lineHeight: 1.6 }} />
@@ -1468,9 +1623,12 @@ export default function MonthlyQuarterlyReportPage() {
               <div style={{ padding: '8px', background: '#dc2626', borderRadius: '50%', color: '#fff' }}><AlertTriangle size={16} /></div>
               <h3 style={{ fontWeight: 800, fontSize: '1.2rem', color: '#7f1d1d', margin: 0 }}>Điểm nghẽn & Khó khăn</h3>
             </div>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <AIBlockButton block="bottleneck" label="AI phân tích điểm nghẽn" />
             <button className="btn btn-ghost btn-icon" onClick={() => setIsEditingBottleneck(!isEditingBottleneck)} style={{ color: '#dc2626' }}>
               {isEditingBottleneck ? <Save size={18} /> : <Edit3 size={18} />}
             </button>
+          </div>
           </div>
           {isEditingBottleneck ? (
             <textarea className="form-input" value={bottleneckText} onChange={e => setBottleneckText(e.target.value)} rows={3} style={{ width: '100%', fontSize: '1rem', lineHeight: 1.6 }} />
@@ -1490,9 +1648,12 @@ export default function MonthlyQuarterlyReportPage() {
               <div style={{ padding: '8px', background: '#2563eb', borderRadius: '50%', color: '#fff' }}><TrendingUp size={16} /></div>
               <h3 style={{ fontWeight: 800, fontSize: '1.2rem', color: '#1e40af', margin: 0 }}>Mở rộng & Đề xuất</h3>
             </div>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <AIBlockButton block="recommendation" label="AI viết đề xuất" />
             <button className="btn btn-ghost btn-icon" onClick={() => setIsEditingRec(!isEditingRec)} style={{ color: '#2563eb' }}>
               {isEditingRec ? <Save size={18} /> : <Edit3 size={18} />}
             </button>
+          </div>
           </div>
           {isEditingRec ? (
             <textarea className="form-input" value={recommendationText} onChange={e => setRecommendationText(e.target.value)} rows={3} style={{ width: '100%', fontSize: '1rem', lineHeight: 1.6 }} />
@@ -1507,11 +1668,16 @@ export default function MonthlyQuarterlyReportPage() {
       {/* ── Block 7: Kế hoạch triển khai kỳ tới ── */}
       {visibleBlocks.nextPlan && (
         <div className="card" style={{ padding: '24px', marginBottom: '24px', background: '#fff', border: '1px solid #e2e8f0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
-            <div style={{ padding: '8px', background: 'linear-gradient(135deg, #10b981, #059669)', borderRadius: '8px', color: '#fff' }}>
-              <Compass size={18} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ padding: '8px', background: 'linear-gradient(135deg, #10b981, #059669)', borderRadius: '8px', color: '#fff' }}>
+                <Compass size={18} />
+              </div>
+              <h3 style={{ fontWeight: 800, fontSize: '1.25rem', color: '#0f172a', margin: 0 }}>Kế hoạch triển khai kỳ tới</h3>
             </div>
-            <h3 style={{ fontWeight: 800, fontSize: '1.25rem', color: '#0f172a', margin: 0 }}>Kế hoạch triển khai kỳ tới</h3>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <AIBlockButton block="nextPlan" label="AI gợi ý kế hoạch" />
+            </div>
           </div>
           
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '24px' }}>
@@ -1623,6 +1789,149 @@ export default function MonthlyQuarterlyReportPage() {
 
       {drillDownData && (
         <DrillDownModal data={drillDownData} onClose={() => setDrillDownData(null)} />
+      )}
+
+      {/* ── AI Modals ── */}
+      
+      {/* 1. AI Settings Modal */}
+      {showAISettings && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div className="card" style={{ width: '400px', maxWidth: '90vw', padding: '24px', background: '#fff' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: '#0f172a' }}>
+                <Settings size={20} color="#10b981" /> Cài đặt AI
+              </h3>
+              <button className="btn btn-ghost btn-icon" onClick={() => setShowAISettings(false)}><X size={18} /></button>
+            </div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+              API Key đã được cấu hình bảo mật trên server. Bạn chỉ cần chọn model AI để sử dụng.
+            </p>
+            <div className="form-group">
+              <label className="form-label">Model</label>
+              <select className="form-input" value={aiModel} onChange={e => { setAiModel(e.target.value); setStoredModel(e.target.value); }}>
+                <option value="gemini-2.5-pro">Gemini 2.5 Pro (Khuyên dùng)</option>
+                <option value="gemini-2.0-flash">Gemini 2.0 Flash (Nhanh)</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
+              <button className="btn btn-primary" onClick={() => setShowAISettings(false)}>Xong</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. AI Full Report Review Modal */}
+      {showAIReview && aiReviewData && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div className="card" style={{ width: '800px', maxWidth: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column', background: '#fff', overflow: 'hidden' }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: '#0f172a' }}>
+                <Bot size={20} color="#10b981" /> Kết quả phân tích AI
+              </h3>
+              <button className="btn btn-ghost btn-icon" onClick={() => setShowAIReview(false)}><X size={18} /></button>
+            </div>
+            
+            <div style={{ padding: '24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div>
+                <h4 style={{ color: '#4c1d95', margin: '0 0 8px 0', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}><Sparkles size={16}/> Nhận xét tổng quan</h4>
+                <div style={{ padding: '16px', background: '#f5f3ff', borderRadius: '8px', fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>{aiReviewData.insights}</div>
+              </div>
+              
+              <div>
+                <h4 style={{ color: '#7f1d1d', margin: '0 0 8px 0', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}><AlertTriangle size={16}/> Điểm nghẽn</h4>
+                <div style={{ padding: '16px', background: '#fef2f2', borderRadius: '8px', fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>{aiReviewData.bottleneck}</div>
+              </div>
+              
+              <div>
+                <h4 style={{ color: '#1e40af', margin: '0 0 8px 0', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}><TrendingUp size={16}/> Đề xuất</h4>
+                <div style={{ padding: '16px', background: '#eff6ff', borderRadius: '8px', fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>{aiReviewData.recommendation}</div>
+              </div>
+
+              {aiReviewData.nextPlan && (
+                <div>
+                  <h4 style={{ color: '#064e3b', margin: '0 0 8px 0', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}><Compass size={16}/> Kế hoạch kỳ tới</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div style={{ padding: '12px', background: '#ecfdf5', borderRadius: '8px', fontSize: '0.85rem' }}><b>Định hướng:</b><br/><span style={{whiteSpace: 'pre-wrap'}}>{aiReviewData.nextPlan.general}</span></div>
+                    <div style={{ padding: '12px', background: '#ecfdf5', borderRadius: '8px', fontSize: '0.85rem' }}><b>Mục tiêu:</b><br/><span style={{whiteSpace: 'pre-wrap'}}>{aiReviewData.nextPlan.goals}</span></div>
+                    <div style={{ padding: '12px', background: '#ecfdf5', borderRadius: '8px', fontSize: '0.85rem' }}><b>Chủ đề focus:</b><br/><span style={{whiteSpace: 'pre-wrap'}}>{aiReviewData.nextPlan.topics}</span></div>
+                    <div style={{ padding: '12px', background: '#ecfdf5', borderRadius: '8px', fontSize: '0.85rem' }}><b>Phát triển đội ngũ:</b><br/><span style={{whiteSpace: 'pre-wrap'}}>{aiReviewData.nextPlan.team}</span></div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '12px', background: '#f8fafc' }}>
+              <button className="btn btn-secondary" onClick={() => setShowAIReview(false)}>Hủy</button>
+              <button className="btn btn-primary" onClick={applyAIReview} style={{ background: '#10b981', borderColor: '#10b981' }}>
+                <CheckCircle size={16} /> Áp dụng vào báo cáo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. AI Chat Modal */}
+      {showAIChat && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div className="card" style={{ width: '600px', maxWidth: '95vw', height: '80vh', display: 'flex', flexDirection: 'column', background: '#fff', overflow: 'hidden' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f0fdf4' }}>
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: '#166534', fontSize: '1.1rem' }}>
+                <MessageSquare size={18} /> Trợ lý AI
+              </h3>
+              <button className="btn btn-ghost btn-icon" onClick={() => setShowAIChat(false)} style={{ color: '#166534' }}><X size={18} /></button>
+            </div>
+            
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', background: '#f8fafc' }}>
+              {chatMessages.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', marginTop: '40px' }}>
+                  <Bot size={48} style={{ opacity: 0.2, marginBottom: '12px' }} />
+                  <p>Hỏi AI bất kỳ thông tin nào về báo cáo kỳ này.</p>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center', marginTop: '16px' }}>
+                    <span className="badge" style={{ cursor: 'pointer' }} onClick={() => setChatInput('Team nào đang có hiệu suất tốt nhất?')}>Team nào tốt nhất?</span>
+                    <span className="badge" style={{ cursor: 'pointer' }} onClick={() => setChatInput('Có rủi ro gì về chất lượng không?')}>Phân tích chất lượng</span>
+                  </div>
+                </div>
+              ) : (
+                chatMessages.map((msg, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                    <div style={{ 
+                      maxWidth: '85%', padding: '12px 16px', borderRadius: '12px',
+                      background: msg.role === 'user' ? '#10b981' : '#fff',
+                      color: msg.role === 'user' ? '#fff' : '#0f172a',
+                      boxShadow: msg.role === 'model' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                      whiteSpace: 'pre-wrap', fontSize: '0.9rem', lineHeight: 1.5
+                    }}>
+                      {msg.text}
+                    </div>
+                  </div>
+                ))
+              )}
+              {chatLoading && (
+                <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                  <div style={{ padding: '12px 16px', borderRadius: '12px', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                    <Loader2 size={16} className="spin" color="#10b981" />
+                  </div>
+                </div>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            <div style={{ padding: '16px', borderTop: '1px solid #e2e8f0', background: '#fff' }}>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input type="text" className="form-input" style={{ flex: 1 }} 
+                  placeholder="Hỏi AI về số liệu báo cáo..." 
+                  value={chatInput} onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSendChat()}
+                  disabled={chatLoading}
+                />
+                <button className="btn btn-primary" onClick={handleSendChat} disabled={!chatInput.trim() || chatLoading}
+                  style={{ background: '#10b981', borderColor: '#10b981', padding: '0 16px' }}>
+                  <Send size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
