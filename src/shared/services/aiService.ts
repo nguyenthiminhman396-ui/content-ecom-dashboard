@@ -148,18 +148,19 @@ function buildContextString(ctx: ReportContext): string {
 
 const SYSTEM_PROMPT = `Bạn là trợ lý phân tích nội dung chuyên sâu của phòng Content Ecom tại Long Châu (FPT Long Châu - chuỗi nhà thuốc và tiêm chủng).
 
-Quy tắc CỐT LÕI:
+Quy tắc CỐT LÕI (TUÂN THỦ 100%):
 1. Viết bằng tiếng Việt, văn phong chuyên nghiệp, truyền cảm hứng, mang tính chiến lược cao.
 2. LUÔN trích dẫn số liệu cụ thể từ data để chứng minh nhận định.
-3. KHÔNG viết quá nhiều gạch đầu dòng (bullet points). Hãy viết dưới dạng văn xuôi (plaintext), thành các đoạn văn mạch lạc, dễ đọc như một bài báo cáo phân tích của Giám đốc chuyên môn. Chỉ dùng bullet points khi liệt kê quá nhiều ý ngắn.
-4. TẦM NHÌN & VAI TRÒ: Khi nhận xét, hãy mở rộng góc nhìn. Đừng chỉ đọc số liệu khô khan, hãy lồng ghép ý nghĩa của những con số đó vào bức tranh lớn: Vai trò của team Content Ecom tác động thế nào đến trải nghiệm khách hàng, uy tín thương hiệu Long Châu, và việc hỗ trợ ra quyết định mua hàng. Nhấn mạnh giá trị "Nội dung y tế chuẩn xác" và "Trải nghiệm mua sắm mượt mà".
-5. Phân tích phải có chiều sâu: so sánh, tìm nguyên nhân, đưa ra insight mà người nhìn data thường bỏ qua.`;
+3. TUYỆT ĐỐI KHÔNG SỬ DỤNG: gạch đầu dòng (-), danh sách đánh số (1. 2.), in đậm (**), in nghiêng (*), biểu tượng cảm xúc (emoji).
+4. CHỈ SỬ DỤNG VĂN XUÔI THUẦN TÚY (Plaintext): Viết thành các đoạn văn mạch lạc, phân tách nhau bằng cách xuống dòng. Các số liệu và tên người/team chỉ cần viết hoa hoặc để trong ngoặc kép nếu cần nhấn mạnh, không dùng markdown in đậm.
+5. TẦM NHÌN & VAI TRÒ: Khi nhận xét, hãy mở rộng góc nhìn. Đừng chỉ đọc số liệu khô khan, hãy lồng ghép ý nghĩa của những con số đó vào bức tranh lớn: Vai trò của team Content Ecom tác động thế nào đến trải nghiệm khách hàng, uy tín thương hiệu Long Châu, và việc hỗ trợ ra quyết định mua hàng. Nhấn mạnh giá trị "Nội dung y tế chuẩn xác" và "Trải nghiệm mua sắm mượt mà".
+6. Phân tích phải có chiều sâu: so sánh, tìm nguyên nhân, đưa ra insight mà người nhìn data thường bỏ qua.`;
 
 const PROMPTS: Record<AIBlockType, string> = {
   insights: `Dựa trên dữ liệu báo cáo bên dưới, hãy viết phần "Nhận xét tổng quan" cho báo cáo kỳ này.
 
 Yêu cầu:
-- Trình bày dưới dạng văn xuôi (2-3 đoạn văn), không lạm dụng gạch đầu dòng.
+- Trình bày dưới dạng văn xuôi (2-3 đoạn văn dài). Không dùng bất kỳ ký tự đặc biệt hay markdown nào.
 - Nêu bật thành tựu, xu hướng so với kỳ trước, sự đóng góp nổi bật của các cá nhân/team.
 - ĐẶC BIỆT: Gắn kết thành tựu với tầm nhìn dài hạn và vai trò cốt lõi của team Content Ecom (định hình trải nghiệm y tế số, tạo niềm tin cho khách hàng).
 - Trích dẫn số liệu một cách tự nhiên vào câu văn.
@@ -169,7 +170,7 @@ Chỉ trả về nội dung nhận xét, không cần tiêu đề.`,
   bottleneck: `Dựa trên dữ liệu báo cáo bên dưới, hãy phân tích và chỉ ra các "Điểm nghẽn & Khó khăn" của kỳ này.
 
 Yêu cầu:
-- Trình bày dưới dạng văn xuôi mạch lạc (2-3 đoạn văn).
+- Trình bày dưới dạng văn xuôi mạch lạc (2-3 đoạn văn dài). Không dùng bất kỳ ký tự đặc biệt hay markdown nào.
 - Phân tích sâu 1-2 điểm nghẽn cốt lõi (dự án chậm tiến độ, chất lượng giảm sút, mất cân đối nhân lực...). Nêu rõ bằng chứng từ data.
 - Nhìn nhận điểm nghẽn này dưới góc độ chiến lược: Nó cản trở mục tiêu chung của Ecom như thế nào?
 - Đề xuất hướng khắc phục cụ thể.
@@ -179,7 +180,7 @@ Chỉ trả về nội dung phân tích, không cần tiêu đề.`,
   recommendation: `Dựa trên dữ liệu báo cáo bên dưới, hãy viết phần "Mở rộng & Đề xuất" mang tính định hướng.
 
 Yêu cầu:
-- Trình bày dưới dạng văn xuôi truyền cảm hứng.
+- Trình bày dưới dạng văn xuôi truyền cảm hứng. Không dùng bất kỳ ký tự đặc biệt hay markdown nào.
 - Đưa ra 2-3 chiến lược/đề xuất nhằm nâng tầm vai trò của team (ví dụ: tối ưu quy trình, ứng dụng AI, mở rộng độ phủ nội dung chất lượng cao).
 - Giải thích tại sao đề xuất này lại quan trọng đối với sự phát triển của chuỗi Long Châu.
 
@@ -187,12 +188,12 @@ Chỉ trả về nội dung đề xuất, không cần tiêu đề.`,
 
   nextPlan: `Dựa trên dữ liệu báo cáo kỳ này bên dưới, hãy gợi ý "Kế hoạch triển khai kỳ tới".
 
-Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau (trình bày dạng văn xuôi ngắn gọn hoặc bullet point nhỏ gọn cho từng phần):
+Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau (bên trong mỗi thẻ CHỈ viết một đoạn văn xuôi duy nhất, TUYỆT ĐỐI không dùng gạch đầu dòng, dấu sao hay emoji):
 
-<general>Định hướng chung cho kỳ tới gắn với tầm nhìn team (1 đoạn văn)</general>
+<general>Định hướng chung cho kỳ tới gắn với tầm nhìn team</general>
 <goals>Mục tiêu nội dung cụ thể (trích dẫn target số liệu)</goals>
 <topics>Chủ đề Focus nên tập trung chiến lược</topics>
-<team>Kế hoạch phát triển và nâng tầm đội ngũ (đào tạo, phân công)</team>
+<team>Kế hoạch phát triển và nâng tầm đội ngũ</team>
 <team_baiviet>Công việc cốt lõi cho Team Bài viết</team_baiviet>
 <team_sanpham>Công việc cốt lõi cho Team Sản phẩm</team_sanpham>
 <team_multimedia>Công việc cốt lõi cho Team Multimedia</team_multimedia>
@@ -205,9 +206,9 @@ Quy tắc:
 
 Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau:
 
-<insights>Nhận xét tổng quan (viết văn xuôi, lồng ghép số liệu và tầm nhìn team)</insights>
-<bottleneck>Điểm nghẽn & Khó khăn (viết văn xuôi, có bằng chứng data)</bottleneck>
-<recommendation>Mở rộng & Đề xuất (viết văn xuôi mang tính định hướng chiến lược)</recommendation>
+<insights>Nhận xét tổng quan (viết 1 đoạn văn xuôi dài, lồng ghép số liệu và tầm nhìn team)</insights>
+<bottleneck>Điểm nghẽn & Khó khăn (viết 1 đoạn văn xuôi dài, có bằng chứng data)</bottleneck>
+<recommendation>Mở rộng & Đề xuất (viết 1 đoạn văn xuôi dài mang tính định hướng chiến lược)</recommendation>
 <nextPlan>
   <general>Định hướng chung (2-3 bullets)</general>
   <goals>Mục tiêu nội dung (2-3 bullets với target số)</goals>
@@ -219,9 +220,10 @@ Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau:
 </nextPlan>
 
 Quy tắc:
-- Các trường nhận xét, điểm nghẽn, đề xuất hãy ưu tiên viết dưới dạng đoạn văn xuôi (plaintext) dễ đọc, truyền cảm hứng.
+- BẮT BUỘC viết dưới dạng ĐOẠN VĂN XUÔI (plaintext) hoàn toàn.
+- TUYỆT ĐỐI KHÔNG dùng bất kỳ ký tự đặc biệt nào: KHÔNG in đậm (**), KHÔNG gạch đầu dòng (-), KHÔNG emoji.
 - PHẢI trích dẫn số liệu cụ thể tự nhiên vào câu.
-- BẮT BUỘC dùng thẻ XML (ví dụ: <insights>...</insights>), KHÔNG dùng JSON.`
+- BẮT BUỘC dùng thẻ XML (ví dụ: <insights>...</insights>).`
 };
 
 // ─── API Call via Vercel Proxy ─────────────────────────────
