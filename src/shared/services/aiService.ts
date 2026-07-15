@@ -188,41 +188,41 @@ Chỉ trả về nội dung đề xuất, không cần tiêu đề.`,
 
   nextPlan: `Dựa trên dữ liệu báo cáo kỳ này bên dưới, hãy gợi ý "Kế hoạch triển khai kỳ tới".
 
-Trả về JSON với đúng 7 trường sau (mỗi trường là string, viết dạng bullet points):
-{
-  "general": "Định hướng chung cho kỳ tới (2-3 bullet points)",
-  "goals": "Mục tiêu nội dung cụ thể (2-3 bullet points với số liệu target)",
-  "topics": "Chủ đề Focus nên tập trung (2-3 chủ đề/bệnh lý cụ thể)",
-  "team": "Kế hoạch phát triển đội ngũ (đào tạo, tuyển dụng, phân công)",
-  "team_baiviet": "Công việc cụ thể cho Team Bài viết kỳ tới",
-  "team_sanpham": "Công việc cụ thể cho Team Sản phẩm kỳ tới",
-  "team_multimedia": "Công việc cụ thể cho Team Multimedia kỳ tới"
-}
+Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau (bên trong mỗi thẻ là text dạng bullet points):
 
-CHỈ trả về JSON, không có text nào khác bên ngoài JSON.`,
+<general>Định hướng chung cho kỳ tới (2-3 bullet points)</general>
+<goals>Mục tiêu nội dung cụ thể (2-3 bullet points với số liệu target)</goals>
+<topics>Chủ đề Focus nên tập trung (2-3 chủ đề/bệnh lý cụ thể)</topics>
+<team>Kế hoạch phát triển đội ngũ (đào tạo, tuyển dụng, phân công)</team>
+<team_baiviet>Công việc cụ thể cho Team Bài viết kỳ tới</team_baiviet>
+<team_sanpham>Công việc cụ thể cho Team Sản phẩm kỳ tới</team_sanpham>
+<team_multimedia>Công việc cụ thể cho Team Multimedia kỳ tới</team_multimedia>
+
+Quy tắc:
+- BẮT BUỘC sử dụng đúng tên thẻ mở và đóng như mẫu.
+- KHÔNG sử dụng JSON, chỉ dùng định dạng thẻ XML.`,
 
   fullReport: `Dựa trên dữ liệu báo cáo bên dưới, hãy sinh toàn bộ nội dung phân tích cho báo cáo kỳ này.
 
-Trả về JSON với đúng cấu trúc sau:
-{
-  "insights": "Nhận xét tổng quan (4-6 bullet points, mỗi bullet có số liệu)",
-  "bottleneck": "Điểm nghẽn & Khó khăn (2-4 điểm, có bằng chứng và nguyên nhân)",
-  "recommendation": "Mở rộng & Đề xuất (2-4 đề xuất khả thi)",
-  "nextPlan": {
-    "general": "Định hướng chung (2-3 bullets)",
-    "goals": "Mục tiêu nội dung (2-3 bullets với target số)",
-    "topics": "Chủ đề Focus (2-3 chủ đề cụ thể)",
-    "team": "Phát triển đội ngũ",
-    "team_baiviet": "Công việc Team Bài viết",
-    "team_sanpham": "Công việc Team Sản phẩm",
-    "team_multimedia": "Công việc Team Multimedia"
-  }
-}
+Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau:
+
+<insights>Nhận xét tổng quan (4-6 bullet points, mỗi bullet có số liệu)</insights>
+<bottleneck>Điểm nghẽn & Khó khăn (2-4 điểm, có bằng chứng và nguyên nhân)</bottleneck>
+<recommendation>Mở rộng & Đề xuất (2-4 đề xuất khả thi)</recommendation>
+<nextPlan>
+  <general>Định hướng chung (2-3 bullets)</general>
+  <goals>Mục tiêu nội dung (2-3 bullets với target số)</goals>
+  <topics>Chủ đề Focus (2-3 chủ đề cụ thể)</topics>
+  <team>Phát triển đội ngũ</team>
+  <team_baiviet>Công việc Team Bài viết</team_baiviet>
+  <team_sanpham>Công việc Team Sản phẩm</team_sanpham>
+  <team_multimedia>Công việc Team Multimedia</team_multimedia>
+</nextPlan>
 
 Quy tắc:
 - Mỗi field là string, viết dạng bullet points dấu gạch đầu dòng (-)
 - PHẢI trích dẫn số liệu cụ thể
-- CHỈ trả về JSON, không có text nào khác bên ngoài JSON.`,
+- BẮT BUỘC dùng thẻ XML (ví dụ: <insights>...</insights>), KHÔNG dùng JSON.`
 };
 
 // ─── API Call via Vercel Proxy ─────────────────────────────
@@ -230,8 +230,7 @@ Quy tắc:
 async function callAIProxy(
   model: string,
   systemPrompt: string,
-  userPrompt: string,
-  expectJson: boolean = false
+  userPrompt: string
 ): Promise<string> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s timeout for Gemini 2.5 Pro
@@ -253,7 +252,6 @@ async function callAIProxy(
           topP: 0.95,
           topK: 40,
           maxOutputTokens: 4096,
-          ...(expectJson ? { responseMimeType: 'application/json' } : {})
         },
       }),
       signal: controller.signal,
@@ -279,30 +277,19 @@ async function callAIProxy(
   }
 }
 
-// ─── Parse Helpers ─────────────────────────────────────────
 
-function extractJSON(text: string): string {
-  const codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  if (codeBlockMatch) return codeBlockMatch[1].trim();
-
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (jsonMatch) return jsonMatch[0].trim();
-
-  return text;
-}
 
 // ─── Public API ────────────────────────────────────────────
 
 export async function generateBlock(
   blockType: AIBlockType,
-  context: ReportContext,
-  expectJson: boolean = false
+  context: ReportContext
 ): Promise<string> {
   const model = getStoredModel();
   const contextStr = buildContextString(context);
   const prompt = `${PROMPTS[blockType]}\n\n---\n\nDỮ LIỆU BÁO CÁO:\n${contextStr}`;
 
-  return callAIProxy(model, SYSTEM_PROMPT, prompt, expectJson);
+  return callAIProxy(model, SYSTEM_PROMPT, prompt);
 }
 
 export async function generateInsights(context: ReportContext): Promise<string> {
@@ -317,24 +304,51 @@ export async function generateRecommendation(context: ReportContext): Promise<st
   return generateBlock('recommendation', context);
 }
 
+function extractTag(text: string, tag: string): string {
+  const match = text.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, 'i'));
+  if (match) return match[1].trim();
+  // Fallback if tag is missing closing tag or capitalized
+  const fallback = text.match(new RegExp(`<${tag}>(.*)`, 'is'));
+  return fallback ? fallback[1].trim() : '';
+}
+
 export async function generateNextPlan(context: ReportContext): Promise<AIGeneratedReport['nextPlan']> {
-  const raw = await generateBlock('nextPlan', context, true);
-  const json = extractJSON(raw);
-  try {
-    return JSON.parse(json);
-  } catch {
-    throw new Error('AI trả về format không hợp lệ. Vui lòng thử lại.');
-  }
+  const raw = await generateBlock('nextPlan', context);
+  
+  const general = extractTag(raw, 'general');
+  if (!general) throw new Error('AI trả về thiếu thông tin. Vui lòng thử lại. (Lỗi: ' + raw.substring(0, 50) + ')');
+
+  return {
+    general,
+    goals: extractTag(raw, 'goals'),
+    topics: extractTag(raw, 'topics'),
+    team: extractTag(raw, 'team'),
+    team_baiviet: extractTag(raw, 'team_baiviet'),
+    team_sanpham: extractTag(raw, 'team_sanpham'),
+    team_multimedia: extractTag(raw, 'team_multimedia'),
+  };
 }
 
 export async function generateFullReport(context: ReportContext): Promise<AIGeneratedReport> {
-  const raw = await generateBlock('fullReport', context, true);
-  const json = extractJSON(raw);
-  try {
-    return JSON.parse(json);
-  } catch {
-    throw new Error('AI trả về format không hợp lệ. Vui lòng thử lại.');
-  }
+  const raw = await generateBlock('fullReport', context);
+  
+  const insights = extractTag(raw, 'insights');
+  if (!insights) throw new Error('AI trả về thiếu thông tin. Vui lòng thử lại. (Lỗi: ' + raw.substring(0, 50) + ')');
+
+  return {
+    insights,
+    bottleneck: extractTag(raw, 'bottleneck'),
+    recommendation: extractTag(raw, 'recommendation'),
+    nextPlan: {
+      general: extractTag(raw, 'general'),
+      goals: extractTag(raw, 'goals'),
+      topics: extractTag(raw, 'topics'),
+      team: extractTag(raw, 'team'),
+      team_baiviet: extractTag(raw, 'team_baiviet'),
+      team_sanpham: extractTag(raw, 'team_sanpham'),
+      team_multimedia: extractTag(raw, 'team_multimedia'),
+    }
+  };
 }
 
 // ─── Chat (conversational) ─────────────────────────────────
