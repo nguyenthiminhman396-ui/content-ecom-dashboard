@@ -580,12 +580,15 @@ export default function MonthlyQuarterlyReportPage() {
 
   const handleExportHTML = () => {
     const { ovStats, ovQuality, ovProjects, driveLink } = getOverriddenData();
-    const nextPlan = visibleBlocks.nextPlan && (metricOverrides['plan_baiMoi'] || metricOverrides['plan_sku'] || metricOverrides['plan_multimedia'] || metricOverrides['plan_toiuu'])
+    const nextPlan = visibleBlocks.nextPlan
       ? {
-          baiMoi: metricOverrides['plan_baiMoi'] || 'Chưa cập nhật',
-          sku: metricOverrides['plan_sku'] || 'Chưa cập nhật',
-          multimedia: metricOverrides['plan_multimedia'] || 'Chưa cập nhật',
-          toiuu: metricOverrides['plan_toiuu'] || 'Chưa cập nhật',
+          general: metricOverrides['plan_general'] || 'Chưa cập nhật',
+          goals: metricOverrides['plan_goals'] || 'Chưa cập nhật',
+          topics: metricOverrides['plan_topics'] || 'Chưa cập nhật',
+          team: metricOverrides['plan_team'] || 'Chưa cập nhật',
+          team_baiviet: metricOverrides['plan_team_baiviet'] || 'Chưa cập nhật',
+          team_sanpham: metricOverrides['plan_team_sanpham'] || 'Chưa cập nhật',
+          team_multimedia: metricOverrides['plan_team_multimedia'] || 'Chưa cập nhật',
         }
       : undefined;
 
@@ -631,12 +634,15 @@ export default function MonthlyQuarterlyReportPage() {
 
   const handleExportPPTX = () => {
     const { ovStats, ovQuality, ovProjects, driveLink } = getOverriddenData();
-    const nextPlan = visibleBlocks.nextPlan && (metricOverrides['plan_baiMoi'] || metricOverrides['plan_sku'] || metricOverrides['plan_multimedia'] || metricOverrides['plan_toiuu'])
+    const nextPlan = visibleBlocks.nextPlan
       ? {
-          baiMoi: metricOverrides['plan_baiMoi'] || 'Chưa cập nhật',
-          sku: metricOverrides['plan_sku'] || 'Chưa cập nhật',
-          multimedia: metricOverrides['plan_multimedia'] || 'Chưa cập nhật',
-          toiuu: metricOverrides['plan_toiuu'] || 'Chưa cập nhật',
+          general: metricOverrides['plan_general'] || 'Chưa cập nhật',
+          goals: metricOverrides['plan_goals'] || 'Chưa cập nhật',
+          topics: metricOverrides['plan_topics'] || 'Chưa cập nhật',
+          team: metricOverrides['plan_team'] || 'Chưa cập nhật',
+          team_baiviet: metricOverrides['plan_team_baiviet'] || 'Chưa cập nhật',
+          team_sanpham: metricOverrides['plan_team_sanpham'] || 'Chưa cập nhật',
+          team_multimedia: metricOverrides['plan_team_multimedia'] || 'Chưa cập nhật',
         }
       : undefined;
 
@@ -1508,91 +1514,94 @@ export default function MonthlyQuarterlyReportPage() {
             <h3 style={{ fontWeight: 800, fontSize: '1.25rem', color: '#0f172a', margin: 0 }}>Kế hoạch triển khai kỳ tới</h3>
           </div>
           
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-            {/* Nhóm Bài viết */}
-            <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '12px', padding: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#0369a1', fontWeight: 700 }}>
-                <FileText size={16} /> Nhóm Bài viết (Góc sức khỏe, Bệnh lý)
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+            {/* Định hướng chung */}
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#0f172a', fontWeight: 700 }}>
+                <Compass size={16} color="#6366f1" /> Định hướng chung
               </div>
               {isEditingMetrics ? (
-                <textarea 
-                  className="form-input" 
-                  style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6, background: '#fff', border: '1px solid #7dd3fc', borderRadius: '8px', padding: '12px' }} 
-                  rows={4} 
-                  placeholder="- Mục tiêu số lượng:\n- Chủ đề focus:\n- Khó khăn cần tháo gỡ:" 
-                  value={metricOverrides['plan_baiMoi'] ?? ''}
-                  onChange={e => setOverride('plan_baiMoi', e.target.value)}
-                />
+                <textarea className="form-input" style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6 }} rows={3} placeholder="Định hướng chiến lược..." value={metricOverrides['plan_general'] ?? ''} onChange={e => setOverride('plan_general', e.target.value)} />
               ) : (
-                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#0c4a6e', whiteSpace: 'pre-wrap' }}>
-                  {metricOverrides['plan_baiMoi'] || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>- Mục tiêu số lượng:\n- Chủ đề focus:\n- Khó khăn cần tháo gỡ:</span>}
-                </div>
-              )}
-            </div>
-
-            {/* Nhóm Sản phẩm */}
-            <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '12px', padding: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#6d28d9', fontWeight: 700 }}>
-                <Package size={16} /> Nhóm Sản phẩm (SKU)
-              </div>
-              {isEditingMetrics ? (
-                <textarea 
-                  className="form-input" 
-                  style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6, background: '#fff', border: '1px solid #c4b5fd', borderRadius: '8px', padding: '12px' }} 
-                  rows={4} 
-                  placeholder="- Mục tiêu số lượng:\n- Chủ đề focus:\n- Khó khăn cần tháo gỡ:" 
-                  value={metricOverrides['plan_sku'] ?? ''}
-                  onChange={e => setOverride('plan_sku', e.target.value)}
-                />
-              ) : (
-                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#4c1d95', whiteSpace: 'pre-wrap' }}>
-                  {metricOverrides['plan_sku'] || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>- Mục tiêu số lượng:\n- Chủ đề focus:\n- Khó khăn cần tháo gỡ:</span>}
-                </div>
-              )}
-            </div>
-
-            {/* Nhóm Multimedia */}
-            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', padding: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#b45309', fontWeight: 700 }}>
-                <Image size={16} /> Nhóm Multimedia (Video, Ảnh)
-              </div>
-              {isEditingMetrics ? (
-                <textarea 
-                  className="form-input" 
-                  style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6, background: '#fff', border: '1px solid #fcd34d', borderRadius: '8px', padding: '12px' }} 
-                  rows={4} 
-                  placeholder="- Mục tiêu số lượng:\n- Định dạng focus:\n- Khó khăn cần tháo gỡ:" 
-                  value={metricOverrides['plan_multimedia'] ?? ''}
-                  onChange={e => setOverride('plan_multimedia', e.target.value)}
-                />
-              ) : (
-                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#78350f', whiteSpace: 'pre-wrap' }}>
-                  {metricOverrides['plan_multimedia'] || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>- Mục tiêu số lượng:\n- Định dạng focus:\n- Khó khăn cần tháo gỡ:</span>}
-                </div>
-              )}
-            </div>
-
-            {/* Nhóm Tối ưu */}
-            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#15803d', fontWeight: 700 }}>
-                <Wrench size={16} /> Nhóm Tối ưu SP - Bài viết
-              </div>
-              {isEditingMetrics ? (
-                <textarea 
-                  className="form-input" 
-                  style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6, background: '#fff', border: '1px solid #86efac', borderRadius: '8px', padding: '12px' }} 
-                  rows={4} 
-                  placeholder="- Trọng tâm SP vs BV:\n- Tiêu chí Audit:\n- Khó khăn cần tháo gỡ:" 
-                  value={metricOverrides['plan_toiuu'] ?? ''}
-                  onChange={e => setOverride('plan_toiuu', e.target.value)}
-                />
-              ) : (
-                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#14532d', whiteSpace: 'pre-wrap' }}>
-                  {metricOverrides['plan_toiuu'] || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>- Trọng tâm SP vs BV:\n- Tiêu chí Audit:\n- Khó khăn cần tháo gỡ:</span>}
-                </div>
+                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#334155', whiteSpace: 'pre-wrap' }}>{metricOverrides['plan_general'] || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
               )}
             </div>
             
+            {/* Mục tiêu nội dung */}
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#0f172a', fontWeight: 700 }}>
+                <Target size={16} color="#ef4444" /> Mục tiêu nội dung
+              </div>
+              {isEditingMetrics ? (
+                <textarea className="form-input" style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6 }} rows={3} placeholder="Mục tiêu số lượng/chất lượng..." value={metricOverrides['plan_goals'] ?? ''} onChange={e => setOverride('plan_goals', e.target.value)} />
+              ) : (
+                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#334155', whiteSpace: 'pre-wrap' }}>{metricOverrides['plan_goals'] || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
+              )}
+            </div>
+
+            {/* Chủ đề Focus */}
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#0f172a', fontWeight: 700 }}>
+                <Hash size={16} color="#8b5cf6" /> Chủ đề Focus
+              </div>
+              {isEditingMetrics ? (
+                <textarea className="form-input" style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6 }} rows={3} placeholder="Các chủ đề/bệnh lý tập trung..." value={metricOverrides['plan_topics'] ?? ''} onChange={e => setOverride('plan_topics', e.target.value)} />
+              ) : (
+                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#334155', whiteSpace: 'pre-wrap' }}>{metricOverrides['plan_topics'] || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
+              )}
+            </div>
+
+            {/* Phát triển đội ngũ */}
+            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#0f172a', fontWeight: 700 }}>
+                <Sparkles size={16} color="#10b981" /> Phát triển đội ngũ
+              </div>
+              {isEditingMetrics ? (
+                <textarea className="form-input" style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6 }} rows={3} placeholder="Kế hoạch tuyển dụng, đào tạo..." value={metricOverrides['plan_team'] ?? ''} onChange={e => setOverride('plan_team', e.target.value)} />
+              ) : (
+                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#334155', whiteSpace: 'pre-wrap' }}>{metricOverrides['plan_team'] || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
+              )}
+            </div>
+          </div>
+
+          <h4 style={{ fontWeight: 700, fontSize: '1rem', color: '#0f172a', marginBottom: '16px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>Công việc cụ thể theo Team</h4>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+            {/* Team Bài viết */}
+            <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '12px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#0369a1', fontWeight: 700 }}>
+                <FileText size={16} /> Team Bài viết
+              </div>
+              {isEditingMetrics ? (
+                <textarea className="form-input" style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6, background: '#fff', border: '1px solid #7dd3fc', borderRadius: '8px', padding: '12px' }} rows={4} placeholder="Chi tiết công việc team Bài viết..." value={metricOverrides['plan_team_baiviet'] ?? ''} onChange={e => setOverride('plan_team_baiviet', e.target.value)} />
+              ) : (
+                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#0c4a6e', whiteSpace: 'pre-wrap' }}>{metricOverrides['plan_team_baiviet'] || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
+              )}
+            </div>
+
+            {/* Team Sản phẩm */}
+            <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '12px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#6d28d9', fontWeight: 700 }}>
+                <Package size={16} /> Team Sản phẩm
+              </div>
+              {isEditingMetrics ? (
+                <textarea className="form-input" style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6, background: '#fff', border: '1px solid #c4b5fd', borderRadius: '8px', padding: '12px' }} rows={4} placeholder="Chi tiết công việc team Sản phẩm..." value={metricOverrides['plan_team_sanpham'] ?? ''} onChange={e => setOverride('plan_team_sanpham', e.target.value)} />
+              ) : (
+                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#4c1d95', whiteSpace: 'pre-wrap' }}>{metricOverrides['plan_team_sanpham'] || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
+              )}
+            </div>
+
+            {/* Team Multimedia */}
+            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#b45309', fontWeight: 700 }}>
+                <Image size={16} /> Team Multimedia
+              </div>
+              {isEditingMetrics ? (
+                <textarea className="form-input" style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6, background: '#fff', border: '1px solid #fcd34d', borderRadius: '8px', padding: '12px' }} rows={4} placeholder="Chi tiết công việc team Multimedia..." value={metricOverrides['plan_team_multimedia'] ?? ''} onChange={e => setOverride('plan_team_multimedia', e.target.value)} />
+              ) : (
+                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#78350f', whiteSpace: 'pre-wrap' }}>{metricOverrides['plan_team_multimedia'] || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1691,10 +1700,13 @@ interface ReportHtmlData {
   driveLink?: string;
   qc_driveLink?: string;
   nextPlan?: {
-    baiMoi: string;
-    sku: string;
-    multimedia: string;
-    toiuu: string;
+    general: string;
+    goals: string;
+    topics: string;
+    team: string;
+    team_baiviet: string;
+    team_sanpham: string;
+    team_multimedia: string;
   };
 }
 
@@ -1836,22 +1848,38 @@ ${data.insights}
 
 ${data.nextPlan ? `
 <h2>🧭 Kế hoạch triển khai kỳ tới</h2>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
+    <div style="color:#0f172a;font-weight:700;margin-bottom:8px">Định hướng chung</div>
+    <div style="font-size:0.85rem;line-height:1.6;color:#334155;white-space:pre-wrap">${data.nextPlan.general}</div>
+  </div>
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
+    <div style="color:#0f172a;font-weight:700;margin-bottom:8px">Mục tiêu nội dung</div>
+    <div style="font-size:0.85rem;line-height:1.6;color:#334155;white-space:pre-wrap">${data.nextPlan.goals}</div>
+  </div>
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
+    <div style="color:#0f172a;font-weight:700;margin-bottom:8px">Chủ đề Focus</div>
+    <div style="font-size:0.85rem;line-height:1.6;color:#334155;white-space:pre-wrap">${data.nextPlan.topics}</div>
+  </div>
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px">
+    <div style="color:#0f172a;font-weight:700;margin-bottom:8px">Phát triển đội ngũ</div>
+    <div style="font-size:0.85rem;line-height:1.6;color:#334155;white-space:pre-wrap">${data.nextPlan.team}</div>
+  </div>
+</div>
+
+<h3 style="font-size:1rem;margin-bottom:12px;color:#0f172a">Công việc cụ thể theo Team</h3>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:28px">
   <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:16px">
-    <div style="color:#0369a1;font-weight:700;margin-bottom:8px">📝 Nhóm Bài viết</div>
-    <div style="font-size:0.85rem;line-height:1.6;color:#0c4a6e;white-space:pre-wrap">${data.nextPlan.baiMoi}</div>
+    <div style="color:#0369a1;font-weight:700;margin-bottom:8px">📝 Team Bài viết</div>
+    <div style="font-size:0.85rem;line-height:1.6;color:#0c4a6e;white-space:pre-wrap">${data.nextPlan.team_baiviet}</div>
   </div>
   <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:12px;padding:16px">
-    <div style="color:#6d28d9;font-weight:700;margin-bottom:8px">📦 Nhóm Sản phẩm</div>
-    <div style="font-size:0.85rem;line-height:1.6;color:#4c1d95;white-space:pre-wrap">${data.nextPlan.sku}</div>
+    <div style="color:#6d28d9;font-weight:700;margin-bottom:8px">📦 Team Sản phẩm</div>
+    <div style="font-size:0.85rem;line-height:1.6;color:#4c1d95;white-space:pre-wrap">${data.nextPlan.team_sanpham}</div>
   </div>
   <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px">
-    <div style="color:#b45309;font-weight:700;margin-bottom:8px">🎨 Nhóm Multimedia</div>
-    <div style="font-size:0.85rem;line-height:1.6;color:#78350f;white-space:pre-wrap">${data.nextPlan.multimedia}</div>
-  </div>
-  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px">
-    <div style="color:#15803d;font-weight:700;margin-bottom:8px">🔧 Nhóm Tối ưu</div>
-    <div style="font-size:0.85rem;line-height:1.6;color:#14532d;white-space:pre-wrap">${data.nextPlan.toiuu}</div>
+    <div style="color:#b45309;font-weight:700;margin-bottom:8px">🎨 Team Multimedia</div>
+    <div style="font-size:0.85rem;line-height:1.6;color:#78350f;white-space:pre-wrap">${data.nextPlan.team_multimedia}</div>
   </div>
 </div>
 ` : ''}
@@ -2022,25 +2050,44 @@ ${data.bottleneck}
     </div>
   `, 'linear-gradient(135deg,#fffbeb,#fef3c7)');
 
-  // Slide 6.5: Next Plan
-  const s6_5 = data.nextPlan ? slide(`
+  // Slide 6.5a: Next Plan Overview
+  const s6_5a = data.nextPlan ? slide(`
     <h2 style="font-size:1.8rem;font-weight:800;margin-bottom:40px;color:#0f172a">🧭 Kế hoạch triển khai kỳ tới</h2>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+      <div style="padding:28px;border-radius:16px;background:#f8fafc;border:2px solid #e2e8f0;font-size:1.05rem;line-height:1.8;color:#334155;white-space:pre-wrap">
+        <h3 style="margin-bottom:12px;font-size:1.3rem;font-weight:800;color:#0f172a">Định hướng chung</h3>
+${data.nextPlan.general}
+      </div>
+      <div style="padding:28px;border-radius:16px;background:#f8fafc;border:2px solid #e2e8f0;font-size:1.05rem;line-height:1.8;color:#334155;white-space:pre-wrap">
+        <h3 style="margin-bottom:12px;font-size:1.3rem;font-weight:800;color:#0f172a">Mục tiêu nội dung</h3>
+${data.nextPlan.goals}
+      </div>
+      <div style="padding:28px;border-radius:16px;background:#f8fafc;border:2px solid #e2e8f0;font-size:1.05rem;line-height:1.8;color:#334155;white-space:pre-wrap">
+        <h3 style="margin-bottom:12px;font-size:1.3rem;font-weight:800;color:#0f172a">Chủ đề Focus</h3>
+${data.nextPlan.topics}
+      </div>
+      <div style="padding:28px;border-radius:16px;background:#f8fafc;border:2px solid #e2e8f0;font-size:1.05rem;line-height:1.8;color:#334155;white-space:pre-wrap">
+        <h3 style="margin-bottom:12px;font-size:1.3rem;font-weight:800;color:#0f172a">Phát triển đội ngũ</h3>
+${data.nextPlan.team}
+      </div>
+    </div>
+  `) : '';
+
+  // Slide 6.5b: Next Plan Teams
+  const s6_5b = data.nextPlan ? slide(`
+    <h2 style="font-size:1.8rem;font-weight:800;margin-bottom:40px;color:#0f172a">🎯 Công việc cụ thể theo Team</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px">
       <div style="padding:28px;border-radius:16px;background:#f0f9ff;border:2px solid #bae6fd;font-size:1.05rem;line-height:1.8;color:#0c4a6e;white-space:pre-wrap">
-        <h3 style="margin-bottom:12px;font-size:1.3rem;font-weight:800;color:#0369a1">📝 Nhóm Bài viết</h3>
-${data.nextPlan.baiMoi}
+        <h3 style="margin-bottom:12px;font-size:1.3rem;font-weight:800;color:#0369a1">📝 Team Bài viết</h3>
+${data.nextPlan.team_baiviet}
       </div>
       <div style="padding:28px;border-radius:16px;background:#f5f3ff;border:2px solid #ddd6fe;font-size:1.05rem;line-height:1.8;color:#4c1d95;white-space:pre-wrap">
-        <h3 style="margin-bottom:12px;font-size:1.3rem;font-weight:800;color:#6d28d9">📦 Nhóm Sản phẩm</h3>
-${data.nextPlan.sku}
+        <h3 style="margin-bottom:12px;font-size:1.3rem;font-weight:800;color:#6d28d9">📦 Team Sản phẩm</h3>
+${data.nextPlan.team_sanpham}
       </div>
       <div style="padding:28px;border-radius:16px;background:#fffbeb;border:2px solid #fde68a;font-size:1.05rem;line-height:1.8;color:#78350f;white-space:pre-wrap">
-        <h3 style="margin-bottom:12px;font-size:1.3rem;font-weight:800;color:#b45309">🎨 Nhóm Multimedia</h3>
-${data.nextPlan.multimedia}
-      </div>
-      <div style="padding:28px;border-radius:16px;background:#f0fdf4;border:2px solid #bbf7d0;font-size:1.05rem;line-height:1.8;color:#14532d;white-space:pre-wrap">
-        <h3 style="margin-bottom:12px;font-size:1.3rem;font-weight:800;color:#15803d">🔧 Nhóm Tối ưu</h3>
-${data.nextPlan.toiuu}
+        <h3 style="margin-bottom:12px;font-size:1.3rem;font-weight:800;color:#b45309">🎨 Team Multimedia</h3>
+${data.nextPlan.team_multimedia}
       </div>
     </div>
   `) : '';
@@ -2070,7 +2117,7 @@ ${data.nextPlan.toiuu}
     background:rgba(255,255,255,.15);color:#fff;transition:all .2s}
   nav button:hover{background:rgba(255,255,255,.3)}
 </style></head><body>
-${s1}${s2}${s3}${s4}${s5}${s5_1}${s5_2}${s6}${s6_5}${s7}
+${s1}${s2}${s3}${s4}${s5}${s5_1}${s5_2}${s6}${s6_5a}${s6_5b}${s7}
 <nav>
   <button onclick="window.print()">🖨 In</button>
   <button onclick="scrollBy({top:-window.innerHeight,behavior:'smooth'})">▲ Trước</button>
