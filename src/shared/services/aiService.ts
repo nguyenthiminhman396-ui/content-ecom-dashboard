@@ -230,7 +230,8 @@ Quy tắc:
 async function callAIProxy(
   model: string,
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  expectJson: boolean = false
 ): Promise<string> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s timeout for Gemini 2.5 Pro
@@ -252,6 +253,7 @@ async function callAIProxy(
           topP: 0.95,
           topK: 40,
           maxOutputTokens: 4096,
+          ...(expectJson ? { responseMimeType: 'application/json' } : {})
         },
       }),
       signal: controller.signal,
@@ -293,13 +295,14 @@ function extractJSON(text: string): string {
 
 export async function generateBlock(
   blockType: AIBlockType,
-  context: ReportContext
+  context: ReportContext,
+  expectJson: boolean = false
 ): Promise<string> {
   const model = getStoredModel();
   const contextStr = buildContextString(context);
   const prompt = `${PROMPTS[blockType]}\n\n---\n\nDỮ LIỆU BÁO CÁO:\n${contextStr}`;
 
-  return callAIProxy(model, SYSTEM_PROMPT, prompt);
+  return callAIProxy(model, SYSTEM_PROMPT, prompt, expectJson);
 }
 
 export async function generateInsights(context: ReportContext): Promise<string> {
@@ -315,7 +318,7 @@ export async function generateRecommendation(context: ReportContext): Promise<st
 }
 
 export async function generateNextPlan(context: ReportContext): Promise<AIGeneratedReport['nextPlan']> {
-  const raw = await generateBlock('nextPlan', context);
+  const raw = await generateBlock('nextPlan', context, true);
   const json = extractJSON(raw);
   try {
     return JSON.parse(json);
@@ -325,7 +328,7 @@ export async function generateNextPlan(context: ReportContext): Promise<AIGenera
 }
 
 export async function generateFullReport(context: ReportContext): Promise<AIGeneratedReport> {
-  const raw = await generateBlock('fullReport', context);
+  const raw = await generateBlock('fullReport', context, true);
   const json = extractJSON(raw);
   try {
     return JSON.parse(json);
