@@ -7,7 +7,8 @@ import {
   ChevronLeft, ChevronRight, Sparkles, Presentation, FileDown,
   ArrowRight, Flame, Hash, Edit3, Save, AlertTriangle,
   CheckCircle, Activity, ShieldCheck, MessageSquare,
-  Eye, EyeOff, LayoutTemplate, ExternalLink, X
+  Eye, EyeOff, LayoutTemplate, ExternalLink, X,
+  Compass, Package, Image, Wrench
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -134,6 +135,7 @@ export default function MonthlyQuarterlyReportPage() {
     teamAndProject: true,
     bottleneck: true,
     recommendation: true,
+    nextPlan: true,
   });
   const [showBlockSettings, setShowBlockSettings] = useState(false);
 
@@ -578,6 +580,15 @@ export default function MonthlyQuarterlyReportPage() {
 
   const handleExportHTML = () => {
     const { ovStats, ovQuality, ovProjects, driveLink } = getOverriddenData();
+    const nextPlan = visibleBlocks.nextPlan && (metricOverrides['plan_baiMoi'] || metricOverrides['plan_sku'] || metricOverrides['plan_multimedia'] || metricOverrides['plan_toiuu'])
+      ? {
+          baiMoi: metricOverrides['plan_baiMoi'] || 'Chưa cập nhật',
+          sku: metricOverrides['plan_sku'] || 'Chưa cập nhật',
+          multimedia: metricOverrides['plan_multimedia'] || 'Chưa cập nhật',
+          toiuu: metricOverrides['plan_toiuu'] || 'Chưa cập nhật',
+        }
+      : undefined;
+
     const html = buildPeriodicReportHtml({
       title: `Báo cáo ${periodLabel}`,
       periodLabel,
@@ -587,6 +598,7 @@ export default function MonthlyQuarterlyReportPage() {
       insights: autoInsights,
       bottleneck: bottleneckText,
       driveLink,
+      nextPlan,
     });
     const blob = new Blob([html], { type: 'text/html;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -619,6 +631,15 @@ export default function MonthlyQuarterlyReportPage() {
 
   const handleExportPPTX = () => {
     const { ovStats, ovQuality, ovProjects, driveLink } = getOverriddenData();
+    const nextPlan = visibleBlocks.nextPlan && (metricOverrides['plan_baiMoi'] || metricOverrides['plan_sku'] || metricOverrides['plan_multimedia'] || metricOverrides['plan_toiuu'])
+      ? {
+          baiMoi: metricOverrides['plan_baiMoi'] || 'Chưa cập nhật',
+          sku: metricOverrides['plan_sku'] || 'Chưa cập nhật',
+          multimedia: metricOverrides['plan_multimedia'] || 'Chưa cập nhật',
+          toiuu: metricOverrides['plan_toiuu'] || 'Chưa cập nhật',
+        }
+      : undefined;
+
     // Build a multi-slide HTML that mimics PPTX presentation style
     const html = buildPresentationHtml({
       title: `Báo cáo ${periodLabel}`,
@@ -629,6 +650,7 @@ export default function MonthlyQuarterlyReportPage() {
       insights: autoInsights,
       bottleneck: bottleneckText,
       driveLink,
+      nextPlan,
     });
     const blob = new Blob([html], { type: 'text/html;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -739,10 +761,10 @@ export default function MonthlyQuarterlyReportPage() {
             productivity: 'Năng suất & Tăng trưởng',
             quality: 'Chất lượng & Compliance',
             topics: 'Top chủ đề focus',
-            teamTasks: 'Chi tiết đầu việc Team',
             teamAndProject: 'Phân bổ theo người & Dự án',
             bottleneck: 'Điểm nghẽn & Khó khăn',
             recommendation: 'Mở rộng & Đề xuất',
+            nextPlan: 'Kế hoạch kỳ tới',
           }).map(([key, label]) => {
             const k = key as keyof typeof visibleBlocks;
             const active = visibleBlocks[k];
@@ -1476,6 +1498,105 @@ export default function MonthlyQuarterlyReportPage() {
         </div>
       )}
 
+      {/* ── Block 7: Kế hoạch triển khai kỳ tới ── */}
+      {visibleBlocks.nextPlan && (
+        <div className="card" style={{ padding: '24px', marginBottom: '24px', background: '#fff', border: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
+            <div style={{ padding: '8px', background: 'linear-gradient(135deg, #10b981, #059669)', borderRadius: '8px', color: '#fff' }}>
+              <Compass size={18} />
+            </div>
+            <h3 style={{ fontWeight: 800, fontSize: '1.25rem', color: '#0f172a', margin: 0 }}>Kế hoạch triển khai kỳ tới</h3>
+          </div>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+            {/* Nhóm Bài viết */}
+            <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '12px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#0369a1', fontWeight: 700 }}>
+                <FileText size={16} /> Nhóm Bài viết (Góc sức khỏe, Bệnh lý)
+              </div>
+              {isEditingMetrics ? (
+                <textarea 
+                  className="form-input" 
+                  style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6, background: '#fff', border: '1px solid #7dd3fc', borderRadius: '8px', padding: '12px' }} 
+                  rows={4} 
+                  placeholder="- Mục tiêu số lượng:\n- Chủ đề focus:\n- Khó khăn cần tháo gỡ:" 
+                  value={metricOverrides['plan_baiMoi'] ?? ''}
+                  onChange={e => setOverride('plan_baiMoi', e.target.value)}
+                />
+              ) : (
+                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#0c4a6e', whiteSpace: 'pre-wrap' }}>
+                  {metricOverrides['plan_baiMoi'] || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>- Mục tiêu số lượng:\n- Chủ đề focus:\n- Khó khăn cần tháo gỡ:</span>}
+                </div>
+              )}
+            </div>
+
+            {/* Nhóm Sản phẩm */}
+            <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: '12px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#6d28d9', fontWeight: 700 }}>
+                <Package size={16} /> Nhóm Sản phẩm (SKU)
+              </div>
+              {isEditingMetrics ? (
+                <textarea 
+                  className="form-input" 
+                  style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6, background: '#fff', border: '1px solid #c4b5fd', borderRadius: '8px', padding: '12px' }} 
+                  rows={4} 
+                  placeholder="- Mục tiêu số lượng:\n- Chủ đề focus:\n- Khó khăn cần tháo gỡ:" 
+                  value={metricOverrides['plan_sku'] ?? ''}
+                  onChange={e => setOverride('plan_sku', e.target.value)}
+                />
+              ) : (
+                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#4c1d95', whiteSpace: 'pre-wrap' }}>
+                  {metricOverrides['plan_sku'] || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>- Mục tiêu số lượng:\n- Chủ đề focus:\n- Khó khăn cần tháo gỡ:</span>}
+                </div>
+              )}
+            </div>
+
+            {/* Nhóm Multimedia */}
+            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#b45309', fontWeight: 700 }}>
+                <Image size={16} /> Nhóm Multimedia (Video, Ảnh)
+              </div>
+              {isEditingMetrics ? (
+                <textarea 
+                  className="form-input" 
+                  style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6, background: '#fff', border: '1px solid #fcd34d', borderRadius: '8px', padding: '12px' }} 
+                  rows={4} 
+                  placeholder="- Mục tiêu số lượng:\n- Định dạng focus:\n- Khó khăn cần tháo gỡ:" 
+                  value={metricOverrides['plan_multimedia'] ?? ''}
+                  onChange={e => setOverride('plan_multimedia', e.target.value)}
+                />
+              ) : (
+                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#78350f', whiteSpace: 'pre-wrap' }}>
+                  {metricOverrides['plan_multimedia'] || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>- Mục tiêu số lượng:\n- Định dạng focus:\n- Khó khăn cần tháo gỡ:</span>}
+                </div>
+              )}
+            </div>
+
+            {/* Nhóm Tối ưu */}
+            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#15803d', fontWeight: 700 }}>
+                <Wrench size={16} /> Nhóm Tối ưu SP - Bài viết
+              </div>
+              {isEditingMetrics ? (
+                <textarea 
+                  className="form-input" 
+                  style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6, background: '#fff', border: '1px solid #86efac', borderRadius: '8px', padding: '12px' }} 
+                  rows={4} 
+                  placeholder="- Trọng tâm SP vs BV:\n- Tiêu chí Audit:\n- Khó khăn cần tháo gỡ:" 
+                  value={metricOverrides['plan_toiuu'] ?? ''}
+                  onChange={e => setOverride('plan_toiuu', e.target.value)}
+                />
+              ) : (
+                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#14532d', whiteSpace: 'pre-wrap' }}>
+                  {metricOverrides['plan_toiuu'] || <span style={{ opacity: 0.5, fontStyle: 'italic' }}>- Trọng tâm SP vs BV:\n- Tiêu chí Audit:\n- Khó khăn cần tháo gỡ:</span>}
+                </div>
+              )}
+            </div>
+            
+          </div>
+        </div>
+      )}
+
       </div> {/* end reportRef */}
 
       {/* ── Quick action: Go to weekly reports ── */}
@@ -1569,6 +1690,12 @@ interface ReportHtmlData {
   bottleneck: string;
   driveLink?: string;
   qc_driveLink?: string;
+  nextPlan?: {
+    baiMoi: string;
+    sku: string;
+    multimedia: string;
+    toiuu: string;
+  };
 }
 
 function buildPeriodicReportHtml(data: ReportHtmlData): string {
@@ -1706,6 +1833,29 @@ ${data.qc_driveLink ? `<div style="margin-bottom:16px"><a href="${data.qc_driveL
 <div style="padding:18px 20px;border-radius:12px;background:#eff6ff;border:1px solid #bfdbfe;font-size:0.9rem;line-height:1.8;white-space:pre-wrap;color:#1e3a8a;margin-bottom:28px">
 ${data.insights}
 </div>
+
+${data.nextPlan ? `
+<h2>🧭 Kế hoạch triển khai kỳ tới</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px">
+  <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:16px">
+    <div style="color:#0369a1;font-weight:700;margin-bottom:8px">📝 Nhóm Bài viết</div>
+    <div style="font-size:0.85rem;line-height:1.6;color:#0c4a6e;white-space:pre-wrap">${data.nextPlan.baiMoi}</div>
+  </div>
+  <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:12px;padding:16px">
+    <div style="color:#6d28d9;font-weight:700;margin-bottom:8px">📦 Nhóm Sản phẩm</div>
+    <div style="font-size:0.85rem;line-height:1.6;color:#4c1d95;white-space:pre-wrap">${data.nextPlan.sku}</div>
+  </div>
+  <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px">
+    <div style="color:#b45309;font-weight:700;margin-bottom:8px">🎨 Nhóm Multimedia</div>
+    <div style="font-size:0.85rem;line-height:1.6;color:#78350f;white-space:pre-wrap">${data.nextPlan.multimedia}</div>
+  </div>
+  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px">
+    <div style="color:#15803d;font-weight:700;margin-bottom:8px">🔧 Nhóm Tối ưu</div>
+    <div style="font-size:0.85rem;line-height:1.6;color:#14532d;white-space:pre-wrap">${data.nextPlan.toiuu}</div>
+  </div>
+</div>
+` : ''}
+
 
 <div style="text-align:center;padding-top:20px;border-top:1px solid #e2e8f0">
   <p style="font-size:0.75rem;color:#94a3b8">Long Châu Content Studio · Content Ecom LC Dashboard</p>
@@ -1872,6 +2022,29 @@ ${data.bottleneck}
     </div>
   `, 'linear-gradient(135deg,#fffbeb,#fef3c7)');
 
+  // Slide 6.5: Next Plan
+  const s6_5 = data.nextPlan ? slide(`
+    <h2 style="font-size:1.8rem;font-weight:800;margin-bottom:40px;color:#0f172a">🧭 Kế hoạch triển khai kỳ tới</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+      <div style="padding:28px;border-radius:16px;background:#f0f9ff;border:2px solid #bae6fd;font-size:1.05rem;line-height:1.8;color:#0c4a6e;white-space:pre-wrap">
+        <h3 style="margin-bottom:12px;font-size:1.3rem;font-weight:800;color:#0369a1">📝 Nhóm Bài viết</h3>
+${data.nextPlan.baiMoi}
+      </div>
+      <div style="padding:28px;border-radius:16px;background:#f5f3ff;border:2px solid #ddd6fe;font-size:1.05rem;line-height:1.8;color:#4c1d95;white-space:pre-wrap">
+        <h3 style="margin-bottom:12px;font-size:1.3rem;font-weight:800;color:#6d28d9">📦 Nhóm Sản phẩm</h3>
+${data.nextPlan.sku}
+      </div>
+      <div style="padding:28px;border-radius:16px;background:#fffbeb;border:2px solid #fde68a;font-size:1.05rem;line-height:1.8;color:#78350f;white-space:pre-wrap">
+        <h3 style="margin-bottom:12px;font-size:1.3rem;font-weight:800;color:#b45309">🎨 Nhóm Multimedia</h3>
+${data.nextPlan.multimedia}
+      </div>
+      <div style="padding:28px;border-radius:16px;background:#f0fdf4;border:2px solid #bbf7d0;font-size:1.05rem;line-height:1.8;color:#14532d;white-space:pre-wrap">
+        <h3 style="margin-bottom:12px;font-size:1.3rem;font-weight:800;color:#15803d">🔧 Nhóm Tối ưu</h3>
+${data.nextPlan.toiuu}
+      </div>
+    </div>
+  `) : '';
+
   // Slide 7: Thank you
   const s7 = slide(`
     <div style="text-align:center">
@@ -1897,7 +2070,7 @@ ${data.bottleneck}
     background:rgba(255,255,255,.15);color:#fff;transition:all .2s}
   nav button:hover{background:rgba(255,255,255,.3)}
 </style></head><body>
-${s1}${s2}${s3}${s4}${s5}${s5_1}${s5_2}${s6}${s7}
+${s1}${s2}${s3}${s4}${s5}${s5_1}${s5_2}${s6}${s6_5}${s7}
 <nav>
   <button onclick="window.print()">🖨 In</button>
   <button onclick="scrollBy({top:-window.innerHeight,behavior:'smooth'})">▲ Trước</button>
