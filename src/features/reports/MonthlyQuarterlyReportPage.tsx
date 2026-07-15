@@ -394,9 +394,9 @@ export default function MonthlyQuarterlyReportPage() {
       const tasks = projectTasks.filter(t => t.projectId === p.id);
       const allSubs = submissions.filter(s => s.projectId === p.id);
       const periodSubs = currentSubs.filter(s => s.projectId === p.id);
-      if (tasks.length === 0) {
-        return { name: p.name, progress: p.manualProgress ?? 0, periodLinks: periodSubs.reduce((s, x) => s + x.links.length, 0), totalTarget: 0 };
-      }
+      let totalDone = 0;
+      let totalTarget = 0;
+
       const progress = tasks.map(t => {
         const mode = t.trackingMode || 'link';
         const matched = allSubs.filter(s => {
@@ -406,15 +406,26 @@ export default function MonthlyQuarterlyReportPage() {
           if (t.taskDetail && s.taskDetail !== t.taskDetail) return false;
           return !!t.taskType || !!t.taskDetail;
         });
+        
         if (mode === 'quantity' && t.targetQuantity && t.targetQuantity > 0) {
           const done = matched.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
+          totalDone += done;
+          totalTarget += t.targetQuantity;
           return Math.min(100, Math.round((done / t.targetQuantity) * 100));
         }
         const done = matched.reduce((sum, s) => sum + s.links.length, 0);
+        totalDone += done;
+        totalTarget += t.targetLinks || 0;
         return Math.min(100, Math.round((done / Math.max(t.targetLinks, 1)) * 100));
       });
       const avgProgress = Math.round(progress.reduce((s, x) => s + x, 0) / progress.length);
-      return { name: p.name, progress: avgProgress, periodLinks: periodSubs.reduce((s, x) => s + x.links.length, 0), totalTarget: tasks.reduce((s, t) => s + t.targetLinks, 0) };
+      return { 
+        name: p.name, 
+        progress: avgProgress, 
+        periodLinks: periodSubs.reduce((s, x) => s + x.links.length, 0), 
+        totalTarget: totalTarget,
+        totalDone: totalDone
+      };
     }).sort((a, b) => Math.max(b.totalTarget, b.periodLinks) - Math.max(a.totalTarget, a.periodLinks));
   }, [projects, projectTasks, submissions, currentSubs]);
 
@@ -1386,7 +1397,7 @@ export default function MonthlyQuarterlyReportPage() {
                           callbacks: {
                             label: (ctx: any) => {
                               const p = projectProgress[ctx.dataIndex];
-                              if (ctx.datasetIndex === 0) return p ? `${p.progress}% hoàn thành (${p.periodLinks}/${p.totalTarget} link)` : '';
+                              if (ctx.datasetIndex === 0) return p ? `${p.progress}% tiến độ chung (${p.totalDone}/${p.totalTarget} mục tiêu. Đã làm kỳ này: ${p.periodLinks})` : '';
                               return `${100 - (p?.progress ?? 0)}% còn lại`;
                             },
                           },
