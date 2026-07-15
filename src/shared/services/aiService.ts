@@ -148,55 +148,54 @@ function buildContextString(ctx: ReportContext): string {
 
 const SYSTEM_PROMPT = `Bạn là trợ lý phân tích nội dung chuyên sâu của phòng Content Ecom tại Long Châu (FPT Long Châu - chuỗi nhà thuốc và tiêm chủng).
 
-Quy tắc:
-- Viết bằng tiếng Việt, văn phong chuyên nghiệp, ngắn gọn, sắc sảo
-- LUÔN trích dẫn số liệu cụ thể từ data để chứng minh nhận định
-- Không dùng từ ngữ chung chung, mơ hồ
-- Phân tích phải có chiều sâu: so sánh, tìm nguyên nhân, đưa ra insight mà người nhìn data thường bỏ qua
-- Output dùng bullet points, dấu gạch đầu dòng (-), emoji phù hợp
-- Khi phân tích team: chú ý đến tỷ lệ đóng góp, hiệu suất/nhân viên, xu hướng tăng/giảm`;
+Quy tắc CỐT LÕI:
+1. Viết bằng tiếng Việt, văn phong chuyên nghiệp, truyền cảm hứng, mang tính chiến lược cao.
+2. LUÔN trích dẫn số liệu cụ thể từ data để chứng minh nhận định.
+3. KHÔNG viết quá nhiều gạch đầu dòng (bullet points). Hãy viết dưới dạng văn xuôi (plaintext), thành các đoạn văn mạch lạc, dễ đọc như một bài báo cáo phân tích của Giám đốc chuyên môn. Chỉ dùng bullet points khi liệt kê quá nhiều ý ngắn.
+4. TẦM NHÌN & VAI TRÒ: Khi nhận xét, hãy mở rộng góc nhìn. Đừng chỉ đọc số liệu khô khan, hãy lồng ghép ý nghĩa của những con số đó vào bức tranh lớn: Vai trò của team Content Ecom tác động thế nào đến trải nghiệm khách hàng, uy tín thương hiệu Long Châu, và việc hỗ trợ ra quyết định mua hàng. Nhấn mạnh giá trị "Nội dung y tế chuẩn xác" và "Trải nghiệm mua sắm mượt mà".
+5. Phân tích phải có chiều sâu: so sánh, tìm nguyên nhân, đưa ra insight mà người nhìn data thường bỏ qua.`;
 
 const PROMPTS: Record<AIBlockType, string> = {
   insights: `Dựa trên dữ liệu báo cáo bên dưới, hãy viết phần "Nhận xét tổng quan" cho báo cáo kỳ này.
 
 Yêu cầu:
-- 4-6 bullet points
-- Mỗi bullet phải có số liệu cụ thể
-- Nêu bật: (1) Thành tựu nổi bật, (2) Xu hướng so với kỳ trước, (3) Phân bổ lực lượng giữa các team, (4) Highlight nhân viên xuất sắc
-- Kết thúc bằng 1 câu đánh giá tổng thể
+- Trình bày dưới dạng văn xuôi (2-3 đoạn văn), không lạm dụng gạch đầu dòng.
+- Nêu bật thành tựu, xu hướng so với kỳ trước, sự đóng góp nổi bật của các cá nhân/team.
+- ĐẶC BIỆT: Gắn kết thành tựu với tầm nhìn dài hạn và vai trò cốt lõi của team Content Ecom (định hình trải nghiệm y tế số, tạo niềm tin cho khách hàng).
+- Trích dẫn số liệu một cách tự nhiên vào câu văn.
 
-Chỉ trả về nội dung nhận xét, không cần tiêu đề hay heading.`,
+Chỉ trả về nội dung nhận xét, không cần tiêu đề.`,
 
   bottleneck: `Dựa trên dữ liệu báo cáo bên dưới, hãy phân tích và chỉ ra các "Điểm nghẽn & Khó khăn" của kỳ này.
 
 Yêu cầu:
-- 2-4 điểm nghẽn cụ thể
-- Mỗi điểm phải: (1) Nêu vấn đề rõ ràng, (2) Chỉ ra bằng chứng từ data, (3) Phân tích nguyên nhân có thể, (4) Đề xuất ngắn gọn hướng khắc phục
-- Ưu tiên: dự án chậm tiến độ, team sụt giảm, chất lượng review kém, mất cân đối nhân lực
+- Trình bày dưới dạng văn xuôi mạch lạc (2-3 đoạn văn).
+- Phân tích sâu 1-2 điểm nghẽn cốt lõi (dự án chậm tiến độ, chất lượng giảm sút, mất cân đối nhân lực...). Nêu rõ bằng chứng từ data.
+- Nhìn nhận điểm nghẽn này dưới góc độ chiến lược: Nó cản trở mục tiêu chung của Ecom như thế nào?
+- Đề xuất hướng khắc phục cụ thể.
 
 Chỉ trả về nội dung phân tích, không cần tiêu đề.`,
 
-  recommendation: `Dựa trên dữ liệu báo cáo bên dưới, hãy viết phần "Mở rộng & Đề xuất" cho Leader.
+  recommendation: `Dựa trên dữ liệu báo cáo bên dưới, hãy viết phần "Mở rộng & Đề xuất" mang tính định hướng.
 
 Yêu cầu:
-- 2-4 đề xuất cụ thể, khả thi
-- Mỗi đề xuất phải: (1) Nêu rõ hành động, (2) Giải thích tại sao dựa trên data, (3) Kết quả kỳ vọng
-- Có thể đề xuất: mở rộng team, tập trung vào nhóm nội dung nào, cải thiện quy trình, ứng dụng công nghệ
-- Giọng văn mang tính xây dựng, hướng tới hành động
+- Trình bày dưới dạng văn xuôi truyền cảm hứng.
+- Đưa ra 2-3 chiến lược/đề xuất nhằm nâng tầm vai trò của team (ví dụ: tối ưu quy trình, ứng dụng AI, mở rộng độ phủ nội dung chất lượng cao).
+- Giải thích tại sao đề xuất này lại quan trọng đối với sự phát triển của chuỗi Long Châu.
 
 Chỉ trả về nội dung đề xuất, không cần tiêu đề.`,
 
   nextPlan: `Dựa trên dữ liệu báo cáo kỳ này bên dưới, hãy gợi ý "Kế hoạch triển khai kỳ tới".
 
-Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau (bên trong mỗi thẻ là text dạng bullet points):
+Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau (trình bày dạng văn xuôi ngắn gọn hoặc bullet point nhỏ gọn cho từng phần):
 
-<general>Định hướng chung cho kỳ tới (2-3 bullet points)</general>
-<goals>Mục tiêu nội dung cụ thể (2-3 bullet points với số liệu target)</goals>
-<topics>Chủ đề Focus nên tập trung (2-3 chủ đề/bệnh lý cụ thể)</topics>
-<team>Kế hoạch phát triển đội ngũ (đào tạo, tuyển dụng, phân công)</team>
-<team_baiviet>Công việc cụ thể cho Team Bài viết kỳ tới</team_baiviet>
-<team_sanpham>Công việc cụ thể cho Team Sản phẩm kỳ tới</team_sanpham>
-<team_multimedia>Công việc cụ thể cho Team Multimedia kỳ tới</team_multimedia>
+<general>Định hướng chung cho kỳ tới gắn với tầm nhìn team (1 đoạn văn)</general>
+<goals>Mục tiêu nội dung cụ thể (trích dẫn target số liệu)</goals>
+<topics>Chủ đề Focus nên tập trung chiến lược</topics>
+<team>Kế hoạch phát triển và nâng tầm đội ngũ (đào tạo, phân công)</team>
+<team_baiviet>Công việc cốt lõi cho Team Bài viết</team_baiviet>
+<team_sanpham>Công việc cốt lõi cho Team Sản phẩm</team_sanpham>
+<team_multimedia>Công việc cốt lõi cho Team Multimedia</team_multimedia>
 
 Quy tắc:
 - BẮT BUỘC sử dụng đúng tên thẻ mở và đóng như mẫu.
@@ -206,9 +205,9 @@ Quy tắc:
 
 Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau:
 
-<insights>Nhận xét tổng quan (4-6 bullet points, mỗi bullet có số liệu)</insights>
-<bottleneck>Điểm nghẽn & Khó khăn (2-4 điểm, có bằng chứng và nguyên nhân)</bottleneck>
-<recommendation>Mở rộng & Đề xuất (2-4 đề xuất khả thi)</recommendation>
+<insights>Nhận xét tổng quan (viết văn xuôi, lồng ghép số liệu và tầm nhìn team)</insights>
+<bottleneck>Điểm nghẽn & Khó khăn (viết văn xuôi, có bằng chứng data)</bottleneck>
+<recommendation>Mở rộng & Đề xuất (viết văn xuôi mang tính định hướng chiến lược)</recommendation>
 <nextPlan>
   <general>Định hướng chung (2-3 bullets)</general>
   <goals>Mục tiêu nội dung (2-3 bullets với target số)</goals>
@@ -220,8 +219,8 @@ Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau:
 </nextPlan>
 
 Quy tắc:
-- Mỗi field là string, viết dạng bullet points dấu gạch đầu dòng (-)
-- PHẢI trích dẫn số liệu cụ thể
+- Các trường nhận xét, điểm nghẽn, đề xuất hãy ưu tiên viết dưới dạng đoạn văn xuôi (plaintext) dễ đọc, truyền cảm hứng.
+- PHẢI trích dẫn số liệu cụ thể tự nhiên vào câu.
 - BẮT BUỘC dùng thẻ XML (ví dụ: <insights>...</insights>), KHÔNG dùng JSON.`
 };
 
