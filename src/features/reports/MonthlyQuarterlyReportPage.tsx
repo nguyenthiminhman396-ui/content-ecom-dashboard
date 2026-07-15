@@ -206,49 +206,56 @@ export default function MonthlyQuarterlyReportPage() {
 
   /* ── aggregate data (productivity) ── */
   const stats = useMemo(() => {
-    // Categorize by exact match or substring in taskType / teamGroup
+    // Categorize by exact match in taskType (which maps to config category)
     const cat = (s: typeof prodSubs[0]) => {
-      const t = (s.taskType || '').toLowerCase();
-      const d = (s.taskDetail || '').toLowerCase();
-      const g = (s.teamGroup || '').toLowerCase();
-      const combined = `${t} ${d} ${g}`;
+      const t = s.taskType || '';
       
-      if (combined.includes('tối ưu') || combined.includes('cập nhật')) return 'toiUu';
-      if (g.includes('bài viết')) return 'baiMoi';
-      if (g.includes('sản phẩm') || g.includes('sku')) return 'sku';
-      if (g.includes('multimedia')) return 'multimedia';
+      if (t === 'Bài Góc sức khỏe - Bệnh lý - Thành phần') return 'baiMoi';
+      if (t === 'Sản phẩm') return 'sku';
+      if (t === 'Multimedia' || t === 'Tin nhanh') return 'multimedia';
+      if (t === 'Tối ưu Sản phẩm - Bài viết') return 'toiUu';
+      
+      // Fallback
+      const tl = t.toLowerCase();
+      if (tl.includes('bài góc sức khỏe') || (tl.includes('bài viết') && !tl.includes('tối ưu'))) return 'baiMoi';
+      if (tl.includes('sản phẩm') && !tl.includes('tối ưu')) return 'sku';
+      if (tl.includes('multimedia') || tl.includes('tin nhanh')) return 'multimedia';
+      if (tl.includes('tối ưu')) return 'toiUu';
+      
       return 'khac';
     };
 
-    const baiMoi = prodSubs.filter(s => cat(s) === 'baiMoi').reduce((sum, s) => sum + s.links.length, 0);
-    const sku = prodSubs.filter(s => cat(s) === 'sku').reduce((sum, s) => sum + s.links.length, 0);
-    const multimedia = prodSubs.filter(s => cat(s) === 'multimedia').reduce((sum, s) => sum + s.links.length, 0);
-    const toiUu = prodSubs.filter(s => cat(s) === 'toiUu').reduce((sum, s) => sum + s.links.length, 0);
+    const getQty = (s: typeof prodSubs[0]) => (s.quantity && s.quantity > 0) ? s.quantity : (s.links?.length || 0);
+
+    const baiMoi = prodSubs.filter(s => cat(s) === 'baiMoi').reduce((sum, s) => sum + getQty(s), 0);
+    const sku = prodSubs.filter(s => cat(s) === 'sku').reduce((sum, s) => sum + getQty(s), 0);
+    const multimedia = prodSubs.filter(s => cat(s) === 'multimedia').reduce((sum, s) => sum + getQty(s), 0);
+    const toiUu = prodSubs.filter(s => cat(s) === 'toiUu').reduce((sum, s) => sum + getQty(s), 0);
     
     const toiUu_SP = prodSubs.filter(s => {
       if (cat(s) !== 'toiUu') return false;
-      const combined = `${s.taskType || ''} ${s.taskDetail || ''} ${s.teamGroup || ''}`.toLowerCase();
-      return combined.includes('sản phẩm') || combined.includes('sku');
-    }).reduce((sum, s) => sum + s.links.length, 0);
+      const detail = (s.taskDetail || '').toLowerCase();
+      return detail.includes('sản phẩm') || detail.includes('product') || detail.includes('sku');
+    }).reduce((sum, s) => sum + getQty(s), 0);
     
     const toiUu_BV = prodSubs.filter(s => {
       if (cat(s) !== 'toiUu') return false;
-      const combined = `${s.taskType || ''} ${s.taskDetail || ''} ${s.teamGroup || ''}`.toLowerCase();
-      return combined.includes('bài viết') || combined.includes('tin bài');
-    }).reduce((sum, s) => sum + s.links.length, 0);
+      const detail = (s.taskDetail || '').toLowerCase();
+      return detail.includes('bài viết') || detail.includes('faq') || detail.includes('article') || detail.includes('trực ban');
+    }).reduce((sum, s) => sum + getQty(s), 0);
 
-    const totalLinks = prodSubs.reduce((s, x) => s + x.links.length, 0);
+    const totalLinks = prodSubs.reduce((s, x) => s + getQty(x), 0);
     const totalPoints = prodSubs.reduce((s, x) => s + x.totalPoints, 0);
     const totalSubmits = prodSubs.length;
     const employees = new Set(prodSubs.map(s => s.employeeName));
     const avgPointsPerEmp = employees.size > 0 ? totalPoints / employees.size : 0;
 
-    const prevLinks = prevProdSubs.reduce((s, x) => s + x.links.length, 0);
+    const prevLinks = prevProdSubs.reduce((s, x) => s + getQty(x), 0);
     const prevPoints = prevProdSubs.reduce((s, x) => s + x.totalPoints, 0);
     const prevSubmits = prevProdSubs.length;
 
     // Site breakdowns for subtitles
-    const getSiteLinks = (kind: string, siteId: string) => prodSubs.filter(s => cat(s) === kind && s.siteId === siteId).reduce((sum, s) => sum + s.links.length, 0);
+    const getSiteLinks = (kind: string, siteId: string) => prodSubs.filter(s => cat(s) === kind && s.siteId === siteId).reduce((sum, s) => sum + getQty(s), 0);
 
     return {
       totalLinks, totalPoints, totalSubmits,
