@@ -7,14 +7,15 @@ import {
   ChevronLeft, ChevronRight, Presentation, FileDown,
   ArrowRight, Hash, Edit3, Save, ShieldCheck,
   Eye, EyeOff, LayoutTemplate, ExternalLink, Package, Settings, KeyRound, PieChart,
-  Bot, Sparkles, AlertTriangle, Send, Loader2, X, Compass, MessageSquare, CheckCircle, Activity, Image
+  Bot, Sparkles, AlertTriangle, Send, Loader2, X, Compass, MessageSquare, CheckCircle, Activity, Image, Upload
 } from 'lucide-react';
 import {
   generateFullReport, generateInsights, generateBottleneck,
-  generateRecommendation, generateNextPlan,
+  generateRecommendation, generateNextPlan, generateCustomerCommentAnalysis,
   chatWithAI, getStoredModel, setStoredModel,
   type ReportContext, type AIGeneratedReport, type ChatMessage
 } from '@/shared/services/aiService';
+import { readTabularFile, detectFreeTextColumn } from '@/shared/utils/csvImport';
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -121,6 +122,15 @@ export default function MonthlyQuarterlyReportPage() {
   const [isEditingRec, setIsEditingRec] = useState(false);
   const [selectedFocusProjects, setSelectedFocusProjects] = useState<string[]>([]);
 
+  // Customer comment analysis + extra AI context
+  const [additionalContextText, setAdditionalContextText] = useState('');
+  const [customerCommentsRawText, setCustomerCommentsRawText] = useState('');
+  const [customerCommentAnalysisText, setCustomerCommentAnalysisText] = useState('');
+  const [isEditingCustomerComments, setIsEditingCustomerComments] = useState(false);
+  const [commentImportInfo, setCommentImportInfo] = useState<{ fileName: string; totalRows: number; columnUsed: string } | null>(null);
+  const [isImportingComments, setIsImportingComments] = useState(false);
+  const commentFileInputRef = useRef<HTMLInputElement | null>(null);
+
   // AI states
   const [aiModel, setAiModel] = useState(() => getStoredModel());
   const [showAISettings, setShowAISettings] = useState(false);
@@ -138,6 +148,7 @@ export default function MonthlyQuarterlyReportPage() {
     summary: true,
     productivity: true,
     quality: true,
+    customerComments: true,
     topics: true,
     teamTasks: true,
     teamAndProject: true,
@@ -185,6 +196,11 @@ export default function MonthlyQuarterlyReportPage() {
         if (parsed.bottleneckText) setBottleneckText(parsed.bottleneckText);
         if (parsed.metricOverrides) setMetricOverrides(parsed.metricOverrides);
         if (parsed.selectedFocusProjects) setSelectedFocusProjects(parsed.selectedFocusProjects);
+        // Lưu ý: KHÔNG khôi phục customerCommentsRawText / commentImportInfo — dữ liệu comment thô
+        // (có thể vài nghìn dòng/tháng) chỉ tồn tại trong phiên làm việc hiện tại, không lưu vào localStorage
+        // hay bất kỳ nơi nào khác. Chỉ kết quả phân tích của AI (đoạn văn ngắn) mới được lưu lại.
+        if (parsed.customerCommentAnalysisText) setCustomerCommentAnalysisText(parsed.customerCommentAnalysisText);
+        if (parsed.additionalContextText) setAdditionalContextText(parsed.additionalContextText);
       }
     } catch (e) {
       console.error(e);
@@ -192,9 +208,52 @@ export default function MonthlyQuarterlyReportPage() {
   }, [storageKey]);
 
   const handleSaveConfig = () => {
-    const config = { summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects };
+    // Chủ ý KHÔNG lưu customerCommentsRawText / commentImportInfo vào localStorage — dữ liệu comment thô
+    // (có thể vài nghìn dòng/tháng) chỉ dùng tạm để AI phân tích, không giữ lại. Chỉ lưu kết quả phân tích.
+    const config = {
+      summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects,
+      customerCommentAnalysisText, additionalContextText,
+    };
     localStorage.setItem(storageKey, JSON.stringify(config));
     toast.success('Đã lưu cấu hình báo cáo cho kỳ này!');
+  };
+
+  /** Import file CSV/Excel chứa comment khách hàng (vài nghìn dòng/tháng) → tự tìm cột nội dung comment. */
+  const handleImportCommentsFile = async (file: File) => {
+    setIsImportingComments(true);
+    try {
+      const grid = await readTabularFile(file);
+      if (grid.length < 1) { toast.error('File không có dữ liệu'); return; }
+
+      const hasHeader = grid.length > 1;
+      const detected = detectFreeTextColumn(grid, [
+        'nhận xét', 'nhan xet', 'comment', 'feedback', 'phản hồi', 'phan hoi',
+        'ghi chú', 'ghi chu', 'note', 'nội dung', 'noi dung', 'đánh giá của khách', 'khách hàng',
+      ]);
+      if (!detected) {
+        toast.error('Không tìm được cột chứa nội dung comment trong file. Hãy đảm bảo file có 1 cột văn bản tự do (VD: "Nhận xét khách hàng").');
+        return;
+      }
+
+      const dataRows = hasHeader ? grid.slice(1) : grid;
+      const values = dataRows
+        .map(r => (r[detected.colIndex] ?? '').toString().trim())
+        .filter(v => v.length > 0);
+
+      if (values.length === 0) {
+        toast.error(`Cột "${detected.colName}" không có dữ liệu.`);
+        return;
+      }
+
+      setCustomerCommentsRawText(values.join('\n'));
+      setCommentImportInfo({ fileName: file.name, totalRows: values.length, columnUsed: detected.colName });
+      toast.success(`Đã import ${values.length.toLocaleString('vi-VN')} dòng comment từ cột "${detected.colName}".`);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Lỗi đọc file');
+    } finally {
+      setIsImportingComments(false);
+      if (commentFileInputRef.current) commentFileInputRef.current.value = '';
+    }
   };
 
   /* ── filter submissions by period ── */
@@ -619,6 +678,7 @@ export default function MonthlyQuarterlyReportPage() {
       topEmployees, projectProgress, projectsFocus: ovProjects,
       insights: autoInsights,
       bottleneck: bottleneckText,
+      customerCommentAnalysis: visibleBlocks.customerComments ? customerCommentAnalysisText : undefined,
       driveLink,
       nextPlan,
     });
@@ -674,6 +734,7 @@ export default function MonthlyQuarterlyReportPage() {
       topEmployees, projectProgress, projectsFocus: ovProjects,
       insights: autoInsights,
       bottleneck: bottleneckText,
+      customerCommentAnalysis: visibleBlocks.customerComments ? customerCommentAnalysisText : undefined,
       driveLink,
       nextPlan,
     });
@@ -709,7 +770,9 @@ export default function MonthlyQuarterlyReportPage() {
     projectProgress,
     projectsFocus,
     tasksBreakdown,
-  }), [periodLabel, stats, teamBreakdown, topEmployees, qualityStats, projectProgress, projectsFocus, tasksBreakdown]);
+    customerCommentsRaw: customerCommentsRawText,
+    additionalContext: additionalContextText,
+  }), [periodLabel, stats, teamBreakdown, topEmployees, qualityStats, projectProgress, projectsFocus, tasksBreakdown, customerCommentsRawText, additionalContextText]);
 
   const handleAIFullReport = async () => {
     setAiLoading('full');
@@ -725,7 +788,7 @@ export default function MonthlyQuarterlyReportPage() {
     }
   };
 
-  const handleAIBlock = async (block: 'insights' | 'bottleneck' | 'recommendation' | 'nextPlan') => {
+  const handleAIBlock = async (block: 'insights' | 'bottleneck' | 'recommendation' | 'nextPlan' | 'customerCommentAnalysis') => {
     setAiLoading(block);
     try {
       const ctx = buildReportContext();
@@ -741,6 +804,10 @@ export default function MonthlyQuarterlyReportPage() {
         const result = await generateRecommendation(ctx);
         setRecommendationText(result);
         toast.success('AI đã viết đề xuất!');
+      } else if (block === 'customerCommentAnalysis') {
+        const result = await generateCustomerCommentAnalysis(ctx);
+        setCustomerCommentAnalysisText(result);
+        toast.success('AI đã phân tích comment khách hàng!');
       } else if (block === 'nextPlan') {
         const result = await generateNextPlan(ctx);
         setOverride('plan_general', result.general);
@@ -764,6 +831,9 @@ export default function MonthlyQuarterlyReportPage() {
     setSummaryText(aiReviewData.insights);
     setBottleneckText(aiReviewData.bottleneck);
     setRecommendationText(aiReviewData.recommendation);
+    if (aiReviewData.customerCommentAnalysis) {
+      setCustomerCommentAnalysisText(aiReviewData.customerCommentAnalysis);
+    }
     if (aiReviewData.nextPlan) {
       setOverride('plan_general', aiReviewData.nextPlan.general);
       setOverride('plan_goals', aiReviewData.nextPlan.goals);
@@ -798,7 +868,7 @@ export default function MonthlyQuarterlyReportPage() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
-  const AIBlockButton = ({ block, label }: { block: 'insights' | 'bottleneck' | 'recommendation' | 'nextPlan'; label?: string }) => (
+  const AIBlockButton = ({ block, label }: { block: 'insights' | 'bottleneck' | 'recommendation' | 'nextPlan' | 'customerCommentAnalysis'; label?: string }) => (
     <button className="btn btn-ghost btn-icon" onClick={() => handleAIBlock(block)}
       disabled={aiLoading !== null} title={label || 'AI gợi ý'}
       style={{ color: '#10b981' }}>
@@ -928,6 +998,7 @@ export default function MonthlyQuarterlyReportPage() {
             summary: 'Tóm tắt điều hành',
             productivity: 'Năng suất & Tăng trưởng',
             quality: 'Chất lượng & Compliance',
+            customerComments: 'Comment khách hàng',
             topics: 'Top chủ đề focus',
             teamAndProject: 'Phân bổ theo người & Dự án',
             bottleneck: 'Điểm nghẽn & Khó khăn',
@@ -1225,6 +1296,63 @@ export default function MonthlyQuarterlyReportPage() {
                 setOverride('qc_pctNegative', parts[1]?.trim() || '');
               }} />
           </div>
+        </div>
+      )}
+
+      {/* ── Block 3.5: Customer Comment Analysis ── */}
+      {visibleBlocks.customerComments && (
+        <div className="card" style={{ padding: '20px', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ padding: '8px', background: '#475569', borderRadius: '50%', color: '#fff' }}><MessageSquare size={16} /></div>
+              <h3 style={{ fontWeight: 800, fontSize: '1.2rem', margin: 0 }}>Phân tích Comment khách hàng</h3>
+            </div>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <input
+                ref={commentFileInputRef}
+                type="file"
+                accept=".csv,.xlsx,.xls,.tsv,text/csv"
+                style={{ display: 'none' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleImportCommentsFile(f); }}
+              />
+              <button className="btn btn-secondary" onClick={() => commentFileInputRef.current?.click()}
+                disabled={isImportingComments} title="Import file CSV/Excel chứa comment khách hàng">
+                {isImportingComments ? <Loader2 size={14} className="spin" /> : <Upload size={14} />} Import CSV/Excel
+              </button>
+              <AIBlockButton block="customerCommentAnalysis" label="AI phân tích comment" />
+              <button className="btn btn-ghost btn-icon" onClick={() => setIsEditingCustomerComments(!isEditingCustomerComments)} style={{ color: '#475569' }}>
+                {isEditingCustomerComments ? <Save size={18} /> : <Edit3 size={18} />}
+              </button>
+            </div>
+          </div>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', margin: '0 0 8px 0' }}>
+            Dán hoặc import (CSV/Excel, hỗ trợ hàng nghìn dòng/tháng) nội dung comment/nhận xét khách hàng thực tế để AI đọc và phân tích chủ đề, trích dẫn cụ thể — thay vì chỉ đếm % tích cực/tiêu cực. File import sẽ tự tìm cột chứa văn bản comment.
+            Dữ liệu thô này chỉ dùng tạm trong phiên làm việc hiện tại để AI phân tích, <strong>không được lưu lại</strong> (tải lại trang hoặc đổi kỳ báo cáo sẽ mất, cần import lại); chỉ kết quả phân tích bên dưới mới được lưu.
+          </p>
+          {commentImportInfo && (
+            <p style={{ fontSize: '0.78rem', color: '#0f766e', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <CheckCircle size={13} /> Đã import {commentImportInfo.totalRows.toLocaleString('vi-VN')} dòng từ "{commentImportInfo.fileName}" (cột: "{commentImportInfo.columnUsed}")
+            </p>
+          )}
+          <textarea
+            className="form-input"
+            placeholder={'Ví dụ:\nBài duyệt hơi chậm so với deadline\nNội dung sản phẩm rất chuẩn, khách yên tâm\nCần bổ sung ảnh minh hoạ cho bài tiêm chủng...\n\n(hoặc bấm "Import CSV/Excel" để nạp hàng loạt)'}
+            value={customerCommentsRawText}
+            onChange={e => { setCustomerCommentsRawText(e.target.value); setCommentImportInfo(null); }}
+            rows={4}
+            style={{ width: '100%', fontSize: '0.88rem', lineHeight: 1.6, marginBottom: '16px', fontFamily: 'inherit' }}
+          />
+          {isEditingCustomerComments ? (
+            <textarea className="form-input" value={customerCommentAnalysisText} onChange={e => setCustomerCommentAnalysisText(e.target.value)} rows={4} style={{ width: '100%', fontSize: '0.95rem', lineHeight: 1.6 }} />
+          ) : customerCommentAnalysisText ? (
+            <div style={{ fontSize: '0.95rem', lineHeight: 1.7, color: '#1e293b', whiteSpace: 'pre-wrap', fontWeight: 500, padding: '16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              {customerCommentAnalysisText}
+            </div>
+          ) : (
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', fontStyle: 'italic', padding: '16px', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #e2e8f0' }}>
+              Chưa có phân tích. Dán comment khách hàng ở trên (không bắt buộc) rồi bấm nút AI để tạo phân tích.
+            </div>
+          )}
         </div>
       )}
 
@@ -1800,7 +1928,7 @@ export default function MonthlyQuarterlyReportPage() {
       {/* 1. AI Settings Modal */}
       {showAISettings && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-          <div className="card" style={{ width: '400px', maxWidth: '90vw', padding: '24px', background: '#fff' }}>
+          <div className="card" style={{ width: '480px', maxWidth: '90vw', padding: '24px', background: '#fff' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: '#0f172a' }}>
                 <Settings size={20} color="#10b981" /> Cài đặt AI
@@ -1816,6 +1944,15 @@ export default function MonthlyQuarterlyReportPage() {
                 <option value="gemini-2.5-pro">Gemini 2.5 Pro (Khuyên dùng)</option>
                 <option value="gemini-2.0-flash">Gemini 2.0 Flash (Nhanh)</option>
               </select>
+            </div>
+            <div className="form-group" style={{ marginTop: '12px' }}>
+              <label className="form-label">Thông tin bổ sung cho AI (kỳ này)</label>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', margin: '0 0 6px 0' }}>
+                Note họp, feedback thị trường, bối cảnh ngoài số liệu hệ thống... AI sẽ đọc và lồng ghép vào mọi phần phân tích (nhận xét, điểm nghẽn, đề xuất, comment khách hàng).
+              </p>
+              <textarea className="form-input" value={additionalContextText} onChange={e => setAdditionalContextText(e.target.value)}
+                rows={4} placeholder="VD: Tháng này có đợt campaign tiêm chủng mùa hè, ảnh hưởng tăng đột biến task Multimedia..."
+                style={{ width: '100%', fontSize: '0.85rem', lineHeight: 1.5, fontFamily: 'inherit' }} />
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
               <button className="btn btn-primary" onClick={() => setShowAISettings(false)}>Xong</button>
@@ -1850,6 +1987,13 @@ export default function MonthlyQuarterlyReportPage() {
                 <h4 style={{ color: '#1e40af', margin: '0 0 8px 0', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}><TrendingUp size={16}/> Đề xuất</h4>
                 <div style={{ padding: '16px', background: '#eff6ff', borderRadius: '8px', fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>{aiReviewData.recommendation}</div>
               </div>
+
+              {aiReviewData.customerCommentAnalysis && (
+                <div>
+                  <h4 style={{ color: '#334155', margin: '0 0 8px 0', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}><MessageSquare size={16}/> Phân tích Comment khách hàng</h4>
+                  <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px', fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>{aiReviewData.customerCommentAnalysis}</div>
+                </div>
+              )}
 
               {aiReviewData.nextPlan && (
                 <div>
@@ -2010,6 +2154,7 @@ interface ReportHtmlData {
   projectsFocus: { name: string; type: string; links: number }[];
   insights: string;
   bottleneck: string;
+  customerCommentAnalysis?: string;
   driveLink?: string;
   qc_driveLink?: string;
   nextPlan?: {
@@ -2138,6 +2283,13 @@ ${data.qc_driveLink ? `<div style="margin-bottom:16px"><a href="${data.qc_driveL
     <tr><td style="padding:10px;border-bottom:1px solid #f1f5f9;font-weight:600">% Tích cực / Tiêu cực</td><td style="padding:10px;text-align:center;border-bottom:1px solid #f1f5f9;font-weight:700">${data.qualityStats.pctPositive}% / ${data.qualityStats.pctNegative}%</td></tr>
   </tbody>
 </table>
+
+${data.customerCommentAnalysis ? `
+<h2>💬 Phân tích Comment khách hàng</h2>
+<div style="padding:18px 20px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;font-size:0.9rem;line-height:1.8;white-space:pre-wrap;color:#1e293b;margin-bottom:28px">
+${data.customerCommentAnalysis}
+</div>
+` : ''}
 
 <h2>📋 Chi tiết đầu việc</h2>
 <table style="margin-bottom:28px">
@@ -2348,6 +2500,14 @@ function buildPresentationHtml(data: ReportHtmlData): string {
     ${projFocusRows || '<p style="color:#94a3b8;font-size:1.1rem">Không có dữ liệu</p>'}
   `);
 
+  // Slide 5.3: Customer Comment Analysis
+  const s5_3 = data.customerCommentAnalysis ? slide(`
+    <h2 style="font-size:1.8rem;font-weight:800;margin-bottom:40px;color:#0f172a">💬 Phân tích Comment khách hàng</h2>
+    <div style="padding:28px;border-radius:16px;background:#f8fafc;border:2px solid #e2e8f0;font-size:1.05rem;line-height:1.8;white-space:pre-wrap;color:#1e293b">
+${data.customerCommentAnalysis}
+    </div>
+  `) : '';
+
   // Slide 6: Insights & Bottleneck
   const s6 = slide(`
     <h2 style="font-size:1.8rem;font-weight:800;margin-bottom:40px;color:#0f172a">💡 Nhận xét & Đề xuất</h2>
@@ -2430,7 +2590,7 @@ ${data.nextPlan.team_multimedia}
     background:rgba(255,255,255,.15);color:#fff;transition:all .2s}
   nav button:hover{background:rgba(255,255,255,.3)}
 </style></head><body>
-${s1}${s2}${s3}${s4}${s5}${s5_1}${s5_2}${s6}${s6_5a}${s6_5b}${s7}
+${s1}${s2}${s3}${s4}${s5}${s5_1}${s5_2}${s5_3}${s6}${s6_5a}${s6_5b}${s7}
 <nav>
   <button onclick="window.print()">🖨 In</button>
   <button onclick="scrollBy({top:-window.innerHeight,behavior:'smooth'})">▲ Trước</button>
