@@ -150,8 +150,35 @@ export default function DashboardPage() {
     const dd = String(d.getDate()).padStart(2, '0');
     return `${yy}-${mm}-${dd}`;
   }
-  const prevDateFrom = dateFrom ? shiftMonthDate(dateFrom, -1) : '';
-  const prevDateTo   = dateTo   ? shiftMonthDate(dateTo, -1)   : '';
+  const isFullMonth = useMemo(() => {
+    if (!dateFrom || !dateTo) return false;
+    const from = new Date(dateFrom + 'T00:00:00');
+    const to = new Date(dateTo + 'T00:00:00');
+    if (from.getFullYear() !== to.getFullYear() || from.getMonth() !== to.getMonth()) return false;
+    if (from.getDate() !== 1) return false;
+    const lastDay = new Date(from.getFullYear(), from.getMonth() + 1, 0).getDate();
+    return to.getDate() === lastDay;
+  }, [dateFrom, dateTo]);
+
+  const prevDateFrom = (() => {
+    if (!dateFrom) return '';
+    if (isFullMonth) {
+      const from = new Date(dateFrom + 'T00:00:00');
+      const prev = new Date(from.getFullYear(), from.getMonth() - 1, 1);
+      return fmtDate(prev);
+    }
+    return shiftMonthDate(dateFrom, -1);
+  })();
+
+  const prevDateTo = (() => {
+    if (!dateTo) return '';
+    if (isFullMonth) {
+      const from = new Date(dateFrom + 'T00:00:00');
+      const prevLast = new Date(from.getFullYear(), from.getMonth(), 0);
+      return fmtDate(prevLast);
+    }
+    return shiftMonthDate(dateTo, -1);
+  })();
   const prevFromMs = prevDateFrom ? new Date(prevDateFrom + 'T00:00:00').getTime() : -Infinity;
   const prevToMs   = prevDateTo   ? new Date(prevDateTo   + 'T23:59:59').getTime() : Infinity;
 
