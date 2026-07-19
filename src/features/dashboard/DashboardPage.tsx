@@ -556,8 +556,26 @@ export default function DashboardPage() {
       cur.points += s.totalPoints;
       map.set(s.employeeName, cur);
     });
-    return Array.from(map.values()).sort((a, b) => b.points - a.points).slice(0, 5);
-  }, [thisMonthSubs]);
+    const list = Array.from(map.values()).map(p => {
+      const memConfig = members.find(m => m.name === p.name);
+      const kpiRole = memConfig?.kpiRole || 'member';
+      const empBonus = bonusInRange
+        .filter(b => b.employeeName === p.name)
+        .reduce((sum, b) => sum + b.amount, 0);
+      const totalPoints = p.points + empBonus;
+      const memberTarget = scaleConfig.memberTargetPoints;
+      const pFactor = memConfig?.productivityFactor
+        ?? (kpiRole === 'leader' ? scaleConfig.leaderProductionWeight : 1.0);
+      const targetPoints = Math.round(memberTarget * pFactor * 100) / 100;
+      const kpiAchievement = targetPoints > 0 ? (totalPoints / targetPoints) * 100 : 0;
+      return {
+        ...p,
+        points: totalPoints,
+        kpiAchievement: Math.round(kpiAchievement),
+      };
+    });
+    return list.sort((a, b) => b.kpiAchievement - a.kpiAchievement).slice(0, 5);
+  }, [thisMonthSubs, members, bonusInRange, scaleConfig]);
 
   const myRank = useMemo(() => {
     if (!currentUser) return null;
@@ -619,7 +637,7 @@ export default function DashboardPage() {
       if (topPerformers[0]) {
         lines.push({
           tone: 'good',
-          text: `Top performer: ${topPerformers[0].name} với ${topPerformers[0].points.toFixed(0)}đ.`,
+          text: `Top performer: ${topPerformers[0].name} đạt ${topPerformers[0].kpiAchievement}% KPI.`,
         });
       }
     }
@@ -1037,10 +1055,10 @@ export default function DashboardPage() {
                     }}>{i + 1}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{p.name}</div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>{p.links} link</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>{p.links} link · {p.points.toFixed(0)}đ</div>
                     </div>
                     <div style={{ fontWeight: 800, color: 'var(--success)', fontSize: '0.95rem' }}>
-                      {p.points.toFixed(0)}đ
+                      {p.kpiAchievement}%
                     </div>
                   </div>
                 ))}
