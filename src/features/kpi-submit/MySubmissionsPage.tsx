@@ -530,6 +530,21 @@ function Stat2({ label, value, color }: { label: string; value: number | string;
   );
 }
 
+function toLocalISOString(isoString: string): string {
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return '';
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const date = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${date}T${hours}:${minutes}`;
+  } catch {
+    return '';
+  }
+}
+
 /* ─────────────────────────── EditSubmissionModal (Manager only) ── */
 
 function EditSubmissionModal({ item, taskPointRules, onClose, onSave }: {
@@ -549,6 +564,7 @@ function EditSubmissionModal({ item, taskPointRules, onClose, onSave }: {
   const [auditNote,      setAuditNote]      = useState('');
   const [projectId,      setProjectId]      = useState(item.projectId ?? '');
   const [projectTaskId,  setProjectTaskId]  = useState(item.projectTaskId ?? '');
+  const [submittedAtLocal, setSubmittedAtLocal] = useState(() => toLocalISOString(item.submittedAt));
 
   // Quantity & direct-point fields (for non-link tracking)
   const [quantity,       setQuantity]       = useState<number>(item.quantity ?? 0);
@@ -590,6 +606,7 @@ function EditSubmissionModal({ item, taskPointRules, onClose, onSave }: {
   const removeLink = (i: number) => setLinks(l => l.filter((_, idx) => idx !== i));
 
   const handleSave = () => {
+    const finalSubmittedAt = submittedAtLocal ? new Date(submittedAtLocal).toISOString() : item.submittedAt;
     if (isQuantityMode) {
       if (quantity <= 0) { toast.error('Số lượng phải lớn hơn 0'); return; }
       if (manualPoints < 0) { toast.error('Số điểm không được âm'); return; }
@@ -604,6 +621,7 @@ function EditSubmissionModal({ item, taskPointRules, onClose, onSave }: {
         notes: auditNote ? `[Sửa bởi Manager: ${auditNote}] ${notes}`.trim() : notes || undefined,
         projectId:     projectId || undefined,
         projectTaskId: projectTaskId || undefined,
+        submittedAt:   finalSubmittedAt,
       });
     } else {
       if (cleanLinks.length === 0) { toast.error('Phải có ít nhất 1 link'); return; }
@@ -617,6 +635,7 @@ function EditSubmissionModal({ item, taskPointRules, onClose, onSave }: {
         totalPoints:  finalTotalPoints,
         projectId:     projectId || undefined,
         projectTaskId: projectTaskId || undefined,
+        submittedAt:   finalSubmittedAt,
       });
     }
   };
@@ -668,6 +687,12 @@ function EditSubmissionModal({ item, taskPointRules, onClose, onSave }: {
             </label>
             <input className="form-input" value={taskDetail} onChange={e => setTaskDetail(e.target.value)}
               placeholder="Ví dụ: SEO, Bài mới, Cập nhật..." />
+          </div>
+
+          {/* Ngày nộp (submittedAt) */}
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label">Ngày nộp (submittedAt)</label>
+            <input className="form-input" type="datetime-local" value={submittedAtLocal} onChange={e => setSubmittedAtLocal(e.target.value)} />
           </div>
 
           {/* teamGroup */}
