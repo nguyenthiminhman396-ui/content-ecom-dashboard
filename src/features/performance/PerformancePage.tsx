@@ -34,7 +34,7 @@ function isInRange(ts: string, from: string, to: string): boolean {
   return true;
 }
 
-type SortKey = 'totalScore' | 'totalPoints' | 'kpiAchievement' | 'name';
+type SortKey = 'totalScore' | 'totalPoints' | 'totalLinks' | 'kpiAchievement' | 'name';
 
 export default function PerformancePage() {
   const navigate = useNavigate();
@@ -48,7 +48,7 @@ export default function PerformancePage() {
   const [editItem, setEditItem] = useState<PerformanceReview | null>(null);
   const [expandedEmployee, setExpandedEmployee] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = usePersistedState('perf_search', '');
-  const [sortBy, setSortBy] = usePersistedState<SortKey>('perf_sortBy', 'totalScore');
+  const [sortBy, setSortBy] = usePersistedState<SortKey>('perf_sortBy', 'totalPoints');
   const [sortAsc, setSortAsc] = usePersistedState('perf_sortAsc', false);
 
   // Date range filter — persisted across navigation
@@ -207,7 +207,7 @@ export default function PerformancePage() {
         </div>
         {/* Sort buttons */}
         <div style={{ display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap' }}>
-          {([['totalScore','Tổng điểm'],['totalPoints','Sản lượng'],['kpiAchievement','% KPI'],['name','Tên']] as [SortKey,string][]).map(([k,l]) => (
+          {([['totalPoints','Tổng điểm'],['totalLinks','Sản lượng'],['kpiAchievement','% KPI'],['totalScore','Điểm đánh giá'],['name','Tên']] as [SortKey,string][]).map(([k,l]) => (
             <button key={k} onClick={() => toggleSort(k)}
               style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
                 border: sortBy === k ? '1.5px solid var(--primary-500)' : '1px solid var(--border-light)',
