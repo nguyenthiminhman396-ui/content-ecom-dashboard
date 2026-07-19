@@ -94,9 +94,10 @@ export default function PerformancePage() {
     return allEmployees.map(name => {
       const memConfig = members.find(m => m.name === name);
       const kpiRole = memConfig?.kpiRole || 'member';
-      const empTasks = monthTasks.filter(t => t.employeeName === name);
-      const totalLinks = empTasks.length;
-      const basePoints = empTasks.reduce((s, t) => s + t.point, 0);
+      // Lấy danh sách submissions thực tế trong kỳ của nhân sự này để tính toán chính xác số điểm và số link
+      const empSubs = submissions.filter(s => s.employeeName === name && isInRange(s.submittedAt, dateFrom, dateTo));
+      const totalLinks = empSubs.reduce((sum, s) => sum + (s.links?.length || 0), 0);
+      const basePoints = empSubs.reduce((sum, s) => sum + s.totalPoints, 0);
       // Bonus của tháng (selectedPeriod): chỉ cộng bonus đã APPROVED
       const empBonus = bonusPoints
         .filter(b => b.employeeName === name && b.period === selectedPeriod && b.status === 'approved')
@@ -129,7 +130,7 @@ export default function PerformancePage() {
       if (sortBy === 'name') return a.name.localeCompare(b.name) * dir;
       return ((b[sortBy] as number) - (a[sortBy] as number)) * dir;
     });
-  }, [allEmployees, monthTasks, performanceReviews, selectedPeriod, members, scaleConfig, searchQuery, sortBy, sortAsc, bonusPoints]);
+  }, [allEmployees, monthTasks, performanceReviews, selectedPeriod, members, scaleConfig, searchQuery, sortBy, sortAsc, bonusPoints, submissions]);
 
   // ── Leadership metrics cho tất cả Leader ──────────────────────────────────
   const leadershipMetrics = useMemo(() => {
