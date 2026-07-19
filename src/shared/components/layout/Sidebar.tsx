@@ -93,6 +93,7 @@ export default function Sidebar() {
               )}
               <NavLink
                 to={item.path}
+                end
                 className={`nav-item ${isActive ? 'active' : ''}`}
               >
                 <span className="nav-icon">
