@@ -12,6 +12,7 @@ import { exportCsv, makeId } from '@/shared/utils/helpers';
 import { exportHtmlFile, buildReportHtml } from '@/shared/utils/exportHtml';
 import toast from 'react-hot-toast';
 import WeeklyReportViewer from './WeeklyReportViewer';
+import { generateWeeklyReport, type ReportContext } from '@/shared/services/aiService';
 
 /* ─────────────────────────────────────────────────────────── helpers ── */
 
@@ -783,6 +784,8 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
 
   const [tab, setTab] = useState<TabKey>('data');
   const [aiLoading, setAiLoading] = useState(false);
+  const [tempAdditionalContext, setTempAdditionalContext] = useState('');
+  const [tempCustomerComments, setTempCustomerComments] = useState('');
 
   /* ── recalc helper ── */
   const recalcFromWeek = (weekStart: string) => {
@@ -946,18 +949,161 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
     toast.success('Đã làm mới toàn bộ số liệu!');
   };
 
-  const handleAIGenerate = () => {
+  const handleAIGenerate = async () => {
     setAiLoading(true);
-    setTimeout(() => {
-      const progresses = (form.projectProgress || []).map(p => `${p.projectName}: ${p.progress}%`).join(', ');
-      const assessment =
-        `• Nhận định chính: Đạt ${form.totalLinks || 0} link (${form.totalPoints?.toFixed(0) || 0} điểm). Tiến độ dự án: ${progresses || 'chưa cập nhật'}.\n` +
-        `• Rủi ro tiềm ẩn: ` + (form.totalLinks && form.totalLinks < 200 ? 'Sản lượng đang thấp, nguy cơ trễ KPI cuối tháng.' : 'Hiện tại duy trì tốt, rủi ro thấp.') + `\n` +
-        `• Đề xuất hành động: Tập trung xử lý dứt điểm các dự án dưới 30%, điều phối thêm nguồn lực nếu cần.`;
-      setForm(f => ({ ...f, aiAssessment: assessment }));
+    try {
+      const ws = form.weekStart || currentWeekStart;
+      const calc = recalcFromWeek(ws);
+
+      const getQty = (s: typeof submissions[0]) => (s.quantity && s.quantity > 0) ? s.quantity : s.links.length;
+      const cat = (s: typeof submissions[0]) => {
+        const t = s.taskType || '';
+        if (t === 'Bài Góc sức khỏe - Bệnh lý - Thành phần') return 'baiMoi';
+        if (t === 'Sản phẩm') return 'sku';
+        if (t === 'Multimedia' || t === 'Tin nhanh') return 'multimedia';
+        if (t === 'Tối ưu Sản phẩm - Bài viết') return 'toiUu';
+        const tl = t.toLowerCase();
+        if (tl.includes('bài góc sức khỏe') || (tl.includes('bài viết') && !tl.includes('tối ưu'))) return 'baiMoi';
+        if (tl.includes('sản phẩm') && !tl.includes('tối ưu')) return 'sku';
+        if (tl.includes('multimedia') || tl.includes('tin nhanh')) return 'multimedia';
+        if (tl.includes('tối ưu')) return 'toiUu';
+        return 'khac';
+      };
+
+      const inRange = submissions.filter(s => {
+        const t = new Date(s.submittedAt).getTime();
+        const dStart = new Date(ws);
+        const dEnd = new Date(dStart); dEnd.setDate(dStart.getDate() + 6); dEnd.setHours(23, 59, 59);
+        return !isNaN(t) && t >= dStart.getTime() && t <= dEnd.getTime();
+      });
+
+      const baiMoi = inRange.filter(s => cat(s) === 'baiMoi').reduce((sum, s) => sum + getQty(s), 0);
+      const sku = inRange.filter(s => cat(s) === 'sku').reduce((sum, s) => sum + getQty(s), 0);
+      const multimedia = inRange.filter(s => cat(s) === 'multimedia').reduce((sum, s) => sum + getQty(s), 0);
+      const toiUu = inRange.filter(s => cat(s) === 'toiUu').reduce((sum, s) => sum + getQty(s), 0);
+
+      const employees = new Set(inRange.map(s => s.employeeName));
+      const empPoints = new Map<string, { links: number; points: number }>();
+      inRange.forEach(s => {
+        const prev = empPoints.get(s.employeeName) || { links: 0, points: 0 };
+        empPoints.set(s.employeeName, {
+          links: prev.links + getQty(s),
+          points: prev.points + s.totalPoints
+        });
+      });
+      const topEmployees = Array.from(empPoints.entries())
+        .map(([name, v]) => ({ name, links: v.links, points: v.points }))
+        .sort((a, b) => b.points - a.points);
+
+      // Quality stats (QC)
+      const withQc = inRange.filter(s => !!s.qualityCheck);
+      const qcScores = withQc.map(s => s.qualityCheck!.score);
+      const totalReviews = withQc.length;
+      const avgScore = totalReviews > 0 ? (qcScores.reduce((a, b) => a + b, 0) / totalReviews) * 2 : 0;
+      const comments = withQc.filter(s => s.qualityCheck!.note && s.qualityCheck!.note.trim().length > 0);
+      const totalComments = comments.length;
+      let positiveCount = 0;
+      let negativeCount = 0;
+      comments.forEach(s => {
+        const note = s.qualityCheck!.note!.toLowerCase();
+        if (/(tốt|ok|duyệt|hay|xuất sắc|đạt)/i.test(note)) positiveCount++;
+        else if (/(lỗi|sai|chậm|thiếu|chưa đạt|vi phạm|sửa|cảnh báo|chặn)/i.test(note)) negativeCount++;
+      });
+      const pctPositive = totalComments > 0 ? Math.round((positiveCount / totalComments) * 100) : 0;
+      const pctNegative = totalComments > 0 ? Math.round((negativeCount / totalComments) * 100) : 0;
+
+      const teamMap = new Map<string, { links: number; points: number }>();
+      inRange.forEach(s => {
+        const team = s.teamGroup || 'Khác';
+        const prev = teamMap.get(team) || { links: 0, points: 0 };
+        teamMap.set(team, { links: prev.links + getQty(s), points: prev.points + s.totalPoints });
+      });
+      const teamBreakdown = Array.from(teamMap.entries()).sort((a, b) => b[1].points - a[1].points);
+
+      const projProgress = (form.projectProgress || []).map(p => ({
+        name: p.projectName,
+        progress: p.progress
+      }));
+
+      const projectsFocus = (form.projectProgress || [])
+        .map(p => ({
+          name: p.projectName,
+          type: 'Campaign',
+          links: inRange.filter(s => s.projectId === p.projectId).reduce((sum, s) => sum + getQty(s), 0)
+        }))
+        .filter(p => p.links > 0)
+        .sort((a, b) => b.links - a.links);
+
+      const tMap = new Map<string, Map<string, { links: number; points: number }>>();
+      inRange.forEach(s => {
+        const type = s.taskType || 'Khác';
+        const detail = s.taskDetail || s.taskType || 'Khác';
+        if (!tMap.has(type)) tMap.set(type, new Map());
+        const typeMap = tMap.get(type)!;
+        const prev = typeMap.get(detail) || { links: 0, points: 0 };
+        typeMap.set(detail, { links: prev.links + getQty(s), points: prev.points + s.totalPoints });
+      });
+      const tasksBreakdown = Array.from(tMap.entries()).map(([type, details]) => ({
+        type,
+        details: Array.from(details.entries())
+          .map(([name, data]) => ({ name, links: data.links, points: data.points }))
+          .sort((a, b) => b.points - a.points)
+      })).sort((a, b) => a.type.localeCompare(b.type));
+
+      const formatWeekLabel = (weekStart: string) => {
+        const d = new Date(weekStart);
+        const end = new Date(d);
+        end.setDate(d.getDate() + 6);
+        return `Tuần ${d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} — ${end.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+      };
+
+      const context: ReportContext = {
+        periodLabel: formatWeekLabel(ws),
+        stats: {
+          totalLinks: form.totalLinks ?? calc.totalLinks,
+          totalPoints: form.totalPoints ?? calc.totalPoints,
+          totalSubmits: form.totalTasksCompleted ?? calc.totalTasksCompleted,
+          baiMoi,
+          sku,
+          multimedia,
+          toiUu,
+          employeeCount: employees.size,
+          avgPointsPerEmp: employees.size > 0 ? (form.totalPoints ?? calc.totalPoints) / employees.size : 0,
+          deltaLinks: 0,
+          deltaPoints: 0,
+          deltaSubmits: 0,
+        },
+        teamBreakdown,
+        topEmployees,
+        qualityStats: {
+          avgScore,
+          totalReviews,
+          totalComments,
+          pctPositive,
+          pctNegative,
+        },
+        projectProgress: projProgress,
+        projectsFocus,
+        tasksBreakdown,
+        customerCommentsRaw: tempCustomerComments,
+        additionalContext: tempAdditionalContext,
+      };
+
+      const result = await generateWeeklyReport(context);
+      
+      setForm(f => ({
+        ...f,
+        aiAssessment: result.aiAssessment || f.aiAssessment || '',
+        insights: result.insights || f.insights || '',
+        bottlenecks: result.bottlenecks || f.bottlenecks || '',
+        nextWeekPlan: result.nextWeekPlan || f.nextWeekPlan || '',
+      }));
+      toast.success('AI đã gợi ý đánh giá thực tế thành công!');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Lỗi gọi AI');
+    } finally {
       setAiLoading(false);
-      toast.success('AI đã gợi ý đánh giá!');
-    }, 900);
+    }
   };
 
   const updateProjectProgress = (idx: number, field: keyof WeeklyReportProject, value: string | number) => {
@@ -1201,6 +1347,37 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
             {/* ── TAB 3: Chốt ── */}
             {tab === 'finalize' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {/* AI Input Context Configuration */}
+                <div style={{ padding: '14px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Sparkles size={14} color="#7c3aed" /> Cấu hình ngữ cảnh AI (tùy chọn)
+                  </div>
+                  
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>📝 Thông tin bổ sung cho AI</label>
+                    <textarea 
+                      className="form-textarea" 
+                      value={tempAdditionalContext} 
+                      onChange={e => setTempAdditionalContext(e.target.value)}
+                      rows={2} 
+                      placeholder="Ví dụ: Campaign tiêm chủng đột biến, sự cố kĩ thuật duyệt bài chậm..."
+                      style={{ fontSize: '0.8rem', padding: '6px 8px', background: '#fff' }} 
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>💬 Dán comment khách hàng thô (mỗi dòng một nhận xét)</label>
+                    <textarea 
+                      className="form-textarea" 
+                      value={tempCustomerComments} 
+                      onChange={e => setTempCustomerComments(e.target.value)}
+                      rows={2} 
+                      placeholder="Bài duyệt hơi chậm so với deadline&#10;Nội dung sản phẩm rất chuẩn..."
+                      style={{ fontSize: '0.8rem', padding: '6px 8px', background: '#fff' }} 
+                    />
+                  </div>
+                </div>
+
                 <div className="form-group" style={{ margin: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <label className="form-label" style={{ margin: 0 }}>🤖 AI đánh giá</label>

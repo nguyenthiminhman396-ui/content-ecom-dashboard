@@ -55,7 +55,7 @@ export interface AIGeneratedReport {
   };
 }
 
-type AIBlockType = 'insights' | 'bottleneck' | 'recommendation' | 'nextPlan' | 'fullReport' | 'customerCommentAnalysis';
+type AIBlockType = 'insights' | 'bottleneck' | 'recommendation' | 'nextPlan' | 'fullReport' | 'customerCommentAnalysis' | 'weeklyReport';
 
 // ─── Model Config (stored client-side, no secret) ──────────
 
@@ -269,6 +269,21 @@ Quy tắc:
 - BẮT BUỘC viết dưới dạng ĐOẠN VĂN XUÔI (plaintext) hoàn toàn.
 - TUYỆT ĐỐI KHÔNG dùng bất kỳ ký tự đặc biệt nào: KHÔNG in đậm (**), KHÔNG gạch đầu dòng (-), KHÔNG emoji.
 - PHẢI trích dẫn số liệu cụ thể tự nhiên vào câu.
+- BẮT BUỘC dùng thẻ XML (ví dụ: <insights>...</insights>).`,
+
+  weeklyReport: `Dựa trên dữ liệu báo cáo tuần bên dưới, hãy phân tích và sinh nội dung đánh giá cho báo cáo tuần này.
+
+Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau (bên trong mỗi thẻ viết đoạn văn xuôi duy nhất, TUYỆT ĐỐI không dùng gạch đầu dòng, dấu sao hay emoji):
+
+<insights>Nhận xét từ số liệu tuần: tóm tắt ngắn gọn năng suất, sản lượng, so sánh giữa các nhóm việc và top nhân sự nổi bật</insights>
+<bottleneck>Điểm nghẽn & Rủi ro tuần: nhận diện các vấn đề chậm tiến độ dự án, rủi ro về KPI hoặc chất lượng</bottleneck>
+<aiAssessment>Đánh giá AI: Nhận định chính về kết quả chung, rủi ro tiềm ẩn và đề xuất hành động thiết thực ngay trong tuần tới</aiAssessment>
+<nextWeekPlan>Kế hoạch tuần tới: định hướng hành động cụ thể cho tuần tới</nextWeekPlan>
+
+Quy tắc:
+- BẮT BUỘC viết dưới dạng ĐOẠN VĂN XUÔI (plaintext) hoàn toàn.
+- TUYỆT ĐỐI KHÔNG dùng bất kỳ ký tự đặc biệt nào: KHÔNG in đậm (**), KHÔNG gạch đầu dòng (-), KHÔNG emoji.
+- PHẢI trích dẫn số liệu cụ thể tự nhiên vào câu.
 - BẮT BUỘC dùng thẻ XML (ví dụ: <insights>...</insights>).`
 };
 
@@ -400,6 +415,21 @@ export async function generateFullReport(context: ReportContext): Promise<AIGene
       team_sanpham: extractTag(raw, 'team_sanpham'),
       team_multimedia: extractTag(raw, 'team_multimedia'),
     }
+  };
+}
+
+export async function generateWeeklyReport(context: ReportContext): Promise<{
+  insights: string;
+  bottlenecks: string;
+  aiAssessment: string;
+  nextWeekPlan: string;
+}> {
+  const raw = await generateBlock('weeklyReport', context);
+  return {
+    insights: extractTag(raw, 'insights'),
+    bottlenecks: extractTag(raw, 'bottleneck'),
+    aiAssessment: extractTag(raw, 'aiAssessment'),
+    nextWeekPlan: extractTag(raw, 'nextWeekPlan')
   };
 }
 

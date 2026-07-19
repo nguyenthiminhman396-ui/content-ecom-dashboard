@@ -79,19 +79,20 @@ function pct(a: number, b: number): number {
 }
 
 function DeltaBadge({ value }: { value: number }) {
-  if (value === 0) return (
+  const normalizedVal = value + 0;
+  if (normalizedVal === 0 || isNaN(normalizedVal)) return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.72rem', fontWeight: 700, color: '#64748b', background: '#f1f5f9', borderRadius: '999px', padding: '2px 8px' }}>
       <Minus size={10} /> 0%
     </span>
   );
-  const up = value > 0;
+  const up = normalizedVal > 0;
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.72rem', fontWeight: 700,
       color: up ? '#16a34a' : '#dc2626',
       background: up ? '#dcfce7' : '#fee2e2',
       borderRadius: '999px', padding: '2px 8px' }}>
       {up ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-      {up ? '+' : ''}{value}%
+      {up ? '+' : ''}{normalizedVal}%
     </span>
   );
 }
@@ -259,6 +260,7 @@ export default function MonthlyQuarterlyReportPage() {
   /* ── filter submissions by period ── */
   const filterByMonths = useCallback((months: string[]) => {
     return submissions.filter(s => {
+      if (s.employeeName === 'manntm3') return false; // Loại bỏ tài khoản Manager
       const d = new Date(s.submittedAt);
       if (isNaN(d.getTime())) return false;
       const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -295,7 +297,7 @@ export default function MonthlyQuarterlyReportPage() {
   }, []);
 
   const stats = useMemo(() => {
-    const getQty = (s: typeof prodSubs[0]) => (s.quantity && s.quantity > 0) ? s.quantity : (s.links?.length || 0);
+    const getQty = (s: typeof prodSubs[0]) => s.links?.length || 0;
 
     const baiMoi = prodSubs.filter(s => categorizeSubmission(s) === 'baiMoi').reduce((sum, s) => sum + getQty(s), 0);
     const sku = prodSubs.filter(s => categorizeSubmission(s) === 'sku').reduce((sum, s) => sum + getQty(s), 0);
