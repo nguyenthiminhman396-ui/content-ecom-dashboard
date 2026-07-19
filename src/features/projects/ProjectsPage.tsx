@@ -187,7 +187,28 @@ export default function Projects() {
                 </div>
                 
                 {canManage && (
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '4px', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+                    {project.status === 'Đang chạy' && (
+                      <>
+                        <button className="btn btn-sm btn-secondary" style={{ fontSize: '0.7rem', padding: '3px 8px', color: 'var(--success)' }}
+                          onClick={(e) => { e.stopPropagation(); updateProject(project.id, { status: 'Hoàn thành' }); toast.success('Đã hoàn thành dự án!'); }}
+                          title="Đánh dấu Hoàn thành (Done)">
+                          Done
+                        </button>
+                        <button className="btn btn-sm btn-secondary" style={{ fontSize: '0.7rem', padding: '3px 8px', color: 'var(--text-tertiary)' }}
+                          onClick={(e) => { e.stopPropagation(); updateProject(project.id, { status: 'Hủy' }); toast.success('Đã đóng dự án!'); }}
+                          title="Hủy/Đóng dự án (Close)">
+                          Close
+                        </button>
+                      </>
+                    )}
+                    {project.status !== 'Đang chạy' && (
+                      <button className="btn btn-sm btn-secondary" style={{ fontSize: '0.7rem', padding: '3px 8px', color: 'var(--primary-600)' }}
+                        onClick={(e) => { e.stopPropagation(); updateProject(project.id, { status: 'Đang chạy' }); toast.success('Đã mở lại dự án!'); }}
+                        title="Mở lại dự án (Đang chạy)">
+                        Mở lại
+                      </button>
+                    )}
                     <button className="btn btn-icon btn-ghost" onClick={(e) => openEdit(e, project)} title="Sửa dự án">
                       <Edit3 size={14} />
                     </button>
@@ -260,13 +281,33 @@ export default function Projects() {
                       </span>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: '4px' }}>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                          {canManage && (
                            <>
-                             <button className="btn btn-icon btn-ghost" onClick={(e) => openEdit(e, project)}>
+                             {project.status === 'Đang chạy' ? (
+                               <>
+                                 <button className="btn btn-sm btn-secondary" style={{ fontSize: '0.7rem', padding: '2px 6px', color: 'var(--success)' }}
+                                   onClick={(e) => { e.stopPropagation(); updateProject(project.id, { status: 'Hoàn thành' }); toast.success('Đã hoàn thành dự án!'); }}
+                                   title="Đánh dấu Hoàn thành (Done)">
+                                   Done
+                                 </button>
+                                 <button className="btn btn-sm btn-secondary" style={{ fontSize: '0.7rem', padding: '2px 6px', color: 'var(--text-tertiary)' }}
+                                   onClick={(e) => { e.stopPropagation(); updateProject(project.id, { status: 'Hủy' }); toast.success('Đã đóng dự án!'); }}
+                                   title="Hủy/Đóng dự án (Close)">
+                                   Close
+                                 </button>
+                               </>
+                             ) : (
+                               <button className="btn btn-sm btn-secondary" style={{ fontSize: '0.7rem', padding: '2px 6px', color: 'var(--primary-600)' }}
+                                 onClick={(e) => { e.stopPropagation(); updateProject(project.id, { status: 'Đang chạy' }); toast.success('Đã mở lại dự án!'); }}
+                                 title="Mở lại dự án">
+                                 Mở lại
+                               </button>
+                             )}
+                             <button className="btn btn-icon btn-ghost" onClick={(e) => openEdit(e, project)} title="Sửa dự án">
                                <Edit3 size={14} />
                              </button>
-                             <button className="btn btn-icon btn-ghost" onClick={(e) => handleDelete(e, project.id)} style={{ color: 'var(--danger)' }}>
+                             <button className="btn btn-icon btn-ghost" onClick={(e) => handleDelete(e, project.id)} style={{ color: 'var(--danger)' }} title="Xóa dự án">
                                <Trash2 size={14} />
                              </button>
                            </>
