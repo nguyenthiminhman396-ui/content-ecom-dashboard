@@ -49,7 +49,6 @@ export default function PerformancePage() {
   const [expandedEmployee, setExpandedEmployee] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = usePersistedState('perf_search', '');
   const [sortBy, setSortBy] = usePersistedState<SortKey>('perf_sortBy', 'totalPoints');
-  const [sortAsc, setSortAsc] = usePersistedState('perf_sortAsc', false);
 
   // Date range filter — persisted across navigation
   const now = new Date();
@@ -126,11 +125,10 @@ export default function PerformancePage() {
     })
     .filter(e => !searchQuery || e.name.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => {
-      const dir = sortAsc ? 1 : -1;
-      if (sortBy === 'name') return a.name.localeCompare(b.name) * dir;
-      return ((b[sortBy] as number) - (a[sortBy] as number)) * dir;
+      if (sortBy === 'name') return a.name.localeCompare(b.name);
+      return (b[sortBy] as number) - (a[sortBy] as number);
     });
-  }, [allEmployees, monthTasks, performanceReviews, selectedPeriod, members, scaleConfig, searchQuery, sortBy, sortAsc, bonusPoints, submissions]);
+  }, [allEmployees, monthTasks, performanceReviews, selectedPeriod, members, scaleConfig, searchQuery, sortBy, bonusPoints, submissions]);
 
   // ── Leadership metrics cho tất cả Leader ──────────────────────────────────
   const leadershipMetrics = useMemo(() => {
@@ -169,8 +167,7 @@ export default function PerformancePage() {
   const getScoreColor = (v: number) => v >= 4 ? 'var(--success)' : v >= 3 ? 'var(--primary-600)' : v >= 2 ? 'var(--warning)' : 'var(--danger)';
 
   const toggleSort = (key: SortKey) => {
-    if (sortBy === key) setSortAsc(!sortAsc);
-    else { setSortBy(key); setSortAsc(false); }
+    setSortBy(key);
   };
 
   return (
