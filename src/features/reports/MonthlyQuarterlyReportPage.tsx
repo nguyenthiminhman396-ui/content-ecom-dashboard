@@ -350,8 +350,8 @@ export default function MonthlyQuarterlyReportPage() {
     
     const totalReviews = withQc.length;
     
-    // avg /10 (score is 1-5, so multiply by 2)
-    const avgScore = totalReviews > 0 ? (qcScores.reduce((a, b) => a + b, 0) / totalReviews) * 2 : 0;
+    // avg /5 (score is 1-5, native scale)
+    const avgScore = totalReviews > 0 ? (qcScores.reduce((a, b) => a + b, 0) / totalReviews) : 0;
 
     const comments = withQc.filter(s => s.qualityCheck!.note && s.qualityCheck!.note.trim().length > 0);
     const totalComments = comments.length;
@@ -1274,10 +1274,10 @@ export default function MonthlyQuarterlyReportPage() {
               value={(() => {
                 const v = displayVal('qc_avgScore', qualityStats.hasQualityData ? qualityStats.avgScore.toFixed(1) : 'N/A');
                 if (isEditingMetrics) return v === 'N/A' ? '' : v;
-                return v === 'N/A' ? 'N/A' : `${v}/10`;
+                return v === 'N/A' ? 'N/A' : `${v}/5`;
               })()} 
               gradient="#f0fdf4" accent="#0f766e" border="#bbf7d0" subtitle="Điểm số chất lượng"
-              isEditing={isEditingMetrics} onValueChange={v => setOverride('qc_avgScore', v.replace('/10', ''))} />
+              isEditing={isEditingMetrics} onValueChange={v => setOverride('qc_avgScore', v.replace('/5', ''))} />
               
             <StatCard icon={<MessageSquare size={24} color="#475569" />} label="Tổng lượt comment" 
               value={displayVal('qc_totalComments', qualityStats.hasQualityData ? qualityStats.totalComments : 'N/A')} 
@@ -2269,7 +2269,7 @@ function buildPeriodicReportHtml(data: ReportHtmlData): string {
 
 <h2>🏆 Top nhân viên & QC</h2>
 <table style="margin-bottom:28px">
-  <thead><tr><th>Nhân viên</th><th style="text-align:center;width:80px">Link</th><th style="text-align:center;width:80px">Điểm</th><th style="text-align:center;width:80px">QC (/10)</th></tr></thead>
+  <thead><tr><th>Nhân viên</th><th style="text-align:center;width:80px">Link</th><th style="text-align:center;width:80px">Điểm</th><th style="text-align:center;width:80px">QC (/5)</th></tr></thead>
   <tbody>${empRows}</tbody>
 </table>
 
@@ -2280,7 +2280,7 @@ ${data.qc_driveLink ? `<div style="margin-bottom:16px"><a href="${data.qc_driveL
   <thead><tr><th>Chỉ số</th><th style="text-align:center;width:150px">Kết quả</th></tr></thead>
   <tbody>
     <tr><td style="padding:10px;border-bottom:1px solid #f1f5f9;font-weight:600">Số lượt đánh giá</td><td style="padding:10px;text-align:center;border-bottom:1px solid #f1f5f9;font-weight:700">${data.qualityStats.totalReviews}</td></tr>
-    <tr><td style="padding:10px;border-bottom:1px solid #f1f5f9;font-weight:600">Tổng điểm trung bình</td><td style="padding:10px;text-align:center;border-bottom:1px solid #f1f5f9;font-weight:700">${data.qualityStats.avgScore.toFixed(1)}/10</td></tr>
+    <tr><td style="padding:10px;border-bottom:1px solid #f1f5f9;font-weight:600">Tổng điểm trung bình</td><td style="padding:10px;text-align:center;border-bottom:1px solid #f1f5f9;font-weight:700">${data.qualityStats.avgScore.toFixed(1)}/5</td></tr>
     <tr><td style="padding:10px;border-bottom:1px solid #f1f5f9;font-weight:600">Tổng lượt comment</td><td style="padding:10px;text-align:center;border-bottom:1px solid #f1f5f9;font-weight:700">${data.qualityStats.totalComments}</td></tr>
     <tr><td style="padding:10px;border-bottom:1px solid #f1f5f9;font-weight:600">% Tích cực / Tiêu cực</td><td style="padding:10px;text-align:center;border-bottom:1px solid #f1f5f9;font-weight:700">${data.qualityStats.pctPositive}% / ${data.qualityStats.pctNegative}%</td></tr>
   </tbody>
@@ -2452,7 +2452,7 @@ function buildPresentationHtml(data: ReportHtmlData): string {
     <h2 style="font-size:1.8rem;font-weight:800;margin-bottom:20px;margin-top:40px;color:#0f172a">🛡️ Chất lượng & Compliance</h2>
     <div style="display:flex;gap:20px">
       <div style="flex:1;background:#f8fafc;padding:20px;border-radius:12px;text-align:center;border:1px solid #e2e8f0"><div style="font-size:1.2rem;color:#64748b">Số lượt đánh giá</div><div style="font-size:1.8rem;font-weight:800;color:#0f766e">${data.qualityStats.totalReviews}</div></div>
-      <div style="flex:1;background:#f8fafc;padding:20px;border-radius:12px;text-align:center;border:1px solid #e2e8f0"><div style="font-size:1.2rem;color:#64748b">Điểm trung bình</div><div style="font-size:1.8rem;font-weight:800;color:#0f766e">${data.qualityStats.avgScore.toFixed(1)}/10</div></div>
+      <div style="flex:1;background:#f8fafc;padding:20px;border-radius:12px;text-align:center;border:1px solid #e2e8f0"><div style="font-size:1.2rem;color:#64748b">Điểm trung bình</div><div style="font-size:1.8rem;font-weight:800;color:#0f766e">${data.qualityStats.avgScore.toFixed(1)}/5</div></div>
       <div style="flex:1;background:#f8fafc;padding:20px;border-radius:12px;text-align:center;border:1px solid #e2e8f0"><div style="font-size:1.2rem;color:#64748b">Tổng comment</div><div style="font-size:1.8rem;font-weight:800;color:#475569">${data.qualityStats.totalComments}</div></div>
       <div style="flex:1;background:#f8fafc;padding:20px;border-radius:12px;text-align:center;border:1px solid #e2e8f0"><div style="font-size:1.2rem;color:#64748b">Tích cực / Tiêu cực</div><div style="font-size:1.8rem;font-weight:800;color:#b91c1c">${data.qualityStats.pctPositive}% / ${data.qualityStats.pctNegative}%</div></div>
     </div>
