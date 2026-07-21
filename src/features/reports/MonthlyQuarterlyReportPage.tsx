@@ -8,7 +8,7 @@ import {
   ArrowRight, Hash, Edit3, Save, ShieldCheck,
   Eye, EyeOff, LayoutTemplate, ExternalLink, Package, Settings, KeyRound, PieChart,
   Bot, Sparkles, AlertTriangle, Send, Loader2, X, Compass, MessageSquare, CheckCircle, Activity, Image, Upload
-, Download } from 'lucide-react';
+, Download, Trash2 } from 'lucide-react';
 import {
   generateFullReport, generateInsights, generateBottleneck,
   generateRecommendation, generateNextPlan, generateCustomerCommentAnalysis,
@@ -253,6 +253,11 @@ export default function MonthlyQuarterlyReportPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleClearHotspots = () => {
+    setHotspotComments([]);
+    toast.success('Đã xóa danh sách điểm nóng khỏi báo cáo tháng!');
   };
 
   const handleImportCommentsFile = async (file: File) => {
@@ -1371,9 +1376,14 @@ export default function MonthlyQuarterlyReportPage() {
               </button>
               <AIBlockButton block="customerCommentAnalysis" label="AI phân tích comment" />
               {hotspotComments.length > 0 && (
-                <button className="btn" onClick={handleExportHotspots} style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontWeight: 600 }}>
-                  <Download size={14} /> Xuất Điểm Nóng ({hotspotComments.length})
-                </button>
+                <>
+                  <button className="btn" onClick={handleExportHotspots} style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontWeight: 600 }}>
+                    <Download size={14} /> Xuất Điểm Nóng ({hotspotComments.length})
+                  </button>
+                  <button className="btn btn-ghost btn-icon" onClick={handleClearHotspots} title="Xóa danh sách điểm nóng này khỏi DB" style={{ color: '#ef4444' }}>
+                    <Trash2 size={16} />
+                  </button>
+                </>
               )}
               <button className="btn btn-ghost btn-icon" onClick={() => setIsEditingCustomerComments(!isEditingCustomerComments)} style={{ color: '#475569' }}>
                 {isEditingCustomerComments ? <Save size={18} /> : <Edit3 size={18} />}
