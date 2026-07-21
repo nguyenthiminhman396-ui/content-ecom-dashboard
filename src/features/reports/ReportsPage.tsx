@@ -733,35 +733,35 @@ function ReportCard({ report, isExpanded, linkDelta, canEdit, onToggle, onView, 
               <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg,#eff6ff,#dbeafe)',
                 border: '1px solid #bfdbfe', fontSize: '0.85rem', color: '#1e40af' }}>
                 💡 <strong>Nhận xét từ số liệu:</strong> 
-                <div style={{ marginTop: '4px' }}><ReactMarkdown remarkPlugins={[remarkGfm]}>{report.insights}</ReactMarkdown></div>
+                <div style={{ marginTop: '4px' }}><div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{report.insights}</ReactMarkdown></div></div>
               </div>
             )}
             {report.bottlenecks && (
               <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg,#fef2f2,#fee2e2)',
                 border: '1px solid #fecaca', fontSize: '0.85rem', color: '#991b1b' }}>
                 🚧 <strong>Điểm nghẽn:</strong>
-                <div style={{ marginTop: '4px' }}><ReactMarkdown remarkPlugins={[remarkGfm]}>{report.bottlenecks}</ReactMarkdown></div>
+                <div style={{ marginTop: '4px' }}><div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{report.bottlenecks}</ReactMarkdown></div></div>
               </div>
             )}
             {report.managerAssessment && (
               <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)',
                 border: '1px solid #bbf7d0', fontSize: '0.85rem', color: '#14532d' }}>
                 👤 <strong>Manager đánh giá:</strong>
-                <div style={{ marginTop: '4px' }}><ReactMarkdown remarkPlugins={[remarkGfm]}>{report.managerAssessment}</ReactMarkdown></div>
+                <div style={{ marginTop: '4px' }}><div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{report.managerAssessment}</ReactMarkdown></div></div>
               </div>
             )}
             {report.issues && (
               <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg,#fff7ed,#fed7aa)',
                 border: '1px solid #fdba74', fontSize: '0.85rem', color: '#9a3412' }}>
                 ⚠️ <strong>Vấn đề:</strong>
-                <div style={{ marginTop: '4px' }}><ReactMarkdown remarkPlugins={[remarkGfm]}>{report.issues}</ReactMarkdown></div>
+                <div style={{ marginTop: '4px' }}><div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{report.issues}</ReactMarkdown></div></div>
               </div>
             )}
             {report.nextWeekPlan && (
               <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg,#faf5ff,#ede9fe)',
                 border: '1px solid #c4b5fd', fontSize: '0.85rem', color: '#5b21b6' }}>
                 📋 <strong>Kế hoạch tuần tới:</strong>
-                <div style={{ marginTop: '4px' }}><ReactMarkdown remarkPlugins={[remarkGfm]}>{report.nextWeekPlan}</ReactMarkdown></div>
+                <div style={{ marginTop: '4px' }}><div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{report.nextWeekPlan}</ReactMarkdown></div></div>
               </div>
             )}
           </div>
