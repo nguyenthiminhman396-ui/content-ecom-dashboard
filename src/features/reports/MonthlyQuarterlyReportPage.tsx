@@ -189,6 +189,10 @@ export default function MonthlyQuarterlyReportPage() {
 
   /* ── load/save config ── */
   const reportId = `report_config_${periodLabel}`;
+
+  useEffect(() => {
+    setHotspotComments([]);
+  }, [reportId]);
   
   useEffect(() => {
     try {
@@ -201,7 +205,7 @@ export default function MonthlyQuarterlyReportPage() {
         if (saved.selectedFocusProjects) setSelectedFocusProjects(saved.selectedFocusProjects);
         if (saved.customerCommentAnalysisText) setCustomerCommentAnalysisText(saved.customerCommentAnalysisText);
         if (saved.additionalContextText) setAdditionalContextText(saved.additionalContextText);
-        setHotspotComments([]); // hotspots always cleared on reload for privacy
+        // hotspots always cleared on reload for privacy (handled by reportId useEffect)
       } else {
         setSummaryText('');
         setRecommendationText('');
@@ -210,7 +214,6 @@ export default function MonthlyQuarterlyReportPage() {
         setSelectedFocusProjects([]);
         setCustomerCommentAnalysisText('');
         setAdditionalContextText('');
-        setHotspotComments([]);
       }
     } catch (e) {
       console.error(e);
