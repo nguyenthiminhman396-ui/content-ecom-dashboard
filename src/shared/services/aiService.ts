@@ -43,7 +43,7 @@ export interface AIGeneratedReport {
   insights: string;
   bottleneck: string;
   recommendation: string;
-  customerCommentAnalysis?: string;
+  customerCommentAnalysis?: { text: string; hotspotIds: number[] };
   nextPlan: {
     general: string;
     goals: string;
@@ -120,21 +120,20 @@ function buildContextString(ctx: ReportContext): string {
 
   if (ctx.customerCommentsRaw && ctx.customerCommentsRaw.trim()) {
     const allLines = ctx.customerCommentsRaw.split('\n').map(l => l.trim()).filter(Boolean);
-    const MAX_CHARS = 45000; // giữ prompt gọn (đủ cho vài nghìn comment ngắn), tránh request quá nặng/chậm
+    const MAX_CHARS = 45000; 
 
-    let commentsForPrompt = allLines.join('\n');
+    let commentsForPrompt = allLines.map((l, i) => `[ID: ${i + 1}] ${l}`).join('\n');
     let sampleNote = '';
     if (commentsForPrompt.length > MAX_CHARS && allLines.length > 1) {
-      // Lấy mẫu rải đều trên toàn bộ danh sách (không chỉ N dòng đầu) để đại diện cho cả tháng dữ liệu
       const avgLen = Math.max(1, commentsForPrompt.length / allLines.length);
       const targetCount = Math.max(1, Math.floor(MAX_CHARS / avgLen));
       const step = Math.max(1, Math.ceil(allLines.length / targetCount));
-      const sampled = allLines.filter((_, i) => i % step === 0);
-      commentsForPrompt = sampled.join('\n');
-      sampleNote = ` — do số lượng lớn, đây là mẫu ${sampled.length}/${allLines.length} dòng lấy rải đều trên toàn bộ dữ liệu, hãy suy rộng nhận định cho cả tổng thể`;
+      const sampled = allLines.map((l, i) => ({l, i})).filter((_, i) => i % step === 0);
+      commentsForPrompt = sampled.map(item => `[ID: ${item.i + 1}] ${item.l}`).join('\n');
+      sampleNote = ` — đây là mẫu ${sampled.length}/${allLines.length} dòng, hãy suy rộng nhận định cho cả tổng thể`;
     }
 
-    lines.push(`### Nội dung comment khách hàng (dữ liệu thô, tổng cộng ${allLines.length} dòng, do người phụ trách cung cấp${sampleNote})`);
+    lines.push(`### Nội dung comment khách hàng (dữ liệu thô, đánh số ID, tổng ${allLines.length} dòng${sampleNote})`);
     lines.push(commentsForPrompt);
     lines.push('');
   }
@@ -178,87 +177,41 @@ function buildContextString(ctx: ReportContext): string {
 
 // ─── Prompt Templates ──────────────────────────────────────
 
-const SYSTEM_PROMPT = `Bạn là trợ lý phân tích nội dung chuyên sâu của phòng Content Ecom tại Long Châu (FPT Long Châu - chuỗi nhà thuốc và tiêm chủng).
+const SYSTEM_PROMPT = `Bạn là trợ lý phân tích nội dung chuyên sâu của phòng Content Ecom tại Long Châu.
 
-Quy tắc CỐT LÕI (TUÂN THỦ 100%):
-1. Viết bằng tiếng Việt, văn phong chuyên nghiệp, truyền cảm hứng, mang tính chiến lược cao. Trình bày ngắn gọn, súc tích, dễ scan.
-2. LUÔN trích dẫn số liệu cụ thể từ data để chứng minh nhận định.
-3. TÍCH CỰC SỬ DỤNG định dạng markdown: gạch đầu dòng (-), in đậm (**) để làm nổi bật các key points và số liệu quan trọng, giúp báo cáo dễ đọc, dễ nắm bắt thông tin nhanh.
-4. Tránh viết những đoạn văn quá dài, rườm rà. Mỗi ý/luận điểm nên tách thành gạch đầu dòng rõ ràng.
-5. TẦM NHÌN & VAI TRÒ: Khi nhận xét, hãy mở rộng góc nhìn. Đừng chỉ đọc số liệu khô khan, hãy lồng ghép ý nghĩa của những con số đó vào bức tranh lớn: Vai trò của team Content Ecom tác động thế nào đến trải nghiệm khách hàng, uy tín thương hiệu Long Châu, và việc hỗ trợ ra quyết định mua hàng. Nhấn mạnh giá trị "Nội dung y tế chuẩn xác" và "Trải nghiệm mua sắm mượt mà".
-6. Phân tích phải có chiều sâu: so sánh, tìm nguyên nhân, đưa ra insight mà người nhìn data thường bỏ qua.
-7. Nếu dữ liệu có mục "Nội dung comment khách hàng" hoặc "Thông tin bổ sung do người phụ trách cung cấp", đây là thông tin định tính quý giá — PHẢI đọc kỹ và khai thác thực chất (trích ý cụ thể, gọi tên chủ đề lặp lại) thay vì chỉ nhắc qua loa hay bỏ qua để chỉ bám vào số liệu.`;
+Quy tắc CỐT LÕI:
+1. Viết bằng tiếng Việt, văn phong chuyên nghiệp, chiến lược.
+2. LUÔN trích dẫn số liệu cụ thể.
+3. Sử dụng markdown (in đậm, gạch đầu dòng).
+4. Phân tích phải có chiều sâu, kết nối dữ liệu với giá trị thương hiệu.
+5. Nếu có "Nội dung comment khách hàng", hãy đọc kỹ ID và khai thác thực chất.`;
 
 const PROMPTS: Record<AIBlockType, string> = {
-  insights: `Dựa trên dữ liệu báo cáo bên dưới, hãy viết phần "Nhận xét tổng quan" cho báo cáo kỳ này.
+  insights: `Dựa trên dữ liệu báo cáo bên dưới, hãy viết phần "Nhận xét tổng quan" cho báo cáo kỳ này. Chỉ trả về nội dung, không cần tiêu đề.`,
+
+  bottleneck: `Dựa trên dữ liệu báo cáo bên dưới, hãy phân tích "Điểm nghẽn & Khó khăn". Chỉ trả về nội dung, không cần tiêu đề.`,
+
+  recommendation: `Dựa trên dữ liệu báo cáo bên dưới, hãy viết phần "Mở rộng & Đề xuất" mang tính định hướng. Chỉ trả về nội dung, không cần tiêu đề.`,
+
+  customerCommentAnalysis: `Đọc kỹ mục "Nội dung comment khách hàng (dữ liệu thô)" và "Thông tin bổ sung" (nếu có). Dữ liệu comment thô đã được đánh số [ID: x].
 
 Yêu cầu:
-- Trình bày dưới dạng gạch đầu dòng ngắn gọn, súc tích. Sử dụng in đậm (**) cho các từ khóa và số liệu quan trọng.
-- Nêu bật thành tựu, xu hướng so với kỳ trước, sự đóng góp nổi bật của các cá nhân/team.
-- ĐẶC BIỆT: Gắn kết thành tựu với tầm nhìn dài hạn và vai trò cốt lõi của team Content Ecom (định hình trải nghiệm y tế số, tạo niềm tin cho khách hàng).
-- Trích dẫn số liệu một cách tự nhiên vào câu văn.
+1. Viết phân tích tổng quan vào thẻ <customerCommentAnalysis>...</customerCommentAnalysis>: nhóm chủ đề lặp lại, trích dẫn 2-3 comment tiêu biểu trong ngoặc kép, đối chiếu với số liệu, và đề xuất hành động. Dùng gạch đầu dòng.
+2. Lọc ra các ID của những comment thuộc nhóm "điểm nóng" (tiêu cực, phàn nàn, cần xử lý) và đưa vào thẻ <hotspot_ids>...</hotspot_ids>. Phân tách ID bằng dấu phẩy (VD: <hotspot_ids>1, 5, 23</hotspot_ids>). Nếu không có, hãy để trống thẻ này.`,
 
-Chỉ trả về nội dung nhận xét, không cần tiêu đề.`,
-
-  bottleneck: `Dựa trên dữ liệu báo cáo bên dưới, hãy phân tích và chỉ ra các "Điểm nghẽn & Khó khăn" của kỳ này.
-
-Yêu cầu:
-- Trình bày dưới dạng gạch đầu dòng mạch lạc. Sử dụng in đậm (**) cho các vấn đề cốt lõi.
-- Phân tích sâu 1-2 điểm nghẽn cốt lõi (dự án chậm tiến độ, chất lượng giảm sút, mất cân đối nhân lực...). Nêu rõ bằng chứng từ data.
-- Nhìn nhận điểm nghẽn này dưới góc độ chiến lược: Nó cản trở mục tiêu chung của Ecom như thế nào?
-- Đề xuất hướng khắc phục cụ thể.
-
-Chỉ trả về nội dung phân tích, không cần tiêu đề.`,
-
-  recommendation: `Dựa trên dữ liệu báo cáo bên dưới, hãy viết phần "Mở rộng & Đề xuất" mang tính định hướng.
-
-Yêu cầu:
-- Trình bày dưới dạng gạch đầu dòng rõ ràng, truyền cảm hứng.
-- Đưa ra 2-3 chiến lược/đề xuất nhằm nâng tầm vai trò của team (ví dụ: tối ưu quy trình, ứng dụng AI, mở rộng độ phủ nội dung chất lượng cao).
-- Giải thích tại sao đề xuất này lại quan trọng đối với sự phát triển của chuỗi Long Châu.
-
-Chỉ trả về nội dung đề xuất, không cần tiêu đề.`,
-
-  customerCommentAnalysis: `Dựa trên dữ liệu báo cáo bên dưới, hãy viết phần "Phân tích Comment khách hàng" đào sâu vào phần "Nội dung comment khách hàng (dữ liệu thô)" và "Thông tin bổ sung" nếu có.
-
-Yêu cầu:
-- Trình bày dưới dạng gạch đầu dòng ngắn gọn, dễ hiểu. Sử dụng in đậm (**) cho các ý chính.
-- Đọc kỹ toàn bộ nội dung comment thô được cung cấp (nếu phần dữ liệu ghi rõ đây là "mẫu" do số lượng lớn, hãy suy rộng nhận định cho cả tổng số dòng đã nêu, đừng chỉ nói về vài dòng lấy mẫu), tự nhóm chúng thành các chủ đề/xu hướng lặp lại (ví dụ: tốc độ duyệt bài, độ chính xác y khoa, văn phong, hình ảnh, trải nghiệm phối hợp...). Nêu rõ chủ đề nào xuất hiện nhiều nhất, ước lượng tỉ lệ tương đối nếu có thể.
-- Trích dẫn nguyên văn hoặc gần nguyên văn 2-3 comment tiêu biểu (đặt trong ngoặc kép) để minh hoạ cho cả điểm khen và điểm cần cải thiện.
-- Đối chiếu với số liệu định lượng (tổng lượt đánh giá, điểm trung bình, % tích cực/tiêu cực) để cho thấy bức tranh định tính có khớp với con số hay không, và nếu có Thông tin bổ sung do người phụ trách cung cấp thì phải lồng ghép vào phân tích.
-- Kết thúc bằng 1-2 đề xuất hành động cụ thể để cải thiện trải nghiệm/phản hồi từ khách hàng trong kỳ tới.
-- Nếu không có dữ liệu comment thô nào được cung cấp, hãy nói rõ điều này và chỉ phân tích dựa trên số liệu tổng hợp (% tích cực/tiêu cực, tổng lượt đánh giá) cùng Thông tin bổ sung nếu có, đồng thời gợi ý nên thu thập thêm dữ liệu comment chi tiết cho kỳ sau.
-
-Chỉ trả về nội dung phân tích, không cần tiêu đề.`,
-
-  nextPlan: `Dựa trên dữ liệu báo cáo kỳ này bên dưới, hãy gợi ý "Kế hoạch triển khai kỳ tới".
-
-Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau (bên trong mỗi thẻ viết dưới dạng văn phong ngắn gọn, súc tích, CÓ THỂ dùng gạch đầu dòng để list ra các ý chính):
-
-<general>Định hướng chung cho kỳ tới gắn với tầm nhìn team</general>
-<goals>Mục tiêu nội dung cụ thể (trích dẫn target số liệu)</goals>
-<topics>Chủ đề Focus nên tập trung chiến lược</topics>
-<team>Kế hoạch phát triển và nâng tầm đội ngũ</team>
-<team_baiviet>Công việc cốt lõi cho Team Bài viết</team_baiviet>
-<team_sanpham>Công việc cốt lõi cho Team Sản phẩm</team_sanpham>
-<team_multimedia>Công việc cốt lõi cho Team Multimedia</team_multimedia>
-
-Quy tắc:
-- BẮT BUỘC sử dụng đúng tên thẻ mở và đóng như mẫu.
-- KHÔNG sử dụng JSON, chỉ dùng định dạng thẻ XML.`,
+  nextPlan: `Dựa trên dữ liệu báo cáo kỳ này bên dưới, hãy gợi ý "Kế hoạch triển khai kỳ tới" sử dụng thẻ XML: <general>, <goals>, <topics>, <team>, <team_baiviet>, <team_sanpham>, <team_multimedia>.`,
 
   fullReport: `Dựa trên dữ liệu báo cáo bên dưới, hãy sinh toàn bộ nội dung phân tích cho báo cáo kỳ này.
-
 Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau:
-
-<insights>Nhận xét tổng quan (ngắn gọn, dùng gạch đầu dòng, lồng ghép số liệu và tầm nhìn team)</insights>
-<bottleneck>Điểm nghẽn & Khó khăn (ngắn gọn, dùng gạch đầu dòng, có bằng chứng data)</bottleneck>
-<recommendation>Mở rộng & Đề xuất (ngắn gọn, dùng gạch đầu dòng mang tính định hướng chiến lược)</recommendation>
-<customerCommentAnalysis>Phân tích Comment khách hàng: đọc kỹ mục "Nội dung comment khách hàng (dữ liệu thô)" và "Thông tin bổ sung" nếu có, nhóm chủ đề lặp lại, trích dẫn 2-3 comment tiêu biểu trong ngoặc kép, đối chiếu với số liệu % tích cực/tiêu cực, và đề xuất hành động cải thiện. Dùng gạch đầu dòng. Nếu không có comment thô, nói rõ và chỉ dựa vào số liệu tổng hợp.</customerCommentAnalysis>
+<insights>Nhận xét tổng quan</insights>
+<bottleneck>Điểm nghẽn</bottleneck>
+<recommendation>Mở rộng & Đề xuất</recommendation>
+<customerCommentAnalysis>Phân tích comment khách hàng chi tiết</customerCommentAnalysis>
+<hotspot_ids>ID các comment tiêu cực/điểm nóng (VD: 1, 5, 23). Nếu không có, để trống.</hotspot_ids>
 <nextPlan>
-  <general>Định hướng chung (2-3 bullets)</general>
-  <goals>Mục tiêu nội dung (2-3 bullets với target số)</goals>
-  <topics>Chủ đề Focus (2-3 chủ đề cụ thể)</topics>
+  <general>Định hướng chung</general>
+  <goals>Mục tiêu</goals>
+  <topics>Chủ đề Focus</topics>
   <team>Phát triển đội ngũ</team>
   <team_baiviet>Công việc Team Bài viết</team_baiviet>
   <team_sanpham>Công việc Team Sản phẩm</team_sanpham>
@@ -366,8 +319,12 @@ export async function generateRecommendation(context: ReportContext): Promise<st
   return generateBlock('recommendation', context);
 }
 
-export async function generateCustomerCommentAnalysis(context: ReportContext): Promise<string> {
-  return generateBlock('customerCommentAnalysis', context);
+export async function generateCustomerCommentAnalysis(context: ReportContext): Promise<{ text: string; hotspotIds: number[] }> {
+  const raw = await generateBlock('customerCommentAnalysis', context);
+  const text = extractTag(raw, 'customerCommentAnalysis');
+  const idsStr = extractTag(raw, 'hotspot_ids');
+  const hotspotIds = idsStr ? idsStr.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n)) : [];
+  return { text, hotspotIds };
 }
 
 function extractTag(text: string, tag: string): string {
@@ -405,7 +362,10 @@ export async function generateFullReport(context: ReportContext): Promise<AIGene
     insights,
     bottleneck: extractTag(raw, 'bottleneck'),
     recommendation: extractTag(raw, 'recommendation'),
-    customerCommentAnalysis: extractTag(raw, 'customerCommentAnalysis'),
+    customerCommentAnalysis: {
+      text: extractTag(raw, 'customerCommentAnalysis'),
+      hotspotIds: extractTag(raw, 'hotspot_ids').split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n))
+    },
     nextPlan: {
       general: extractTag(raw, 'general'),
       goals: extractTag(raw, 'goals'),

@@ -8,7 +8,7 @@ import {
   ArrowRight, Hash, Edit3, Save, ShieldCheck,
   Eye, EyeOff, LayoutTemplate, ExternalLink, Package, Settings, KeyRound, PieChart,
   Bot, Sparkles, AlertTriangle, Send, Loader2, X, Compass, MessageSquare, CheckCircle, Activity, Image, Upload
-} from 'lucide-react';
+, Download } from 'lucide-react';
 import {
   generateFullReport, generateInsights, generateBottleneck,
   generateRecommendation, generateNextPlan, generateCustomerCommentAnalysis,
@@ -129,6 +129,7 @@ export default function MonthlyQuarterlyReportPage() {
   const [additionalContextText, setAdditionalContextText] = useState('');
   const [customerCommentsRawText, setCustomerCommentsRawText] = useState('');
   const [customerCommentAnalysisText, setCustomerCommentAnalysisText] = useState('');
+  const [hotspotComments, setHotspotComments] = useState<string[]>([]);
   const [isEditingCustomerComments, setIsEditingCustomerComments] = useState(false);
   const [commentImportInfo, setCommentImportInfo] = useState<{ fileName: string; totalRows: number; columnUsed: string } | null>(null);
   const [isImportingComments, setIsImportingComments] = useState(false);
@@ -204,6 +205,7 @@ export default function MonthlyQuarterlyReportPage() {
         // hay bất kỳ nơi nào khác. Chỉ kết quả phân tích của AI (đoạn văn ngắn) mới được lưu lại.
         if (parsed.customerCommentAnalysisText) setCustomerCommentAnalysisText(parsed.customerCommentAnalysisText);
         if (parsed.additionalContextText) setAdditionalContextText(parsed.additionalContextText);
+        if (parsed.hotspotComments) setHotspotComments(parsed.hotspotComments);
       }
     } catch (e) {
       console.error(e);
@@ -218,10 +220,10 @@ export default function MonthlyQuarterlyReportPage() {
     }
     const config = {
       summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects,
-      customerCommentAnalysisText, additionalContextText,
+      customerCommentAnalysisText, additionalContextText, hotspotComments,
     };
     localStorage.setItem(storageKey, JSON.stringify(config));
-  }, [summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects, customerCommentAnalysisText, additionalContextText, storageKey]);
+  }, [summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects, customerCommentAnalysisText, additionalContextText, hotspotComments, storageKey]);
 
   const handleSaveConfig = () => {
     // Chủ ý KHÔNG lưu customerCommentsRawText / commentImportInfo vào localStorage — dữ liệu comment thô
@@ -235,6 +237,18 @@ export default function MonthlyQuarterlyReportPage() {
   };
 
   /** Import file CSV/Excel chứa comment khách hàng (vài nghìn dòng/tháng) → tự tìm cột nội dung comment. */
+    const handleExportHotspots = () => {
+    if (hotspotComments.length === 0) return;
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + "Comment cần xử lý\n" + hotspotComments.map(c => `\"${c.replace(/"/g, '\"\"')}\"`).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `diem-nong-comment-${periodLabel.replace(/\s+/g, '-')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleImportCommentsFile = async (file: File) => {
     setIsImportingComments(true);
     try {
@@ -787,7 +801,7 @@ export default function MonthlyQuarterlyReportPage() {
     projectProgress,
     projectsFocus,
     tasksBreakdown,
-    customerCommentsRaw: customerCommentsRawText,
+    customerCommentsRaw: customerCommentsRawText.trim() ? customerCommentsRawText.split('\n').map((l, i) => `[ID: ${i+1}] ${l}`).join('\n') : '',
     additionalContext: additionalContextText,
   }), [periodLabel, stats, teamBreakdown, topEmployees, qualityStats, projectProgress, projectsFocus, tasksBreakdown, customerCommentsRawText, additionalContextText]);
 
@@ -823,7 +837,14 @@ export default function MonthlyQuarterlyReportPage() {
         toast.success('AI đã viết đề xuất!');
       } else if (block === 'customerCommentAnalysis') {
         const result = await generateCustomerCommentAnalysis(ctx);
-        setCustomerCommentAnalysisText(result);
+        setCustomerCommentAnalysisText(result.text);
+        if (result.hotspotIds && result.hotspotIds.length > 0) {
+          const rawLines = customerCommentsRawText.split('\n').map(l => l.trim()).filter(Boolean);
+          const extracted = result.hotspotIds.map(id => rawLines[id - 1]).filter(Boolean);
+          setHotspotComments(extracted);
+        } else {
+          setHotspotComments([]);
+        }
         toast.success('AI đã phân tích comment khách hàng!');
       } else if (block === 'nextPlan') {
         const result = await generateNextPlan(ctx);
@@ -849,7 +870,14 @@ export default function MonthlyQuarterlyReportPage() {
     setBottleneckText(aiReviewData.bottleneck);
     setRecommendationText(aiReviewData.recommendation);
     if (aiReviewData.customerCommentAnalysis) {
-      setCustomerCommentAnalysisText(aiReviewData.customerCommentAnalysis);
+      setCustomerCommentAnalysisText(aiReviewData.customerCommentAnalysis.text);
+      if (aiReviewData.customerCommentAnalysis.hotspotIds && aiReviewData.customerCommentAnalysis.hotspotIds.length > 0) {
+        const rawLines = customerCommentsRawText.split('\n').map(l => l.trim()).filter(Boolean);
+        const extracted = aiReviewData.customerCommentAnalysis.hotspotIds.map(id => rawLines[id - 1]).filter(Boolean);
+        setHotspotComments(extracted);
+      } else {
+        setHotspotComments([]);
+      }
     }
     if (aiReviewData.nextPlan) {
       setOverride('plan_general', aiReviewData.nextPlan.general);
@@ -1336,6 +1364,11 @@ export default function MonthlyQuarterlyReportPage() {
                 {isImportingComments ? <Loader2 size={14} className="spin" /> : <Upload size={14} />} Import CSV/Excel
               </button>
               <AIBlockButton block="customerCommentAnalysis" label="AI phân tích comment" />
+              {hotspotComments.length > 0 && (
+                <button className="btn" onClick={handleExportHotspots} style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontWeight: 600 }}>
+                  <Download size={14} /> Xuất Điểm Nóng ({hotspotComments.length})
+                </button>
+              )}
               <button className="btn btn-ghost btn-icon" onClick={() => setIsEditingCustomerComments(!isEditingCustomerComments)} style={{ color: '#475569' }}>
                 {isEditingCustomerComments ? <Save size={18} /> : <Edit3 size={18} />}
               </button>
@@ -2007,7 +2040,7 @@ export default function MonthlyQuarterlyReportPage() {
               {aiReviewData.customerCommentAnalysis && (
                 <div>
                   <h4 style={{ color: '#334155', margin: '0 0 8px 0', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '6px' }}><MessageSquare size={16}/> Phân tích Comment khách hàng</h4>
-                  <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px', fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>{aiReviewData.customerCommentAnalysis}</div>
+                  <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px', fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>{aiReviewData.customerCommentAnalysis.text}</div>
                 </div>
               )}
 
