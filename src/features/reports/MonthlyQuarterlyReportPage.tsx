@@ -1837,7 +1837,7 @@ export default function MonthlyQuarterlyReportPage() {
               {isEditingMetrics ? (
                 <textarea className="form-input" style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6 }} rows={3} placeholder="Định hướng chiến lược..." value={metricOverrides['plan_general'] ?? ''} onChange={e => setOverride('plan_general', e.target.value)} />
               ) : (
-                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#334155' }}>{metricOverrides[''] ? <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{metricOverrides['']}</ReactMarkdown></div> : <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
+                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#334155' }}>{metricOverrides['plan_general'] ? <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{metricOverrides['plan_general']}</ReactMarkdown></div> : <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
               )}
             </div>
             
@@ -1849,7 +1849,7 @@ export default function MonthlyQuarterlyReportPage() {
               {isEditingMetrics ? (
                 <textarea className="form-input" style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6 }} rows={3} placeholder="Mục tiêu số lượng/chất lượng..." value={metricOverrides['plan_goals'] ?? ''} onChange={e => setOverride('plan_goals', e.target.value)} />
               ) : (
-                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#334155' }}>{metricOverrides[''] ? <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{metricOverrides['']}</ReactMarkdown></div> : <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
+                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#334155' }}>{metricOverrides['plan_goals'] ? <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{metricOverrides['plan_goals']}</ReactMarkdown></div> : <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
               )}
             </div>
 
@@ -1861,7 +1861,7 @@ export default function MonthlyQuarterlyReportPage() {
               {isEditingMetrics ? (
                 <textarea className="form-input" style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6 }} rows={3} placeholder="Các chủ đề/bệnh lý tập trung..." value={metricOverrides['plan_topics'] ?? ''} onChange={e => setOverride('plan_topics', e.target.value)} />
               ) : (
-                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#334155' }}>{metricOverrides[''] ? <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{metricOverrides['']}</ReactMarkdown></div> : <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
+                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#334155' }}>{metricOverrides['plan_topics'] ? <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{metricOverrides['plan_topics']}</ReactMarkdown></div> : <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
               )}
             </div>
 
@@ -1873,7 +1873,7 @@ export default function MonthlyQuarterlyReportPage() {
               {isEditingMetrics ? (
                 <textarea className="form-input" style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6 }} rows={3} placeholder="Kế hoạch tuyển dụng, đào tạo..." value={metricOverrides['plan_team'] ?? ''} onChange={e => setOverride('plan_team', e.target.value)} />
               ) : (
-                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#334155' }}>{metricOverrides[''] ? <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{metricOverrides['']}</ReactMarkdown></div> : <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
+                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#334155' }}>{metricOverrides['plan_team'] ? <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{metricOverrides['plan_team']}</ReactMarkdown></div> : <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
               )}
             </div>
           </div>
@@ -1889,7 +1889,7 @@ export default function MonthlyQuarterlyReportPage() {
               {isEditingMetrics ? (
                 <textarea className="form-input" style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6, background: '#fff', border: '1px solid #7dd3fc', borderRadius: '8px', padding: '12px' }} rows={4} placeholder="Chi tiết công việc team Bài viết..." value={metricOverrides['plan_team_baiviet'] ?? ''} onChange={e => setOverride('plan_team_baiviet', e.target.value)} />
               ) : (
-                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '' }}>{metricOverrides[''] ? <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{metricOverrides['']}</ReactMarkdown></div> : <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
+                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#0c4a6e' }}>{metricOverrides['plan_team_baiviet'] ? <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{metricOverrides['plan_team_baiviet']}</ReactMarkdown></div> : <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
               )}
             </div>
 
@@ -1901,7 +1901,7 @@ export default function MonthlyQuarterlyReportPage() {
               {isEditingMetrics ? (
                 <textarea className="form-input" style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6, background: '#fff', border: '1px solid #c4b5fd', borderRadius: '8px', padding: '12px' }} rows={4} placeholder="Chi tiết công việc team Sản phẩm..." value={metricOverrides['plan_team_sanpham'] ?? ''} onChange={e => setOverride('plan_team_sanpham', e.target.value)} />
               ) : (
-                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '' }}>{metricOverrides[''] ? <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{metricOverrides['']}</ReactMarkdown></div> : <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
+                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#4c1d95' }}>{metricOverrides['plan_team_sanpham'] ? <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{metricOverrides['plan_team_sanpham']}</ReactMarkdown></div> : <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
               )}
             </div>
 
@@ -1913,7 +1913,7 @@ export default function MonthlyQuarterlyReportPage() {
               {isEditingMetrics ? (
                 <textarea className="form-input" style={{ width: '100%', fontSize: '0.9rem', lineHeight: 1.6, background: '#fff', border: '1px solid #fcd34d', borderRadius: '8px', padding: '12px' }} rows={4} placeholder="Chi tiết công việc team Multimedia..." value={metricOverrides['plan_team_multimedia'] ?? ''} onChange={e => setOverride('plan_team_multimedia', e.target.value)} />
               ) : (
-                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '' }}>{metricOverrides[''] ? <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{metricOverrides['']}</ReactMarkdown></div> : <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
+                <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: '#78350f' }}>{metricOverrides['plan_team_multimedia'] ? <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{metricOverrides['plan_team_multimedia']}</ReactMarkdown></div> : <span style={{ opacity: 0.5, fontStyle: 'italic' }}>Chưa cập nhật...</span>}</div>
               )}
             </div>
           </div>
