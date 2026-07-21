@@ -210,13 +210,12 @@ export default function MonthlyQuarterlyReportPage() {
     }
   }, [storageKey]);
 
-  const isLoaded = useRef(false);
+  const isMounted = useRef(false);
   useEffect(() => {
-    isLoaded.current = true;
-  }, [storageKey]); // Just to set it true after mount
-
-  useEffect(() => {
-    if (!isLoaded.current) return;
+    if (!isMounted.current) {
+      isMounted.current = true;
+      return;
+    }
     const config = {
       summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects,
       customerCommentAnalysisText, additionalContextText,
