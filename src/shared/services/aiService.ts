@@ -196,14 +196,17 @@ const PROMPTS: Record<AIBlockType, string> = {
    customerCommentAnalysis: `Đọc kỹ mục "Nội dung comment khách hàng (dữ liệu thô)" và "Thông tin bổ sung" (nếu có). Dữ liệu comment thô đã được đánh số [ID: x].
 
 Yêu cầu:
-1. Lọc các ID của những comment thuộc nhóm "điểm nóng" (tiêu cực rõ ràng, phàn nàn gay gắt, rủi ro thương hiệu, cần xử lý khẩn) và đưa vào thẻ <hotspot_ids>...</hotspot_ids>. Phân tách bằng dấu phẩy. Nếu không có, để trống.
-2. Lọc các ID của những comment thuộc nhóm "cần cải thiện" (khách thắc mắc, thiếu thông tin, góp ý xây dựng, cơ hội tối ưu) và đưa vào thẻ <improvement_ids>...</improvement_ids>. Phân tách bằng dấu phẩy. Nếu không có, để trống.
-3. Viết bài phân tích tổng quan vào thẻ <customerCommentAnalysis>...</customerCommentAnalysis>:
-   - Nhóm 2-3 chủ đề chính.
-   - Trích dẫn 1-2 comment tiêu biểu nhất [ID: x].
-   - Nêu đề xuất hành động cụ thể cho từng nhóm.
-   - TUYỆT ĐỐI KHÔNG nhắc đến tên các thẻ XML (như <hotspot_ids> hay <improvement_ids>) trong văn bản phân tích.
-   - Đảm bảo viết súc tích, hoàn chỉnh 100%, không bị cắt ngang câu.`,
+1. Lọc ra các ID của comment thuộc nhóm "điểm nóng" (tiêu cực rõ ràng, phàn nàn gay gắt, rủi ro thương hiệu, cần xử lý khẩn) ➔ đặt trong thẻ <hotspot_ids>...</hotspot_ids> (phân tách dấu phẩy).
+2. Lọc ra các ID của comment thuộc nhóm "cần cải thiện" (thắc mắc, thiếu thông tin, góp ý xây dựng, cơ hội tối ưu) ➔ đặt trong thẻ <improvement_ids>...</improvement_ids> (phân tách dấu phẩy).
+3. Viết bài phân tích súc tích vào thẻ <customerCommentAnalysis>...</customerCommentAnalysis>, BẮT BUỘC ĐỀ CẬP ĐỦ 3 PHẦN:
+   - **Điểm sáng**: Ước tính % tích cực, nhận định ngắn gọn, trích dẫn 1-2 comment tiêu biểu [ID: x], hướng phát huy.
+   - **Điểm nóng**: Ước tính % phàn nàn/rủi ro, nhận định ngắn gọn, trích dẫn 1-2 comment tiêu biểu [ID: x], hành động xử lý.
+   - **Cơ hội / Cần cải thiện**: Ước tính % nhu cầu/thắc mắc, nhận định ngắn gọn, trích dẫn 1-2 comment tiêu biểu [ID: x], hướng tối ưu.
+
+Quy tắc:
+- Nêu rõ con số phần trăm (%) ước tính cho từng phần.
+- Viết ngắn gọn, súc tích, dễ đọc, tuyệt đối hoàn chỉnh 100% không bị ngắt câu.
+- TUYỆT ĐỐI KHÔNG nhắc đến tên các thẻ XML (như <hotspot_ids> hay <improvement_ids>) trong nội dung bài viết.`,
 
   nextPlan: `Dựa trên dữ liệu báo cáo kỳ này bên dưới, hãy gợi ý "Kế hoạch triển khai kỳ tới" sử dụng thẻ XML: <general>, <goals>, <topics>, <team>, <team_baiviet>, <team_sanpham>, <team_multimedia>.`,
 
@@ -214,7 +217,7 @@ Trả về kết quả bằng cách sử dụng đúng các thẻ XML theo thứ
 <recommendation>Mở rộng & Đề xuất</recommendation>
 <hotspot_ids>ID comment điểm nóng. Nếu không có, để trống.</hotspot_ids>
 <improvement_ids>ID comment cần cải thiện. Nếu không có, để trống.</improvement_ids>
-<customerCommentAnalysis>Phân tích comment khách hàng chi tiết và súc tích</customerCommentAnalysis>
+<customerCommentAnalysis>Phân tích comment ngắn gọn đề cập đủ 3 phần (% Điểm sáng, % Điểm nóng, % Cơ hội/Cải thiện)</customerCommentAnalysis>
 <nextPlan>
   <general>Định hướng chung</general>
   <goals>Mục tiêu</goals>
@@ -227,7 +230,7 @@ Trả về kết quả bằng cách sử dụng đúng các thẻ XML theo thứ
 
 Quy tắc:
 - TUYỆT ĐỐI KHÔNG nhắc đến tên các thẻ XML (như <hotspot_ids> hay <improvement_ids>) trong nội dung bài viết.
-- Viết dạng gạch đầu dòng ngắn gọn, in đậm ý chính (**).
+- Viết dạng gạch đầu dòng ngắn gọn, in đậm ý chính (**), có con số % ước tính cho các nhóm comment.
 - Đảm bảo hoàn thành trọn vẹn 100% nội dung, không bị đứt câu giữa chừng.`,
 
   weeklyReport: `Dựa trên dữ liệu báo cáo tuần bên dưới, hãy phân tích và sinh nội dung đánh giá cho báo cáo tuần này.
