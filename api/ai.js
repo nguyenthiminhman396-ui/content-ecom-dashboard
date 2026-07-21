@@ -3,6 +3,8 @@
  * Giấu Gemini API key ở server-side, frontend gọi /api/ai
  */
 
+export const maxDuration = 60;
+
 export default async function handler(req, res) {
   // CORS
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -37,7 +39,7 @@ export default async function handler(req, res) {
           temperature: 0.7,
           topP: 0.95,
           topK: 40,
-          maxOutputTokens: 4096,
+          maxOutputTokens: 8192,
         },
         safetySettings: [
           { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },

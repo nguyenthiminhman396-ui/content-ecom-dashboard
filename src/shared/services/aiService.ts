@@ -196,9 +196,14 @@ const PROMPTS: Record<AIBlockType, string> = {
    customerCommentAnalysis: `Đọc kỹ mục "Nội dung comment khách hàng (dữ liệu thô)" và "Thông tin bổ sung" (nếu có). Dữ liệu comment thô đã được đánh số [ID: x].
 
 Yêu cầu:
-1. Lọc ra các ID của những comment thuộc nhóm "điểm nóng" (tiêu cực rõ ràng, phàn nàn gay gắt, rủi ro thương hiệu, cần xử lý khẩn) và đưa vào thẻ <hotspot_ids>...</hotspot_ids>. Phân tách ID bằng dấu phẩy. Nếu không có, để trống.
-2. Lọc ra các ID của những comment thuộc nhóm "cần cải thiện" (khách thắc mắc, thiếu thông tin, góp ý xây dựng, cơ hội tối ưu nội dung) và đưa vào thẻ <improvement_ids>...</improvement_ids>. Phân tách ID bằng dấu phẩy. Nếu không có, để trống.
-3. Viết phân tích tổng quan vào thẻ <customerCommentAnalysis>...</customerCommentAnalysis>: nhóm chủ đề lặp lại, trích dẫn tối đa 2 comment tiêu biểu cho mỗi nhóm trong ngoặc kép, đối chiếu với số liệu, và đề xuất hành động. Ngắn gọn, mỗi chủ đề tối đa 2-3 câu.`,
+1. Lọc các ID của những comment thuộc nhóm "điểm nóng" (tiêu cực rõ ràng, phàn nàn gay gắt, rủi ro thương hiệu, cần xử lý khẩn) và đưa vào thẻ <hotspot_ids>...</hotspot_ids>. Phân tách bằng dấu phẩy. Nếu không có, để trống.
+2. Lọc các ID của những comment thuộc nhóm "cần cải thiện" (khách thắc mắc, thiếu thông tin, góp ý xây dựng, cơ hội tối ưu) và đưa vào thẻ <improvement_ids>...</improvement_ids>. Phân tách bằng dấu phẩy. Nếu không có, để trống.
+3. Viết bài phân tích tổng quan vào thẻ <customerCommentAnalysis>...</customerCommentAnalysis>:
+   - Nhóm 2-3 chủ đề chính.
+   - Trích dẫn 1-2 comment tiêu biểu nhất [ID: x].
+   - Nêu đề xuất hành động cụ thể cho từng nhóm.
+   - TUYỆT ĐỐI KHÔNG nhắc đến tên các thẻ XML (như <hotspot_ids> hay <improvement_ids>) trong văn bản phân tích.
+   - Đảm bảo viết súc tích, hoàn chỉnh 100%, không bị cắt ngang câu.`,
 
   nextPlan: `Dựa trên dữ liệu báo cáo kỳ này bên dưới, hãy gợi ý "Kế hoạch triển khai kỳ tới" sử dụng thẻ XML: <general>, <goals>, <topics>, <team>, <team_baiviet>, <team_sanpham>, <team_multimedia>.`,
 
@@ -207,9 +212,9 @@ Trả về kết quả bằng cách sử dụng đúng các thẻ XML theo thứ
 <insights>Nhận xét tổng quan</insights>
 <bottleneck>Điểm nghẽn</bottleneck>
 <recommendation>Mở rộng & Đề xuất</recommendation>
-<hotspot_ids>ID comment điểm nóng (tiêu cực rõ, rủi ro thương hiệu, cần xử lý khẩn). Nếu không có, để trống.</hotspot_ids>
-<improvement_ids>ID comment cần cải thiện (góp ý, thắc mắc, thiếu thông tin, cơ hội tối ưu). Nếu không có, để trống.</improvement_ids>
-<customerCommentAnalysis>Phân tích comment khách hàng (ngắn gọn, mỗi chủ đề tối đa 2-3 câu)</customerCommentAnalysis>
+<hotspot_ids>ID comment điểm nóng. Nếu không có, để trống.</hotspot_ids>
+<improvement_ids>ID comment cần cải thiện. Nếu không có, để trống.</improvement_ids>
+<customerCommentAnalysis>Phân tích comment khách hàng chi tiết và súc tích</customerCommentAnalysis>
 <nextPlan>
   <general>Định hướng chung</general>
   <goals>Mục tiêu</goals>
@@ -221,10 +226,9 @@ Trả về kết quả bằng cách sử dụng đúng các thẻ XML theo thứ
 </nextPlan>
 
 Quy tắc:
-- BẮT BUỘC viết dưới dạng ngắn gọn, dễ scan, súc tích.
-- TÍCH CỰC dùng định dạng markdown: in đậm (**), gạch đầu dòng (-) cho các ý chính.
-- PHẢI trích dẫn số liệu cụ thể tự nhiên.
-- BẮT BUỘC dùng thẻ XML (ví dụ: <insights>...</insights>).`,
+- TUYỆT ĐỐI KHÔNG nhắc đến tên các thẻ XML (như <hotspot_ids> hay <improvement_ids>) trong nội dung bài viết.
+- Viết dạng gạch đầu dòng ngắn gọn, in đậm ý chính (**).
+- Đảm bảo hoàn thành trọn vẹn 100% nội dung, không bị đứt câu giữa chừng.`,
 
   weeklyReport: `Dựa trên dữ liệu báo cáo tuần bên dưới, hãy phân tích và sinh nội dung đánh giá cho báo cáo tuần này.
 
@@ -268,7 +272,7 @@ async function callAIProxy(
           temperature: 0.7,
           topP: 0.95,
           topK: 40,
-          maxOutputTokens: 4096,
+          maxOutputTokens: 8192,
         },
       }),
       signal: controller.signal,
@@ -333,10 +337,16 @@ export async function generateCustomerCommentAnalysis(context: ReportContext): P
 
 function extractTag(text: string, tag: string): string {
   const match = text.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, 'i'));
-  if (match) return match[1].trim();
-  // Fallback if tag is missing closing tag or capitalized
-  const fallback = text.match(new RegExp(`<${tag}>(.*)`, 'is'));
-  return fallback ? fallback[1].trim() : '';
+  let res = match ? match[1].trim() : '';
+  if (!res) {
+    const fallback = text.match(new RegExp(`<${tag}>(.*)`, 'is'));
+    res = fallback ? fallback[1].trim() : '';
+  }
+  // Strip any leaked XML tags in text content
+  if (['customerCommentAnalysis', 'insights', 'bottleneck', 'recommendation'].includes(tag)) {
+    res = res.replace(/<\/?(hotspot_ids|improvement_ids|customerCommentAnalysis|insights|bottleneck|recommendation|nextPlan)[^>]*>/gi, '').trim();
+  }
+  return res;
 }
 
 export async function generateNextPlan(context: ReportContext): Promise<AIGeneratedReport['nextPlan']> {
@@ -444,7 +454,7 @@ Khi user hỏi, hãy trả lời dựa trên dữ liệu này. Nếu user hỏi 
           temperature: 0.8,
           topP: 0.95,
           topK: 40,
-          maxOutputTokens: 4096,
+          maxOutputTokens: 8192,
         },
       }),
       signal: controller.signal,
