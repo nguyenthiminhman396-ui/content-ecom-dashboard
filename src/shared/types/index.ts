@@ -683,6 +683,8 @@ export interface AppState {
   setSyncing: (syncing: boolean) => void;
   // WeeklyReport CRUD
   weeklyReports: WeeklyReport[];
+  monthlyReports: MonthlyReportConfig[];
+  updateMonthlyReport: (report: MonthlyReportConfig) => void;
   addWeeklyReport: (report: WeeklyReport) => void;
   updateWeeklyReport: (id: string, updates: Partial<WeeklyReport>) => void;
   deleteWeeklyReport: (id: string) => void;
@@ -767,4 +769,21 @@ export interface LinkQualityReview {
   reviewerId: string;
   reviewedAt: string;
   notes?: string;
+}
+
+
+// ============================================
+// Monthly / Quarterly Report Config
+// ============================================
+
+export interface MonthlyReportConfig {
+  id: string; // Tên kỳ báo cáo (VD: 'Tháng 07/2026')
+  summaryText: string;
+  recommendationText: string;
+  bottleneckText: string;
+  customerCommentAnalysisText: string;
+  additionalContextText: string;
+  metricOverrides: Record<string, string>;
+  selectedFocusProjects: string[];
+  updatedAt?: string;
 }

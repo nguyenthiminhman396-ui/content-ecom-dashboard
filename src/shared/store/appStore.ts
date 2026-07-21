@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import type { AppState, FilterState, KPISubmission, MemberAccount, WeeklyReport, ProjectTask, BonusPoint, RnDLog, MonthlyKPITarget, TodoItem, AppNotification } from '@/shared/types';
+import type { AppState, FilterState, KPISubmission, MemberAccount, WeeklyReport,
+  MonthlyReportConfig, ProjectTask, BonusPoint, RnDLog, MonthlyKPITarget, TodoItem, AppNotification } from '@/shared/types';
 import { DEFAULT_KPI_SCALE_CONFIG } from '@/shared/types';
 import { mockProjects, mockContents, mockMembers, mockClients, mockExpenses, defaultTaskPointRules, defaultSites } from '@/shared/data/mockData';
 
@@ -9,6 +10,7 @@ const DB_SCALE       = 'hcms_scale_config';
 const DB_MEMBERS     = 'hcms_members';
 const DB_ACCOUNTS    = 'hcms_accounts';
 const DB_WEEKLY      = 'hcms_weekly_reports';
+const DB_MONTHLY     = 'hcms_monthly_reports';
 const DB_SITES       = 'hcms_sites';
 const DB_PROJ_TASKS  = 'hcms_project_tasks';
 const DB_BONUS       = 'hcms_bonus';
@@ -131,11 +133,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   scaleConfig: DEFAULT_KPI_SCALE_CONFIG,
   sites:        defaultSites,
   projectTasks: [] as ProjectTask[],
+  
   bonusPoints:  [] as BonusPoint[],
   rndLogs:      [] as RnDLog[],
   kpiTargets:   [] as MonthlyKPITarget[],
   todos:        [] as TodoItem[],
   weeklyReports: [] as WeeklyReport[],
+  monthlyReports: [],
   notifications: [] as AppNotification[],
 
   // ── UI state ─────────────────────────────────────────────────────────────
@@ -520,6 +524,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     removeItemDB(DB_WEEKLY, [id]);
   },
 
+  // ── MonthlyReport CRUD ────────────────────────────────────────────────────
+  updateMonthlyReport: (report: MonthlyReportConfig) => {
+    const monthlyReports = [...get().monthlyReports];
+    const index = monthlyReports.findIndex(r => r.id === report.id);
+    if (index >= 0) {
+      monthlyReports[index] = report;
+      updateItemDB(DB_MONTHLY, report.id, report);
+    } else {
+      monthlyReports.push(report);
+      appendDB(DB_MONTHLY, [report]);
+    }
+    set({ monthlyReports });
+  },
+
   // ── Migrate: bỏ p_nhathuoc/p_tiemchung khỏi Projects (chúng là Sites) ───
   ensureDefaultProjects: () => {
     const state = get();
@@ -566,6 +584,7 @@ export async function initFromDB() {
       [DB_RND]:            'rndLogs',
       [DB_KPI_TARGETS]:    'kpiTargets',
       [DB_WEEKLY]:         'weeklyReports',
+      [DB_MONTHLY]:        'monthlyReports',
       [DB_ACCOUNTS]:       'memberAccounts',
       [DB_NOTIFICATIONS]:  'notifications',
     };

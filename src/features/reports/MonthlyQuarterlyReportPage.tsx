@@ -102,7 +102,7 @@ function DeltaBadge({ value }: { value: number }) {
 /* ═════════════════════════════════════════════════════ MAIN ═════ */
 
 export default function MonthlyQuarterlyReportPage() {
-  const { currentUser, submissions, projects, projectTasks } = useAppStore();
+  const { currentUser, submissions, projects, projectTasks, monthlyReports, updateMonthlyReport } = useAppStore();
   const reportRef = useRef<HTMLDivElement>(null);
 
   const isManager = currentUser?.role === 'Manager';
@@ -188,29 +188,34 @@ export default function MonthlyQuarterlyReportPage() {
   const periodLabel = mode === 'month' ? getMonthLabel(selectedMonth) : getQuarterLabel(selectedQuarter, selectedYear);
 
   /* ── load/save config ── */
-  const storageKey = `report_config_${periodLabel}`;
+  const reportId = `report_config_${periodLabel}`;
   
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(storageKey);
+      const saved = monthlyReports.find(r => r.id === reportId);
       if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.summaryText) setSummaryText(parsed.summaryText);
-        if (parsed.recommendationText) setRecommendationText(parsed.recommendationText);
-        if (parsed.bottleneckText) setBottleneckText(parsed.bottleneckText);
-        if (parsed.metricOverrides) setMetricOverrides(parsed.metricOverrides);
-        if (parsed.selectedFocusProjects) setSelectedFocusProjects(parsed.selectedFocusProjects);
-        // Lưu ý: KHÔNG khôi phục customerCommentsRawText / commentImportInfo — dữ liệu comment thô
-        // (có thể vài nghìn dòng/tháng) chỉ tồn tại trong phiên làm việc hiện tại, không lưu vào localStorage
-        // hay bất kỳ nơi nào khác. Chỉ kết quả phân tích của AI (đoạn văn ngắn) mới được lưu lại.
-        if (parsed.customerCommentAnalysisText) setCustomerCommentAnalysisText(parsed.customerCommentAnalysisText);
-        if (parsed.additionalContextText) setAdditionalContextText(parsed.additionalContextText);
-        if (parsed.hotspotComments) setHotspotComments(parsed.hotspotComments);
+        if (saved.summaryText) setSummaryText(saved.summaryText);
+        if (saved.recommendationText) setRecommendationText(saved.recommendationText);
+        if (saved.bottleneckText) setBottleneckText(saved.bottleneckText);
+        if (saved.metricOverrides) setMetricOverrides(saved.metricOverrides);
+        if (saved.selectedFocusProjects) setSelectedFocusProjects(saved.selectedFocusProjects);
+        if (saved.customerCommentAnalysisText) setCustomerCommentAnalysisText(saved.customerCommentAnalysisText);
+        if (saved.additionalContextText) setAdditionalContextText(saved.additionalContextText);
+        setHotspotComments([]); // hotspots always cleared on reload for privacy
+      } else {
+        setSummaryText('');
+        setRecommendationText('');
+        setBottleneckText('');
+        setMetricOverrides({});
+        setSelectedFocusProjects([]);
+        setCustomerCommentAnalysisText('');
+        setAdditionalContextText('');
+        setHotspotComments([]);
       }
     } catch (e) {
       console.error(e);
     }
-  }, [storageKey]);
+  }, [reportId, monthlyReports]);
 
   const isMounted = useRef(false);
   useEffect(() => {
@@ -218,22 +223,21 @@ export default function MonthlyQuarterlyReportPage() {
       isMounted.current = true;
       return;
     }
-    const config = {
-      summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects,
-      customerCommentAnalysisText, additionalContextText, hotspotComments,
-    };
-    localStorage.setItem(storageKey, JSON.stringify(config));
-  }, [summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects, customerCommentAnalysisText, additionalContextText, hotspotComments, storageKey]);
+    handleSaveConfig(false); // auto-save silently
+  }, [summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects, customerCommentAnalysisText, additionalContextText, reportId]);
 
-  const handleSaveConfig = () => {
-    // Chủ ý KHÔNG lưu customerCommentsRawText / commentImportInfo vào localStorage — dữ liệu comment thô
-    // (có thể vài nghìn dòng/tháng) chỉ dùng tạm để AI phân tích, không giữ lại. Chỉ lưu kết quả phân tích.
+  const handleSaveConfig = (showToast?: boolean | any) => {
+    const shouldToast = showToast === true;
     const config = {
+      id: reportId,
       summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects,
       customerCommentAnalysisText, additionalContextText,
+      updatedAt: new Date().toISOString(),
     };
-    localStorage.setItem(storageKey, JSON.stringify(config));
-    toast.success('Đã lưu cấu hình báo cáo cho kỳ này!');
+    updateMonthlyReport(config);
+    if (shouldToast) {
+      toast.success('Đã lưu cấu hình báo cáo cho kỳ này!');
+    }
   };
 
   /** Import file CSV/Excel chứa comment khách hàng (vài nghìn dòng/tháng) → tự tìm cột nội dung comment. */
