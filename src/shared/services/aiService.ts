@@ -181,10 +181,10 @@ function buildContextString(ctx: ReportContext): string {
 const SYSTEM_PROMPT = `Bạn là trợ lý phân tích nội dung chuyên sâu của phòng Content Ecom tại Long Châu (FPT Long Châu - chuỗi nhà thuốc và tiêm chủng).
 
 Quy tắc CỐT LÕI (TUÂN THỦ 100%):
-1. Viết bằng tiếng Việt, văn phong chuyên nghiệp, truyền cảm hứng, mang tính chiến lược cao.
+1. Viết bằng tiếng Việt, văn phong chuyên nghiệp, truyền cảm hứng, mang tính chiến lược cao. Trình bày ngắn gọn, súc tích, dễ scan.
 2. LUÔN trích dẫn số liệu cụ thể từ data để chứng minh nhận định.
-3. TUYỆT ĐỐI KHÔNG SỬ DỤNG: gạch đầu dòng (-), danh sách đánh số (1. 2.), in đậm (**), in nghiêng (*), biểu tượng cảm xúc (emoji).
-4. CHỈ SỬ DỤNG VĂN XUÔI THUẦN TÚY (Plaintext): Viết thành các đoạn văn mạch lạc, phân tách nhau bằng cách xuống dòng. Các số liệu và tên người/team chỉ cần viết hoa hoặc để trong ngoặc kép nếu cần nhấn mạnh, không dùng markdown in đậm.
+3. TÍCH CỰC SỬ DỤNG định dạng markdown: gạch đầu dòng (-), in đậm (**) để làm nổi bật các key points và số liệu quan trọng, giúp báo cáo dễ đọc, dễ nắm bắt thông tin nhanh.
+4. Tránh viết những đoạn văn quá dài, rườm rà. Mỗi ý/luận điểm nên tách thành gạch đầu dòng rõ ràng.
 5. TẦM NHÌN & VAI TRÒ: Khi nhận xét, hãy mở rộng góc nhìn. Đừng chỉ đọc số liệu khô khan, hãy lồng ghép ý nghĩa của những con số đó vào bức tranh lớn: Vai trò của team Content Ecom tác động thế nào đến trải nghiệm khách hàng, uy tín thương hiệu Long Châu, và việc hỗ trợ ra quyết định mua hàng. Nhấn mạnh giá trị "Nội dung y tế chuẩn xác" và "Trải nghiệm mua sắm mượt mà".
 6. Phân tích phải có chiều sâu: so sánh, tìm nguyên nhân, đưa ra insight mà người nhìn data thường bỏ qua.
 7. Nếu dữ liệu có mục "Nội dung comment khách hàng" hoặc "Thông tin bổ sung do người phụ trách cung cấp", đây là thông tin định tính quý giá — PHẢI đọc kỹ và khai thác thực chất (trích ý cụ thể, gọi tên chủ đề lặp lại) thay vì chỉ nhắc qua loa hay bỏ qua để chỉ bám vào số liệu.`;
@@ -193,7 +193,7 @@ const PROMPTS: Record<AIBlockType, string> = {
   insights: `Dựa trên dữ liệu báo cáo bên dưới, hãy viết phần "Nhận xét tổng quan" cho báo cáo kỳ này.
 
 Yêu cầu:
-- Trình bày dưới dạng văn xuôi (2-3 đoạn văn dài). Không dùng bất kỳ ký tự đặc biệt hay markdown nào.
+- Trình bày dưới dạng gạch đầu dòng ngắn gọn, súc tích. Sử dụng in đậm (**) cho các từ khóa và số liệu quan trọng.
 - Nêu bật thành tựu, xu hướng so với kỳ trước, sự đóng góp nổi bật của các cá nhân/team.
 - ĐẶC BIỆT: Gắn kết thành tựu với tầm nhìn dài hạn và vai trò cốt lõi của team Content Ecom (định hình trải nghiệm y tế số, tạo niềm tin cho khách hàng).
 - Trích dẫn số liệu một cách tự nhiên vào câu văn.
@@ -203,7 +203,7 @@ Chỉ trả về nội dung nhận xét, không cần tiêu đề.`,
   bottleneck: `Dựa trên dữ liệu báo cáo bên dưới, hãy phân tích và chỉ ra các "Điểm nghẽn & Khó khăn" của kỳ này.
 
 Yêu cầu:
-- Trình bày dưới dạng văn xuôi mạch lạc (2-3 đoạn văn dài). Không dùng bất kỳ ký tự đặc biệt hay markdown nào.
+- Trình bày dưới dạng gạch đầu dòng mạch lạc. Sử dụng in đậm (**) cho các vấn đề cốt lõi.
 - Phân tích sâu 1-2 điểm nghẽn cốt lõi (dự án chậm tiến độ, chất lượng giảm sút, mất cân đối nhân lực...). Nêu rõ bằng chứng từ data.
 - Nhìn nhận điểm nghẽn này dưới góc độ chiến lược: Nó cản trở mục tiêu chung của Ecom như thế nào?
 - Đề xuất hướng khắc phục cụ thể.
@@ -213,7 +213,7 @@ Chỉ trả về nội dung phân tích, không cần tiêu đề.`,
   recommendation: `Dựa trên dữ liệu báo cáo bên dưới, hãy viết phần "Mở rộng & Đề xuất" mang tính định hướng.
 
 Yêu cầu:
-- Trình bày dưới dạng văn xuôi truyền cảm hứng. Không dùng bất kỳ ký tự đặc biệt hay markdown nào.
+- Trình bày dưới dạng gạch đầu dòng rõ ràng, truyền cảm hứng.
 - Đưa ra 2-3 chiến lược/đề xuất nhằm nâng tầm vai trò của team (ví dụ: tối ưu quy trình, ứng dụng AI, mở rộng độ phủ nội dung chất lượng cao).
 - Giải thích tại sao đề xuất này lại quan trọng đối với sự phát triển của chuỗi Long Châu.
 
@@ -222,7 +222,7 @@ Chỉ trả về nội dung đề xuất, không cần tiêu đề.`,
   customerCommentAnalysis: `Dựa trên dữ liệu báo cáo bên dưới, hãy viết phần "Phân tích Comment khách hàng" đào sâu vào phần "Nội dung comment khách hàng (dữ liệu thô)" và "Thông tin bổ sung" nếu có.
 
 Yêu cầu:
-- Trình bày dưới dạng văn xuôi mạch lạc (2-4 đoạn văn). Không dùng bất kỳ ký tự đặc biệt hay markdown nào (không gạch đầu dòng, không in đậm, không emoji).
+- Trình bày dưới dạng gạch đầu dòng ngắn gọn, dễ hiểu. Sử dụng in đậm (**) cho các ý chính.
 - Đọc kỹ toàn bộ nội dung comment thô được cung cấp (nếu phần dữ liệu ghi rõ đây là "mẫu" do số lượng lớn, hãy suy rộng nhận định cho cả tổng số dòng đã nêu, đừng chỉ nói về vài dòng lấy mẫu), tự nhóm chúng thành các chủ đề/xu hướng lặp lại (ví dụ: tốc độ duyệt bài, độ chính xác y khoa, văn phong, hình ảnh, trải nghiệm phối hợp...). Nêu rõ chủ đề nào xuất hiện nhiều nhất, ước lượng tỉ lệ tương đối nếu có thể.
 - Trích dẫn nguyên văn hoặc gần nguyên văn 2-3 comment tiêu biểu (đặt trong ngoặc kép) để minh hoạ cho cả điểm khen và điểm cần cải thiện.
 - Đối chiếu với số liệu định lượng (tổng lượt đánh giá, điểm trung bình, % tích cực/tiêu cực) để cho thấy bức tranh định tính có khớp với con số hay không, và nếu có Thông tin bổ sung do người phụ trách cung cấp thì phải lồng ghép vào phân tích.
@@ -233,7 +233,7 @@ Chỉ trả về nội dung phân tích, không cần tiêu đề.`,
 
   nextPlan: `Dựa trên dữ liệu báo cáo kỳ này bên dưới, hãy gợi ý "Kế hoạch triển khai kỳ tới".
 
-Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau (bên trong mỗi thẻ CHỈ viết một đoạn văn xuôi duy nhất, TUYỆT ĐỐI không dùng gạch đầu dòng, dấu sao hay emoji):
+Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau (bên trong mỗi thẻ viết dưới dạng văn phong ngắn gọn, súc tích, CÓ THỂ dùng gạch đầu dòng để list ra các ý chính):
 
 <general>Định hướng chung cho kỳ tới gắn với tầm nhìn team</general>
 <goals>Mục tiêu nội dung cụ thể (trích dẫn target số liệu)</goals>
@@ -251,10 +251,10 @@ Quy tắc:
 
 Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau:
 
-<insights>Nhận xét tổng quan (viết 1 đoạn văn xuôi dài, lồng ghép số liệu và tầm nhìn team)</insights>
-<bottleneck>Điểm nghẽn & Khó khăn (viết 1 đoạn văn xuôi dài, có bằng chứng data)</bottleneck>
-<recommendation>Mở rộng & Đề xuất (viết 1 đoạn văn xuôi dài mang tính định hướng chiến lược)</recommendation>
-<customerCommentAnalysis>Phân tích Comment khách hàng: đọc kỹ mục "Nội dung comment khách hàng (dữ liệu thô)" và "Thông tin bổ sung" nếu có, nhóm chủ đề lặp lại, trích dẫn 2-3 comment tiêu biểu trong ngoặc kép, đối chiếu với số liệu % tích cực/tiêu cực, và đề xuất hành động cải thiện. Nếu không có comment thô, nói rõ và chỉ dựa vào số liệu tổng hợp.</customerCommentAnalysis>
+<insights>Nhận xét tổng quan (ngắn gọn, dùng gạch đầu dòng, lồng ghép số liệu và tầm nhìn team)</insights>
+<bottleneck>Điểm nghẽn & Khó khăn (ngắn gọn, dùng gạch đầu dòng, có bằng chứng data)</bottleneck>
+<recommendation>Mở rộng & Đề xuất (ngắn gọn, dùng gạch đầu dòng mang tính định hướng chiến lược)</recommendation>
+<customerCommentAnalysis>Phân tích Comment khách hàng: đọc kỹ mục "Nội dung comment khách hàng (dữ liệu thô)" và "Thông tin bổ sung" nếu có, nhóm chủ đề lặp lại, trích dẫn 2-3 comment tiêu biểu trong ngoặc kép, đối chiếu với số liệu % tích cực/tiêu cực, và đề xuất hành động cải thiện. Dùng gạch đầu dòng. Nếu không có comment thô, nói rõ và chỉ dựa vào số liệu tổng hợp.</customerCommentAnalysis>
 <nextPlan>
   <general>Định hướng chung (2-3 bullets)</general>
   <goals>Mục tiêu nội dung (2-3 bullets với target số)</goals>
@@ -266,14 +266,14 @@ Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau:
 </nextPlan>
 
 Quy tắc:
-- BẮT BUỘC viết dưới dạng ĐOẠN VĂN XUÔI (plaintext) hoàn toàn.
-- TUYỆT ĐỐI KHÔNG dùng bất kỳ ký tự đặc biệt nào: KHÔNG in đậm (**), KHÔNG gạch đầu dòng (-), KHÔNG emoji.
-- PHẢI trích dẫn số liệu cụ thể tự nhiên vào câu.
+- BẮT BUỘC viết dưới dạng ngắn gọn, dễ scan, súc tích.
+- TÍCH CỰC dùng định dạng markdown: in đậm (**), gạch đầu dòng (-) cho các ý chính.
+- PHẢI trích dẫn số liệu cụ thể tự nhiên.
 - BẮT BUỘC dùng thẻ XML (ví dụ: <insights>...</insights>).`,
 
   weeklyReport: `Dựa trên dữ liệu báo cáo tuần bên dưới, hãy phân tích và sinh nội dung đánh giá cho báo cáo tuần này.
 
-Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau (bên trong mỗi thẻ viết đoạn văn xuôi duy nhất, TUYỆT ĐỐI không dùng gạch đầu dòng, dấu sao hay emoji):
+Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau (bên trong mỗi thẻ viết dưới dạng gạch đầu dòng ngắn gọn, dễ hiểu, in đậm các ý chính):
 
 <insights>Nhận xét từ số liệu tuần: tóm tắt ngắn gọn năng suất, sản lượng, so sánh giữa các nhóm việc và top nhân sự nổi bật</insights>
 <bottleneck>Điểm nghẽn & Rủi ro tuần: nhận diện các vấn đề chậm tiến độ dự án, rủi ro về KPI hoặc chất lượng</bottleneck>
@@ -281,9 +281,9 @@ Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau (bên 
 <nextWeekPlan>Kế hoạch tuần tới: định hướng hành động cụ thể cho tuần tới</nextWeekPlan>
 
 Quy tắc:
-- BẮT BUỘC viết dưới dạng ĐOẠN VĂN XUÔI (plaintext) hoàn toàn.
-- TUYỆT ĐỐI KHÔNG dùng bất kỳ ký tự đặc biệt nào: KHÔNG in đậm (**), KHÔNG gạch đầu dòng (-), KHÔNG emoji.
-- PHẢI trích dẫn số liệu cụ thể tự nhiên vào câu.
+- Trình bày ngắn gọn, chuyên nghiệp, dễ scan.
+- Sử dụng markdown: gạch đầu dòng (-) và in đậm (**) để làm nổi bật ý.
+- PHẢI trích dẫn số liệu cụ thể.
 - BẮT BUỘC dùng thẻ XML (ví dụ: <insights>...</insights>).`
 };
 

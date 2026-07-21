@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { X, Edit3, Save, Printer } from 'lucide-react';
 import type { WeeklyReport } from '@/shared/types';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -63,9 +65,6 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave }:
   const riskCount    = report.projectProgress.filter(p => p.progress < 30).length;
   const weekLabel    = formatWeekLabel(report.weekStart);
 
-  // ── parse free-text fields ─────────────────────────────────────────────
-  const bottleneckLines = val('bottlenecks').split('\n\n').filter(Boolean);
-  const actionLines     = val('nextWeekPlan').split('\n').filter(Boolean);
 
   const pctTarget = (act: number, tgt: number | undefined) => tgt ? Math.round((act / tgt) * 100) : 0;
 
@@ -325,17 +324,9 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave }:
             {sectionTitle('4. Điểm nghẽn & Rủi ro', 'Phân loại theo mức độ ảnh hưởng')}
             {card(
               editing ? editArea('bottlenecks', 7, 'Mỗi điểm nghẽn cách nhau một dòng trống...') :
-              bottleneckLines.length > 0 ? (
-                <div style={{ display: 'grid', gap: '10px' }}>
-                  {bottleneckLines.map((line, i) => (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '32px 1fr', gap: '10px',
-                      padding: '12px', borderRadius: '14px', border: '1px solid #fee2e2', background: '#fff9f9' }}>
-                      <div style={{ width: '32px', height: '32px', borderRadius: '10px',
-                        display: 'grid', placeItems: 'center', background: '#fef2f2',
-                        color: '#dc2626', fontWeight: 900, fontSize: '13px' }}>{i+1}</div>
-                      <p style={{ fontSize: '13px', color: '#475569', margin: 0, lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{line}</p>
-                    </div>
-                  ))}
+              val('bottlenecks') ? (
+                <div style={{ fontSize: '13px', color: '#475569', lineHeight: 1.65, display: 'grid', gap: '8px' }}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{val('bottlenecks')}</ReactMarkdown>
                 </div>
               ) : (
                 <p style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '24px 0' }}>
@@ -353,12 +344,10 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave }:
               border: '1px solid #dbeafe', color: '#1e3a8a' }}>
               {editing ? (
                 editArea('nextWeekPlan', 7, 'Mỗi action trên một dòng...')
-              ) : actionLines.length > 0 ? (
-                <ol style={{ paddingLeft: '18px' }}>
-                  {actionLines.map((line, i) => (
-                    <li key={i} style={{ margin: '9px 0', fontWeight: 600, fontSize: '13px', lineHeight: 1.65 }}>{line}</li>
-                  ))}
-                </ol>
+              ) : val('nextWeekPlan') ? (
+                <div style={{ fontSize: '13px', lineHeight: 1.65, fontWeight: 500 }}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{val('nextWeekPlan')}</ReactMarkdown>
+                </div>
               ) : (
                 <p style={{ color: '#6b7280', fontSize: '13px', textAlign: 'center', padding: '24px 0' }}>
                   Chưa có kế hoạch tuần tới.
@@ -376,7 +365,7 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave }:
               ⚠️ Việc cần chốt / Cần hỗ trợ
             </div>
             {editing ? editArea('issues', 3, 'Ghi chú các vấn đề cần chốt, người cần chốt...') :
-              <p style={{ fontSize: '13px', color: '#92400e', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{val('issues')}</p>}
+              <div style={{ fontSize: '13px', color: '#92400e', lineHeight: 1.7 }}><ReactMarkdown remarkPlugins={[remarkGfm]}>{val('issues')}</ReactMarkdown></div>}
           </div>
         )}
 
@@ -388,7 +377,7 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave }:
               ✅ Nhận xét manager
             </div>
             {editing ? editArea('managerAssessment', 3, 'Nhận xét của manager...') :
-              <p style={{ fontSize: '13px', color: '#166534', lineHeight: 1.7 }}>{val('managerAssessment')}</p>}
+              <div style={{ fontSize: '13px', color: '#166534', lineHeight: 1.7 }}><ReactMarkdown remarkPlugins={[remarkGfm]}>{val('managerAssessment')}</ReactMarkdown></div>}
           </div>
         )}
 
@@ -399,7 +388,7 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave }:
             <div style={{ fontWeight: 700, color: '#6d28d9', marginBottom: '8px', fontSize: '14px' }}>
               ✨ Đánh giá AI
             </div>
-            <p style={{ fontSize: '13px', color: '#4c1d95', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{val('aiAssessment')}</p>
+            <div style={{ fontSize: '13px', color: '#4c1d95', lineHeight: 1.7 }}><ReactMarkdown remarkPlugins={[remarkGfm]}>{val('aiAssessment')}</ReactMarkdown></div>
           </div>
         )}
 
