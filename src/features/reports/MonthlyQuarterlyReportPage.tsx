@@ -1074,43 +1074,51 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
 
       {/* ── Mode Toggle + Period Selector ── */}
       <div className="card" style={{ padding: '14px 20px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-        {/* mode tabs */}
-        <div style={{ display: 'flex', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border-light)' }}>
-          {(['month', 'quarter'] as ViewMode[]).map(m => (
-            <button key={m} onClick={() => setMode(m)}
-              style={{
-                padding: '6px 16px', border: 'none', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600,
-                background: mode === m ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'var(--bg-primary)',
-                color: mode === m ? '#fff' : 'var(--text-secondary)',
-                transition: 'all .2s',
-              }}>
-              {m === 'month' ? '📅 Tháng' : '📊 Quý'}
-            </button>
-          ))}
-        </div>
-
-        {/* period navigation */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button className="btn btn-icon btn-ghost" onClick={goPrev}><ChevronLeft size={16} /></button>
-          {mode === 'month' ? (
-            <input type="month" className="form-input" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}
-              style={{ width: 'auto', fontSize: '0.88rem', fontWeight: 700 }} />
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <select className="form-input" value={selectedQuarter} onChange={e => setSelectedQuarter(Number(e.target.value))}
-                style={{ width: 'auto', fontSize: '0.88rem', fontWeight: 700 }}>
-                {[1, 2, 3, 4].map(q => <option key={q} value={q}>Quý {q}</option>)}
-              </select>
-              <select className="form-input" value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))}
-                style={{ width: 'auto', fontSize: '0.88rem', fontWeight: 700 }}>
-                {Array.from({ length: 5 }, (_, i) => now.getFullYear() - 2 + i).map(y =>
-                  <option key={y} value={y}>{y}</option>
-                )}
-              </select>
+        {isPublicShare ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.05rem', fontWeight: 800, color: '#1e3a8a', background: '#eff6ff', border: '1px solid #bfdbfe', padding: '6px 16px', borderRadius: '8px' }}>
+            <Calendar size={16} color="#2563eb" /> {periodLabel}
+          </div>
+        ) : (
+          <>
+            {/* mode tabs */}
+            <div style={{ display: 'flex', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border-light)' }}>
+              {(['month', 'quarter'] as ViewMode[]).map(m => (
+                <button key={m} onClick={() => setMode(m)}
+                  style={{
+                    padding: '6px 16px', border: 'none', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600,
+                    background: mode === m ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'var(--bg-primary)',
+                    color: mode === m ? '#fff' : 'var(--text-secondary)',
+                    transition: 'all .2s',
+                  }}>
+                  {m === 'month' ? '📅 Tháng' : '📊 Quý'}
+                </button>
+              ))}
             </div>
-          )}
-          <button className="btn btn-icon btn-ghost" onClick={goNext}><ChevronRight size={16} /></button>
-        </div>
+
+            {/* period navigation */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button className="btn btn-icon btn-ghost" onClick={goPrev}><ChevronLeft size={16} /></button>
+              {mode === 'month' ? (
+                <input type="month" className="form-input" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}
+                  style={{ width: 'auto', fontSize: '0.88rem', fontWeight: 700 }} />
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <select className="form-input" value={selectedQuarter} onChange={e => setSelectedQuarter(Number(e.target.value))}
+                    style={{ width: 'auto', fontSize: '0.88rem', fontWeight: 700 }}>
+                    {[1, 2, 3, 4].map(q => <option key={q} value={q}>Quý {q}</option>)}
+                  </select>
+                  <select className="form-input" value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))}
+                    style={{ width: 'auto', fontSize: '0.88rem', fontWeight: 700 }}>
+                    {Array.from({ length: 5 }, (_, i) => now.getFullYear() - 2 + i).map(y =>
+                      <option key={y} value={y}>{y}</option>
+                    )}
+                  </select>
+                </div>
+              )}
+              <button className="btn btn-icon btn-ghost" onClick={goNext}><ChevronRight size={16} /></button>
+            </div>
+          </>
+        )}
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1119,15 +1127,19 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
               Tự động tổng hợp từ {currentSubs.length} submissions
             </span>
           </div>
-          <button className={`btn btn-secondary ${isEditingMetrics ? 'btn-active' : ''}`} 
-            onClick={() => setIsEditingMetrics(!isEditingMetrics)}
-            style={{ border: isEditingMetrics ? '1px solid #8b5cf6' : '', background: isEditingMetrics ? '#f5f3ff' : '', color: isEditingMetrics ? '#7c3aed' : '' }}>
-            <Edit3 size={14} /> Chỉnh sửa số liệu
-          </button>
-          
-          <button className="btn btn-secondary" onClick={() => setShowBlockSettings(!showBlockSettings)}>
-            <LayoutTemplate size={14} /> Tuỳ chỉnh hiển thị
-          </button>
+          {!isPublicShare && (
+            <>
+              <button className={`btn btn-secondary ${isEditingMetrics ? 'btn-active' : ''}`} 
+                onClick={() => setIsEditingMetrics(!isEditingMetrics)}
+                style={{ border: isEditingMetrics ? '1px solid #8b5cf6' : '', background: isEditingMetrics ? '#f5f3ff' : '', color: isEditingMetrics ? '#7c3aed' : '' }}>
+                <Edit3 size={14} /> Chỉnh sửa số liệu
+              </button>
+              
+              <button className="btn btn-secondary" onClick={() => setShowBlockSettings(!showBlockSettings)}>
+                <LayoutTemplate size={14} /> Tuỳ chỉnh hiển thị
+              </button>
+            </>
+          )}
         </div>
       </div>
 
