@@ -245,11 +245,11 @@ export default function MonthlyQuarterlyReportPage() {
   /** Import file CSV/Excel chứa comment khách hàng (vài nghìn dòng/tháng) → tự tìm cột nội dung comment. */
     const handleExportHotspots = () => {
     if (hotspotComments.length === 0) return;
-    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + "Comment cần xử lý\n" + hotspotComments.map(c => `\"${c.replace(/"/g, '\"\"')}\"`).join("\n");
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + "Comment cần xử lý/cải thiện\n" + hotspotComments.map(c => `\"${c.replace(/"/g, '\"\"')}\"`).join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `diem-nong-comment-${periodLabel.replace(/\s+/g, '-')}.csv`);
+    link.setAttribute("download", `diem-nong-cai-thien-${periodLabel.replace(/\s+/g, '-')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -257,7 +257,7 @@ export default function MonthlyQuarterlyReportPage() {
 
   const handleClearHotspots = () => {
     setHotspotComments([]);
-    toast.success('Đã xóa danh sách điểm nóng khỏi báo cáo tháng!');
+    toast.success('Đã xóa danh sách điểm nóng & cải thiện khỏi báo cáo tháng!');
   };
 
   const handleImportCommentsFile = async (file: File) => {
@@ -1378,9 +1378,9 @@ export default function MonthlyQuarterlyReportPage() {
               {hotspotComments.length > 0 && (
                 <>
                   <button className="btn" onClick={handleExportHotspots} style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontWeight: 600 }}>
-                    <Download size={14} /> Xuất Điểm Nóng ({hotspotComments.length})
+                    <Download size={14} /> Xuất Điểm Nóng/Cải Thiện ({hotspotComments.length})
                   </button>
-                  <button className="btn btn-ghost btn-icon" onClick={handleClearHotspots} title="Xóa danh sách điểm nóng này khỏi DB" style={{ color: '#ef4444' }}>
+                  <button className="btn btn-ghost btn-icon" onClick={handleClearHotspots} title="Xóa danh sách điểm nóng & cải thiện này khỏi DB" style={{ color: '#ef4444' }}>
                     <Trash2 size={16} />
                   </button>
                 </>

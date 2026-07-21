@@ -193,11 +193,11 @@ const PROMPTS: Record<AIBlockType, string> = {
 
   recommendation: `Dựa trên dữ liệu báo cáo bên dưới, hãy viết phần "Mở rộng & Đề xuất" mang tính định hướng. Chỉ trả về nội dung, không cần tiêu đề.`,
 
-  customerCommentAnalysis: `Đọc kỹ mục "Nội dung comment khách hàng (dữ liệu thô)" và "Thông tin bổ sung" (nếu có). Dữ liệu comment thô đã được đánh số [ID: x].
+   customerCommentAnalysis: `Đọc kỹ mục "Nội dung comment khách hàng (dữ liệu thô)" và "Thông tin bổ sung" (nếu có). Dữ liệu comment thô đã được đánh số [ID: x].
 
 Yêu cầu:
 1. Viết phân tích tổng quan vào thẻ <customerCommentAnalysis>...</customerCommentAnalysis>: nhóm chủ đề lặp lại, trích dẫn 2-3 comment tiêu biểu trong ngoặc kép, đối chiếu với số liệu, và đề xuất hành động. Dùng gạch đầu dòng.
-2. Lọc ra các ID của những comment thuộc nhóm "điểm nóng" (tiêu cực, phàn nàn, cần xử lý) và đưa vào thẻ <hotspot_ids>...</hotspot_ids>. Phân tách ID bằng dấu phẩy (VD: <hotspot_ids>1, 5, 23</hotspot_ids>). Nếu không có, hãy để trống thẻ này.`,
+2. Lọc ra các ID của những comment thuộc nhóm "điểm nóng" (tiêu cực, phàn nàn, cần xử lý) hoặc nhóm "cần cải thiện/cơ hội" (khách thắc mắc, thiếu thông tin, ý kiến đóng góp) và đưa vào thẻ <hotspot_ids>...</hotspot_ids>. Phân tách ID bằng dấu phẩy (VD: <hotspot_ids>1, 5, 23</hotspot_ids>). Nếu không có, hãy để trống thẻ này.`,
 
   nextPlan: `Dựa trên dữ liệu báo cáo kỳ này bên dưới, hãy gợi ý "Kế hoạch triển khai kỳ tới" sử dụng thẻ XML: <general>, <goals>, <topics>, <team>, <team_baiviet>, <team_sanpham>, <team_multimedia>.`,
 
@@ -207,7 +207,7 @@ Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau:
 <bottleneck>Điểm nghẽn</bottleneck>
 <recommendation>Mở rộng & Đề xuất</recommendation>
 <customerCommentAnalysis>Phân tích comment khách hàng chi tiết</customerCommentAnalysis>
-<hotspot_ids>ID các comment tiêu cực/điểm nóng (VD: 1, 5, 23). Nếu không có, để trống.</hotspot_ids>
+<hotspot_ids>ID các comment tiêu cực/điểm nóng hoặc cần cải thiện/cơ hội (VD: 1, 5, 23). Nếu không có, để trống.</hotspot_ids>
 <nextPlan>
   <general>Định hướng chung</general>
   <goals>Mục tiêu</goals>
