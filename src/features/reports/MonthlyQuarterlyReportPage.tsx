@@ -2097,17 +2097,19 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
       </div> {/* end reportRef */}
 
       {/* ── Quick action: Go to weekly reports ── */}
-      <div style={{ textAlign: 'center', padding: '20px 0' }}>
-        <a href="/reports" style={{
-          display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px',
-          borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg,#f8fafc,#f1f5f9)',
-          border: '1px solid var(--border-light)', color: 'var(--text-secondary)',
-          fontSize: '0.85rem', fontWeight: 600, textDecoration: 'none',
-          transition: 'all .2s',
-        }}>
-          <Calendar size={14} /> Xem báo cáo tuần chi tiết <ArrowRight size={14} />
-        </a>
-      </div>
+      {!isPublicShare && (
+        <div style={{ textAlign: 'center', padding: '20px 0' }}>
+          <a href="/reports" style={{
+            display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px',
+            borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg,#f8fafc,#f1f5f9)',
+            border: '1px solid var(--border-light)', color: 'var(--text-secondary)',
+            fontSize: '0.85rem', fontWeight: 600, textDecoration: 'none',
+            transition: 'all .2s',
+          }}>
+            <Calendar size={14} /> Xem báo cáo tuần chi tiết <ArrowRight size={14} />
+          </a>
+        </div>
+      )}
 
       {drillDownData && (
         <DrillDownModal data={drillDownData} onClose={() => setDrillDownData(null)} />
