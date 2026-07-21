@@ -189,10 +189,6 @@ export default function MonthlyQuarterlyReportPage() {
 
   /* ── load/save config ── */
   const reportId = `report_config_${periodLabel}`;
-
-  useEffect(() => {
-    setHotspotComments([]);
-  }, [reportId]);
   
   useEffect(() => {
     try {
@@ -205,7 +201,8 @@ export default function MonthlyQuarterlyReportPage() {
         if (saved.selectedFocusProjects) setSelectedFocusProjects(saved.selectedFocusProjects);
         if (saved.customerCommentAnalysisText) setCustomerCommentAnalysisText(saved.customerCommentAnalysisText);
         if (saved.additionalContextText) setAdditionalContextText(saved.additionalContextText);
-        // hotspots always cleared on reload for privacy (handled by reportId useEffect)
+        if (saved.hotspotComments) setHotspotComments(saved.hotspotComments);
+        else setHotspotComments([]);
       } else {
         setSummaryText('');
         setRecommendationText('');
@@ -214,6 +211,7 @@ export default function MonthlyQuarterlyReportPage() {
         setSelectedFocusProjects([]);
         setCustomerCommentAnalysisText('');
         setAdditionalContextText('');
+        setHotspotComments([]);
       }
     } catch (e) {
       console.error(e);
@@ -227,7 +225,7 @@ export default function MonthlyQuarterlyReportPage() {
       return;
     }
     handleSaveConfig(false); // auto-save silently
-  }, [summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects, customerCommentAnalysisText, additionalContextText, reportId]);
+  }, [summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects, customerCommentAnalysisText, additionalContextText, reportId, hotspotComments]);
 
   const handleSaveConfig = (showToast?: boolean | any) => {
     const shouldToast = showToast === true;
@@ -235,6 +233,7 @@ export default function MonthlyQuarterlyReportPage() {
       id: reportId,
       summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects,
       customerCommentAnalysisText, additionalContextText,
+      hotspotComments,
       updatedAt: new Date().toISOString(),
     };
     updateMonthlyReport(config);
