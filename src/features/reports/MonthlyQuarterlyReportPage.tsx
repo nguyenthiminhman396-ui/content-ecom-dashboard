@@ -850,8 +850,8 @@ export default function MonthlyQuarterlyReportPage() {
         const result = await generateCustomerCommentAnalysis(ctx);
         setCustomerCommentAnalysisText(result.text);
         if (result.hotspotIds && result.hotspotIds.length > 0) {
-          const rawLines = customerCommentsRawText.split('\n').map(l => l.trim()).filter(Boolean);
-          const extracted = result.hotspotIds.map(id => rawLines[id - 1]).filter(Boolean);
+          const rawLines = customerCommentsRawText.split('\n');
+          const extracted = result.hotspotIds.map(id => rawLines[id - 1]?.trim()).filter(Boolean);
           setHotspotComments(extracted);
         } else {
           setHotspotComments([]);
@@ -883,8 +883,8 @@ export default function MonthlyQuarterlyReportPage() {
     if (aiReviewData.customerCommentAnalysis) {
       setCustomerCommentAnalysisText(aiReviewData.customerCommentAnalysis.text);
       if (aiReviewData.customerCommentAnalysis.hotspotIds && aiReviewData.customerCommentAnalysis.hotspotIds.length > 0) {
-        const rawLines = customerCommentsRawText.split('\n').map(l => l.trim()).filter(Boolean);
-        const extracted = aiReviewData.customerCommentAnalysis.hotspotIds.map(id => rawLines[id - 1]).filter(Boolean);
+        const rawLines = customerCommentsRawText.split('\n');
+        const extracted = aiReviewData.customerCommentAnalysis.hotspotIds.map(id => rawLines[id - 1]?.trim()).filter(Boolean);
         setHotspotComments(extracted);
       } else {
         setHotspotComments([]);
