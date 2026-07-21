@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { useAppStore } from '@/shared/store/appStore';
 import {
@@ -7,7 +8,7 @@ import {
   ChevronLeft, ChevronRight, Presentation, FileDown,
   ArrowRight, Hash, Edit3, Save, ShieldCheck,
   Eye, EyeOff, LayoutTemplate, ExternalLink, Package, Settings, KeyRound, PieChart,
-  Bot, Sparkles, AlertTriangle, Send, Loader2, X, Compass, MessageSquare, CheckCircle, Activity, Image, Upload
+  Bot, Sparkles, AlertTriangle, Send, Loader2, X, Compass, MessageSquare, CheckCircle, Activity, Image, Upload, Share2
 , Download, Trash2 } from 'lucide-react';
 import {
   generateFullReport, generateInsights, generateBottleneck,
@@ -101,9 +102,12 @@ function DeltaBadge({ value }: { value: number }) {
 
 /* ═════════════════════════════════════════════════════ MAIN ═════ */
 
-export default function MonthlyQuarterlyReportPage() {
+export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { isShareMode?: boolean }) {
   const { currentUser, submissions, projects, projectTasks, monthlyReports, updateMonthlyReport } = useAppStore();
   const reportRef = useRef<HTMLDivElement>(null);
+
+  const [searchParams] = useSearchParams();
+  const isPublicShare = isShareMode || searchParams.get('share') === 'true';
 
   const isManager = currentUser?.role === 'Manager';
 
@@ -113,6 +117,25 @@ export default function MonthlyQuarterlyReportPage() {
   const [selectedMonth, setSelectedMonth] = useState(() => `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
   const [selectedQuarter, setSelectedQuarter] = useState(() => Math.ceil((now.getMonth() + 1) / 3));
   const [selectedYear, setSelectedYear] = useState(() => now.getFullYear());
+
+  useEffect(() => {
+    const periodParam = searchParams.get('period');
+    if (periodParam) {
+      const monthMatch = periodParam.match(/Tháng\s+(\d{1,2})\/(\d{4})/i);
+      if (monthMatch) {
+        setMode('month');
+        const m = String(monthMatch[1]).padStart(2, '0');
+        setSelectedMonth(`${monthMatch[2]}-${m}`);
+      } else {
+        const quarterMatch = periodParam.match(/Quý\s+(\d)\/(\d{4})/i);
+        if (quarterMatch) {
+          setMode('quarter');
+          setSelectedQuarter(parseInt(quarterMatch[1], 10));
+          setSelectedYear(parseInt(quarterMatch[2], 10));
+        }
+      }
+    }
+  }, [searchParams]);
 
   const [siteFilter, setSiteFilter] = useState<'all' | 's_nhathuoc' | 's_tiemchung'>('all');
   
@@ -947,19 +970,22 @@ export default function MonthlyQuarterlyReportPage() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
-  const AIBlockButton = ({ block, label }: { block: 'insights' | 'bottleneck' | 'recommendation' | 'nextPlan' | 'customerCommentAnalysis'; label?: string }) => (
-    <button className="btn btn-ghost btn-icon" onClick={() => handleAIBlock(block)}
-      disabled={aiLoading !== null} title={label || 'AI gợi ý'}
-      style={{ color: '#10b981' }}>
-      {aiLoading === block ? <Loader2 size={16} className="spin" /> : <Bot size={16} />}
-    </button>
-  );
+  const AIBlockButton = ({ block, label }: { block: 'insights' | 'bottleneck' | 'recommendation' | 'nextPlan' | 'customerCommentAnalysis'; label?: string }) => {
+    if (isPublicShare) return null;
+    return (
+      <button className="btn btn-ghost btn-icon" onClick={() => handleAIBlock(block)}
+        disabled={aiLoading !== null} title={label || 'AI gợi ý'}
+        style={{ color: '#10b981' }}>
+        {aiLoading === block ? <Loader2 size={16} className="spin" /> : <Bot size={16} />}
+      </button>
+    );
+  };
 
   /* ── chart configs (computed inside render to use theme) ── */
   const chartTextColor = 'var(--text-primary)';
   const chartGridColor = 'rgba(148,163,184,.15)';
 
-  if (!isManager) {
+  if (!isManager && !isPublicShare) {
     return (
       <div className="card" style={{ padding: '60px', textAlign: 'center', marginTop: '20px' }}>
         <div style={{ fontSize: '3rem', marginBottom: '12px' }}>🔒</div>
@@ -971,7 +997,31 @@ export default function MonthlyQuarterlyReportPage() {
 
   /* ══════════════════════ RENDER ══════════════════════ */
   return (
-    <div>
+    <div style={{ padding: isPublicShare ? '24px 32px' : 0, maxWidth: isPublicShare ? '1400px' : '100%', margin: isPublicShare ? '0 auto' : 0 }}>
+      {isPublicShare && (
+        <div style={{
+          background: 'linear-gradient(90deg, #eff6ff 0%, #e0f2fe 100%)',
+          border: '1px solid #bfdbfe',
+          borderRadius: '12px',
+          padding: '12px 20px',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          color: '#1e40af',
+          fontWeight: 600,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Eye size={20} color="#2563eb" />
+            <span style={{ fontSize: '0.95rem' }}>BÁO CÁO CÔNG KHAI (CHỈ XEM) — <strong>{periodLabel}</strong></span>
+          </div>
+          <span style={{ fontSize: '0.8rem', background: '#dbeafe', color: '#1e3a8a', padding: '4px 12px', borderRadius: '20px', fontWeight: 700 }}>
+            Read-Only
+          </span>
+        </div>
+      )}
+
       {/* ── Header ── */}
       <div className="page-header">
         <div>
@@ -981,22 +1031,34 @@ export default function MonthlyQuarterlyReportPage() {
           <p className="page-subtitle">Tổng hợp tự động · Biểu đồ trực quan · Xuất HTML / PDF / Presentation</p>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button className="btn" onClick={handleSaveConfig} style={{ background: '#3b82f6', color: '#fff', border: 'none', fontWeight: 700, boxShadow: '0 2px 8px rgba(59,130,246,.3)' }}>
-            <Save size={14} /> Lưu thay đổi
-          </button>
-          <button className="btn" onClick={handleAIFullReport}
-            disabled={aiLoading !== null}
-            style={{ background: 'linear-gradient(135deg,#10b981,#059669)', color: '#fff', border: 'none', fontWeight: 700, boxShadow: '0 2px 8px rgba(16,185,129,.3)' }}>
-            {aiLoading === 'full' ? <Loader2 size={14} className="spin" /> : <Bot size={14} />} ✨ Phân tích AI
-          </button>
-          <button className="btn btn-secondary" onClick={() => setShowAIChat(true)}
-            style={{ background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', border: '1px solid #86efac', color: '#15803d' }}>
-            <MessageSquare size={14} /> Chat AI
-          </button>
-          <button className="btn btn-icon btn-ghost" onClick={() => setShowAISettings(true)} title="Cài đặt AI">
-            <KeyRound size={14} />
-          </button>
-          <div style={{ width: '1px', background: 'var(--border-light)', margin: '0 4px' }} />
+          {!isPublicShare && (
+            <>
+              <button className="btn" onClick={handleSaveConfig} style={{ background: '#3b82f6', color: '#fff', border: 'none', fontWeight: 700, boxShadow: '0 2px 8px rgba(59,130,246,.3)' }}>
+                <Save size={14} /> Lưu thay đổi
+              </button>
+              <button className="btn" onClick={handleAIFullReport}
+                disabled={aiLoading !== null}
+                style={{ background: 'linear-gradient(135deg,#10b981,#059669)', color: '#fff', border: 'none', fontWeight: 700, boxShadow: '0 2px 8px rgba(16,185,129,.3)' }}>
+                {aiLoading === 'full' ? <Loader2 size={14} className="spin" /> : <Bot size={14} />} ✨ Phân tích AI
+              </button>
+              <button className="btn btn-secondary" onClick={() => setShowAIChat(true)}
+                style={{ background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', border: '1px solid #86efac', color: '#15803d' }}>
+                <MessageSquare size={14} /> Chat AI
+              </button>
+              <button className="btn btn-icon btn-ghost" onClick={() => setShowAISettings(true)} title="Cài đặt AI">
+                <KeyRound size={14} />
+              </button>
+              <button className="btn btn-secondary" onClick={() => {
+                const shareUrl = `${window.location.origin}/share/report?period=${encodeURIComponent(periodLabel)}`;
+                navigator.clipboard.writeText(shareUrl);
+                toast.success('Đã sao chép link báo cáo công khai vào clipboard!');
+              }} title="Chia sẻ link báo cáo chỉ xem (không cần đăng nhập)"
+                style={{ background: 'linear-gradient(135deg,#eff6ff,#dbeafe)', border: '1px solid #93c5fd', color: '#1d4ed8', fontWeight: 600 }}>
+                <Share2 size={14} /> Chia sẻ link
+              </button>
+              <div style={{ width: '1px', background: 'var(--border-light)', margin: '0 4px' }} />
+            </>
+          )}
           <button className="btn btn-secondary" onClick={handleExportHTML} title="Export HTML">
             <FileText size={14} /> HTML
           </button>
@@ -1113,12 +1175,14 @@ export default function MonthlyQuarterlyReportPage() {
           </div>
           <div style={{ display: 'flex', gap: '4px' }}>
             <AIBlockButton block="insights" label="AI viết nhận xét" />
-            <button className="btn btn-ghost btn-icon" onClick={() => setIsEditingSummary(!isEditingSummary)} style={{ color: '#6d28d9' }}>
-              {isEditingSummary ? <Save size={18} /> : <Edit3 size={18} />}
-            </button>
+            {!isPublicShare && (
+              <button className="btn btn-ghost btn-icon" onClick={() => setIsEditingSummary(!isEditingSummary)} style={{ color: '#6d28d9' }}>
+                {isEditingSummary ? <Save size={18} /> : <Edit3 size={18} />}
+              </button>
+            )}
           </div>
         </div>
-        {isEditingSummary ? (
+        {isEditingSummary && !isPublicShare ? (
           <textarea className="form-input" value={summaryText} onChange={e => setSummaryText(e.target.value)} rows={3} style={{ width: '100%', fontSize: '1rem', lineHeight: 1.6 }} />
         ) : (
           <div style={{ fontSize: '1rem', lineHeight: 1.7, color: '#312e81', fontWeight: 500 }}>
@@ -1393,10 +1457,12 @@ export default function MonthlyQuarterlyReportPage() {
                 style={{ display: 'none' }}
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleImportCommentsFile(f); }}
               />
-              <button className="btn btn-secondary" onClick={() => commentFileInputRef.current?.click()}
-                disabled={isImportingComments} title="Import file CSV/Excel chứa comment khách hàng">
-                {isImportingComments ? <Loader2 size={14} className="spin" /> : <Upload size={14} />} Import CSV/Excel
-              </button>
+              {!isPublicShare && (
+                <button className="btn btn-secondary" onClick={() => commentFileInputRef.current?.click()}
+                  disabled={isImportingComments} title="Import file CSV/Excel chứa comment khách hàng">
+                  {isImportingComments ? <Loader2 size={14} className="spin" /> : <Upload size={14} />} Import CSV/Excel
+                </button>
+              )}
               <AIBlockButton block="customerCommentAnalysis" label="AI phân tích comment" />
               {hotspotComments.length > 0 && (
                 <>
@@ -1405,9 +1471,11 @@ export default function MonthlyQuarterlyReportPage() {
                     title="Xuất comment tiêu cực, rủi ro thương hiệu, cần xử lý khẩn">
                     <Download size={14} /> 🔴 Điểm Nóng ({hotspotComments.length})
                   </button>
-                  <button className="btn btn-ghost btn-icon" onClick={handleClearHotspots} title="Xóa danh sách điểm nóng" style={{ color: '#ef4444' }}>
-                    <Trash2 size={16} />
-                  </button>
+                  {!isPublicShare && (
+                    <button className="btn btn-ghost btn-icon" onClick={handleClearHotspots} title="Xóa danh sách điểm nóng" style={{ color: '#ef4444' }}>
+                      <Trash2 size={16} />
+                    </button>
+                  )}
                 </>
               )}
               {improvementComments.length > 0 && (
@@ -1417,14 +1485,18 @@ export default function MonthlyQuarterlyReportPage() {
                     title="Xuất comment góp ý, thắc mắc, cơ hội cải thiện nội dung">
                     <Download size={14} /> 🟡 Cải Thiện ({improvementComments.length})
                   </button>
-                  <button className="btn btn-ghost btn-icon" onClick={handleClearImprovements} title="Xóa danh sách cần cải thiện" style={{ color: '#d97706' }}>
-                    <Trash2 size={16} />
-                  </button>
+                  {!isPublicShare && (
+                    <button className="btn btn-ghost btn-icon" onClick={handleClearImprovements} title="Xóa danh sách cần cải thiện" style={{ color: '#d97706' }}>
+                      <Trash2 size={16} />
+                    </button>
+                  )}
                 </>
               )}
-              <button className="btn btn-ghost btn-icon" onClick={() => setIsEditingCustomerComments(!isEditingCustomerComments)} style={{ color: '#475569' }}>
-                {isEditingCustomerComments ? <Save size={18} /> : <Edit3 size={18} />}
-              </button>
+              {!isPublicShare && (
+                <button className="btn btn-ghost btn-icon" onClick={() => setIsEditingCustomerComments(!isEditingCustomerComments)} style={{ color: '#475569' }}>
+                  {isEditingCustomerComments ? <Save size={18} /> : <Edit3 size={18} />}
+                </button>
+              )}
             </div>
           </div>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', margin: '0 0 8px 0' }}>
@@ -1859,12 +1931,14 @@ export default function MonthlyQuarterlyReportPage() {
             </div>
           <div style={{ display: 'flex', gap: '4px' }}>
             <AIBlockButton block="bottleneck" label="AI phân tích điểm nghẽn" />
-            <button className="btn btn-ghost btn-icon" onClick={() => setIsEditingBottleneck(!isEditingBottleneck)} style={{ color: '#dc2626' }}>
-              {isEditingBottleneck ? <Save size={18} /> : <Edit3 size={18} />}
-            </button>
+            {!isPublicShare && (
+              <button className="btn btn-ghost btn-icon" onClick={() => setIsEditingBottleneck(!isEditingBottleneck)} style={{ color: '#dc2626' }}>
+                {isEditingBottleneck ? <Save size={18} /> : <Edit3 size={18} />}
+              </button>
+            )}
           </div>
           </div>
-          {isEditingBottleneck ? (
+          {isEditingBottleneck && !isPublicShare ? (
             <textarea className="form-input" value={bottleneckText} onChange={e => setBottleneckText(e.target.value)} rows={3} style={{ width: '100%', fontSize: '1rem', lineHeight: 1.6 }} />
           ) : (
             <div style={{ fontSize: '1rem', lineHeight: 1.7, color: '#450a0a', fontWeight: 500 }}>
@@ -1884,12 +1958,14 @@ export default function MonthlyQuarterlyReportPage() {
             </div>
           <div style={{ display: 'flex', gap: '4px' }}>
             <AIBlockButton block="recommendation" label="AI viết đề xuất" />
-            <button className="btn btn-ghost btn-icon" onClick={() => setIsEditingRec(!isEditingRec)} style={{ color: '#2563eb' }}>
-              {isEditingRec ? <Save size={18} /> : <Edit3 size={18} />}
-            </button>
+            {!isPublicShare && (
+              <button className="btn btn-ghost btn-icon" onClick={() => setIsEditingRec(!isEditingRec)} style={{ color: '#2563eb' }}>
+                {isEditingRec ? <Save size={18} /> : <Edit3 size={18} />}
+              </button>
+            )}
           </div>
           </div>
-          {isEditingRec ? (
+          {isEditingRec && !isPublicShare ? (
             <textarea className="form-input" value={recommendationText} onChange={e => setRecommendationText(e.target.value)} rows={3} style={{ width: '100%', fontSize: '1rem', lineHeight: 1.6 }} />
           ) : (
             <div style={{ fontSize: '1rem', lineHeight: 1.7, color: '#1e3a8a', fontWeight: 500 }}>

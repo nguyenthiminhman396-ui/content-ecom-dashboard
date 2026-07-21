@@ -44,6 +44,8 @@ export default function AppRouter() {
         <Route path="/todo"           element={<TodoPage />} />
         <Route path="/expenses"       element={<ExpensesPage />} />
       </Route>
+      {/* Public Read-Only Share Route (No sidebar, no header, no login required) */}
+      <Route path="/share/report" element={<MonthlyQuarterlyReportPage isShareMode={true} />} />
     </Routes>
   );
 }
