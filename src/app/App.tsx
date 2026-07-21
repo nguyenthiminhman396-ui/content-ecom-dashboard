@@ -28,7 +28,9 @@ export default function App() {
 
   if (!bootstrapped) return null;
 
-  if (!currentUser) {
+  const isShareRoute = window.location.pathname.startsWith('/share');
+
+  if (!currentUser && !isShareRoute) {
     return (
       <>
         <Toaster position="top-right" />
