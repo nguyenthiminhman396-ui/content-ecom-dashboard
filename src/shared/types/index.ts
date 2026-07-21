@@ -786,5 +786,6 @@ export interface MonthlyReportConfig {
   metricOverrides: Record<string, string>;
   selectedFocusProjects: string[];
   hotspotComments?: string[];
+  improvementComments?: string[];
   updatedAt?: string;
 }

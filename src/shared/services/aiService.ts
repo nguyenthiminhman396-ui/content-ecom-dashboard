@@ -43,7 +43,7 @@ export interface AIGeneratedReport {
   insights: string;
   bottleneck: string;
   recommendation: string;
-  customerCommentAnalysis?: { text: string; hotspotIds: number[] };
+  customerCommentAnalysis?: { text: string; hotspotIds: number[]; improvementIds: number[] };
   nextPlan: {
     general: string;
     goals: string;
@@ -196,8 +196,9 @@ const PROMPTS: Record<AIBlockType, string> = {
    customerCommentAnalysis: `Đọc kỹ mục "Nội dung comment khách hàng (dữ liệu thô)" và "Thông tin bổ sung" (nếu có). Dữ liệu comment thô đã được đánh số [ID: x].
 
 Yêu cầu:
-1. Đầu tiên, lọc ra các ID của những comment thuộc nhóm "điểm nóng" (tiêu cực, phàn nàn, cần xử lý) hoặc nhóm "cần cải thiện/cơ hội" (khách thắc mắc, thiếu thông tin, ý kiến đóng góp) và đưa vào thẻ <hotspot_ids>...</hotspot_ids>. Phân tách ID bằng dấu phẩy (VD: <hotspot_ids>1, 5, 23</hotspot_ids>). Nếu không có, hãy để trống thẻ này.
-2. Tiếp theo, viết phân tích tổng quan vào thẻ <customerCommentAnalysis>...</customerCommentAnalysis>: nhóm chủ đề lặp lại, trích dẫn tối đa 2 comment tiêu biểu cho mỗi nhóm trong ngoặc kép, đối chiếu với số liệu, và đề xuất hành động. Dùng gạch đầu dòng. Viết ngắn gọn, súc tích (mỗi phần phân tích của mỗi chủ đề chỉ tối đa 2-3 câu).`,
+1. Lọc ra các ID của những comment thuộc nhóm "điểm nóng" (tiêu cực rõ ràng, phàn nàn gay gắt, rủi ro thương hiệu, cần xử lý khẩn) và đưa vào thẻ <hotspot_ids>...</hotspot_ids>. Phân tách ID bằng dấu phẩy. Nếu không có, để trống.
+2. Lọc ra các ID của những comment thuộc nhóm "cần cải thiện" (khách thắc mắc, thiếu thông tin, góp ý xây dựng, cơ hội tối ưu nội dung) và đưa vào thẻ <improvement_ids>...</improvement_ids>. Phân tách ID bằng dấu phẩy. Nếu không có, để trống.
+3. Viết phân tích tổng quan vào thẻ <customerCommentAnalysis>...</customerCommentAnalysis>: nhóm chủ đề lặp lại, trích dẫn tối đa 2 comment tiêu biểu cho mỗi nhóm trong ngoặc kép, đối chiếu với số liệu, và đề xuất hành động. Ngắn gọn, mỗi chủ đề tối đa 2-3 câu.`,
 
   nextPlan: `Dựa trên dữ liệu báo cáo kỳ này bên dưới, hãy gợi ý "Kế hoạch triển khai kỳ tới" sử dụng thẻ XML: <general>, <goals>, <topics>, <team>, <team_baiviet>, <team_sanpham>, <team_multimedia>.`,
 
@@ -206,8 +207,9 @@ Trả về kết quả bằng cách sử dụng đúng các thẻ XML theo thứ
 <insights>Nhận xét tổng quan</insights>
 <bottleneck>Điểm nghẽn</bottleneck>
 <recommendation>Mở rộng & Đề xuất</recommendation>
-<hotspot_ids>ID các comment tiêu cực/điểm nóng hoặc cần cải thiện/cơ hội (VD: 1, 5, 23). Nếu không có, để trống.</hotspot_ids>
-<customerCommentAnalysis>Phân tích comment khách hàng chi tiết (ngắn gọn, mỗi chủ đề tối đa 2-3 câu)</customerCommentAnalysis>
+<hotspot_ids>ID comment điểm nóng (tiêu cực rõ, rủi ro thương hiệu, cần xử lý khẩn). Nếu không có, để trống.</hotspot_ids>
+<improvement_ids>ID comment cần cải thiện (góp ý, thắc mắc, thiếu thông tin, cơ hội tối ưu). Nếu không có, để trống.</improvement_ids>
+<customerCommentAnalysis>Phân tích comment khách hàng (ngắn gọn, mỗi chủ đề tối đa 2-3 câu)</customerCommentAnalysis>
 <nextPlan>
   <general>Định hướng chung</general>
   <goals>Mục tiêu</goals>
@@ -319,12 +321,14 @@ export async function generateRecommendation(context: ReportContext): Promise<st
   return generateBlock('recommendation', context);
 }
 
-export async function generateCustomerCommentAnalysis(context: ReportContext): Promise<{ text: string; hotspotIds: number[] }> {
+export async function generateCustomerCommentAnalysis(context: ReportContext): Promise<{ text: string; hotspotIds: number[]; improvementIds: number[] }> {
   const raw = await generateBlock('customerCommentAnalysis', context);
   const text = extractTag(raw, 'customerCommentAnalysis');
-  const idsStr = extractTag(raw, 'hotspot_ids');
-  const hotspotIds = idsStr ? idsStr.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n)) : [];
-  return { text, hotspotIds };
+  const hotspotStr = extractTag(raw, 'hotspot_ids');
+  const improvementStr = extractTag(raw, 'improvement_ids');
+  const hotspotIds = hotspotStr ? hotspotStr.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n)) : [];
+  const improvementIds = improvementStr ? improvementStr.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n)) : [];
+  return { text, hotspotIds, improvementIds };
 }
 
 function extractTag(text: string, tag: string): string {
@@ -364,7 +368,8 @@ export async function generateFullReport(context: ReportContext): Promise<AIGene
     recommendation: extractTag(raw, 'recommendation'),
     customerCommentAnalysis: {
       text: extractTag(raw, 'customerCommentAnalysis'),
-      hotspotIds: extractTag(raw, 'hotspot_ids').split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n))
+      hotspotIds: extractTag(raw, 'hotspot_ids').split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n)),
+      improvementIds: extractTag(raw, 'improvement_ids').split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n)),
     },
     nextPlan: {
       general: extractTag(raw, 'general'),

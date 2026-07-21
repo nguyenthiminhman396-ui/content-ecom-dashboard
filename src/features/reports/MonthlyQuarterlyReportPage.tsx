@@ -130,6 +130,7 @@ export default function MonthlyQuarterlyReportPage() {
   const [customerCommentsRawText, setCustomerCommentsRawText] = useState('');
   const [customerCommentAnalysisText, setCustomerCommentAnalysisText] = useState('');
   const [hotspotComments, setHotspotComments] = useState<string[]>([]);
+  const [improvementComments, setImprovementComments] = useState<string[]>([]);
   const [isEditingCustomerComments, setIsEditingCustomerComments] = useState(false);
   const [commentImportInfo, setCommentImportInfo] = useState<{ fileName: string; totalRows: number; columnUsed: string } | null>(null);
   const [isImportingComments, setIsImportingComments] = useState(false);
@@ -203,6 +204,8 @@ export default function MonthlyQuarterlyReportPage() {
         if (saved.additionalContextText) setAdditionalContextText(saved.additionalContextText);
         if (saved.hotspotComments) setHotspotComments(saved.hotspotComments);
         else setHotspotComments([]);
+        if (saved.improvementComments) setImprovementComments(saved.improvementComments);
+        else setImprovementComments([]);
       } else {
         setSummaryText('');
         setRecommendationText('');
@@ -212,6 +215,7 @@ export default function MonthlyQuarterlyReportPage() {
         setCustomerCommentAnalysisText('');
         setAdditionalContextText('');
         setHotspotComments([]);
+        setImprovementComments([]);
       }
     } catch (e) {
       console.error(e);
@@ -225,7 +229,7 @@ export default function MonthlyQuarterlyReportPage() {
       return;
     }
     handleSaveConfig(false); // auto-save silently
-  }, [summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects, customerCommentAnalysisText, additionalContextText, reportId, hotspotComments]);
+  }, [summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects, customerCommentAnalysisText, additionalContextText, reportId, hotspotComments, improvementComments]);
 
   const handleSaveConfig = (showToast?: boolean | any) => {
     const shouldToast = showToast === true;
@@ -234,6 +238,7 @@ export default function MonthlyQuarterlyReportPage() {
       summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects,
       customerCommentAnalysisText, additionalContextText,
       hotspotComments,
+      improvementComments,
       updatedAt: new Date().toISOString(),
     };
     updateMonthlyReport(config);
@@ -242,14 +247,27 @@ export default function MonthlyQuarterlyReportPage() {
     }
   };
 
-  /** Import file CSV/Excel chứa comment khách hàng (vài nghìn dòng/tháng) → tự tìm cột nội dung comment. */
-    const handleExportHotspots = () => {
+  /** Export điểm nóng ra CSV */
+  const handleExportHotspots = () => {
     if (hotspotComments.length === 0) return;
-    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + "Comment cần xử lý/cải thiện\n" + hotspotComments.map(c => `\"${c.replace(/"/g, '\"\"')}\"`).join("\n");
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + "Comment Điểm Nóng (cần xử lý khẩn)\n" + hotspotComments.map(c => `"${c.replace(/"/g, '""')}"`).join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `diem-nong-cai-thien-${periodLabel.replace(/\s+/g, '-')}.csv`);
+    link.setAttribute("download", `diem-nong-${periodLabel.replace(/\s+/g, '-')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  /** Export cần cải thiện ra CSV */
+  const handleExportImprovements = () => {
+    if (improvementComments.length === 0) return;
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + "Comment Cần Cải Thiện (cơ hội tối ưu)\n" + improvementComments.map(c => `"${c.replace(/"/g, '""')}"`).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `can-cai-thien-${periodLabel.replace(/\s+/g, '-')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -257,7 +275,12 @@ export default function MonthlyQuarterlyReportPage() {
 
   const handleClearHotspots = () => {
     setHotspotComments([]);
-    toast.success('Đã xóa danh sách điểm nóng & cải thiện khỏi báo cáo tháng!');
+    toast.success('Đã xóa danh sách điểm nóng!');
+  };
+
+  const handleClearImprovements = () => {
+    setImprovementComments([]);
+    toast.success('Đã xóa danh sách cần cải thiện!');
   };
 
   const handleImportCommentsFile = async (file: File) => {
@@ -849,13 +872,13 @@ export default function MonthlyQuarterlyReportPage() {
       } else if (block === 'customerCommentAnalysis') {
         const result = await generateCustomerCommentAnalysis(ctx);
         setCustomerCommentAnalysisText(result.text);
-        if (result.hotspotIds && result.hotspotIds.length > 0) {
-          const rawLines = customerCommentsRawText.split('\n');
-          const extracted = result.hotspotIds.map(id => rawLines[id - 1]?.trim()).filter(Boolean);
-          setHotspotComments(extracted);
-        } else {
-          setHotspotComments([]);
-        }
+        const rawLines = customerCommentsRawText.split('\n');
+        setHotspotComments(
+          result.hotspotIds.map(id => rawLines[id - 1]?.trim()).filter(Boolean)
+        );
+        setImprovementComments(
+          result.improvementIds.map(id => rawLines[id - 1]?.trim()).filter(Boolean)
+        );
         toast.success('AI đã phân tích comment khách hàng!');
       } else if (block === 'nextPlan') {
         const result = await generateNextPlan(ctx);
@@ -882,13 +905,13 @@ export default function MonthlyQuarterlyReportPage() {
     setRecommendationText(aiReviewData.recommendation);
     if (aiReviewData.customerCommentAnalysis) {
       setCustomerCommentAnalysisText(aiReviewData.customerCommentAnalysis.text);
-      if (aiReviewData.customerCommentAnalysis.hotspotIds && aiReviewData.customerCommentAnalysis.hotspotIds.length > 0) {
-        const rawLines = customerCommentsRawText.split('\n');
-        const extracted = aiReviewData.customerCommentAnalysis.hotspotIds.map(id => rawLines[id - 1]?.trim()).filter(Boolean);
-        setHotspotComments(extracted);
-      } else {
-        setHotspotComments([]);
-      }
+      const rawLines = customerCommentsRawText.split('\n');
+      setHotspotComments(
+        (aiReviewData.customerCommentAnalysis.hotspotIds || []).map(id => rawLines[id - 1]?.trim()).filter(Boolean)
+      );
+      setImprovementComments(
+        (aiReviewData.customerCommentAnalysis.improvementIds || []).map(id => rawLines[id - 1]?.trim()).filter(Boolean)
+      );
     }
     if (aiReviewData.nextPlan) {
       setOverride('plan_general', aiReviewData.nextPlan.general);
@@ -1377,10 +1400,24 @@ export default function MonthlyQuarterlyReportPage() {
               <AIBlockButton block="customerCommentAnalysis" label="AI phân tích comment" />
               {hotspotComments.length > 0 && (
                 <>
-                  <button className="btn" onClick={handleExportHotspots} style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontWeight: 600 }}>
-                    <Download size={14} /> Xuất Điểm Nóng/Cải Thiện ({hotspotComments.length})
+                  <button className="btn" onClick={handleExportHotspots}
+                    style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', fontWeight: 600 }}
+                    title="Xuất comment tiêu cực, rủi ro thương hiệu, cần xử lý khẩn">
+                    <Download size={14} /> 🔴 Điểm Nóng ({hotspotComments.length})
                   </button>
-                  <button className="btn btn-ghost btn-icon" onClick={handleClearHotspots} title="Xóa danh sách điểm nóng & cải thiện này khỏi DB" style={{ color: '#ef4444' }}>
+                  <button className="btn btn-ghost btn-icon" onClick={handleClearHotspots} title="Xóa danh sách điểm nóng" style={{ color: '#ef4444' }}>
+                    <Trash2 size={16} />
+                  </button>
+                </>
+              )}
+              {improvementComments.length > 0 && (
+                <>
+                  <button className="btn" onClick={handleExportImprovements}
+                    style={{ background: '#fffbeb', color: '#d97706', border: '1px solid #fde68a', fontWeight: 600 }}
+                    title="Xuất comment góp ý, thắc mắc, cơ hội cải thiện nội dung">
+                    <Download size={14} /> 🟡 Cải Thiện ({improvementComments.length})
+                  </button>
+                  <button className="btn btn-ghost btn-icon" onClick={handleClearImprovements} title="Xóa danh sách cần cải thiện" style={{ color: '#d97706' }}>
                     <Trash2 size={16} />
                   </button>
                 </>
