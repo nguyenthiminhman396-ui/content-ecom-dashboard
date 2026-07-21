@@ -210,6 +210,20 @@ export default function MonthlyQuarterlyReportPage() {
     }
   }, [storageKey]);
 
+  const isLoaded = useRef(false);
+  useEffect(() => {
+    isLoaded.current = true;
+  }, [storageKey]); // Just to set it true after mount
+
+  useEffect(() => {
+    if (!isLoaded.current) return;
+    const config = {
+      summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects,
+      customerCommentAnalysisText, additionalContextText,
+    };
+    localStorage.setItem(storageKey, JSON.stringify(config));
+  }, [summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects, customerCommentAnalysisText, additionalContextText, storageKey]);
+
   const handleSaveConfig = () => {
     // Chủ ý KHÔNG lưu customerCommentsRawText / commentImportInfo vào localStorage — dữ liệu comment thô
     // (có thể vài nghìn dòng/tháng) chỉ dùng tạm để AI phân tích, không giữ lại. Chỉ lưu kết quả phân tích.
@@ -906,6 +920,9 @@ export default function MonthlyQuarterlyReportPage() {
           <p className="page-subtitle">Tổng hợp tự động · Biểu đồ trực quan · Xuất HTML / PDF / Presentation</p>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button className="btn" onClick={handleSaveConfig} style={{ background: '#3b82f6', color: '#fff', border: 'none', fontWeight: 700, boxShadow: '0 2px 8px rgba(59,130,246,.3)' }}>
+            <Save size={14} /> Lưu thay đổi
+          </button>
           <button className="btn" onClick={handleAIFullReport}
             disabled={aiLoading !== null}
             style={{ background: 'linear-gradient(135deg,#10b981,#059669)', color: '#fff', border: 'none', fontWeight: 700, boxShadow: '0 2px 8px rgba(16,185,129,.3)' }}>
@@ -984,11 +1001,7 @@ export default function MonthlyQuarterlyReportPage() {
             style={{ border: isEditingMetrics ? '1px solid #8b5cf6' : '', background: isEditingMetrics ? '#f5f3ff' : '', color: isEditingMetrics ? '#7c3aed' : '' }}>
             <Edit3 size={14} /> Chỉnh sửa số liệu
           </button>
-          {isEditingMetrics && (
-            <button className="btn" onClick={handleSaveConfig} style={{ background: '#10b981', color: '#fff', border: 'none' }}>
-              <Save size={14} /> Lưu báo cáo
-            </button>
-          )}
+          
           <button className="btn btn-secondary" onClick={() => setShowBlockSettings(!showBlockSettings)}>
             <LayoutTemplate size={14} /> Tuỳ chỉnh hiển thị
           </button>
