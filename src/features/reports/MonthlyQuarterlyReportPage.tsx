@@ -5,7 +5,7 @@ import { useAppStore } from '@/shared/store/appStore';
 import {
   CalendarRange, Calendar, TrendingUp, TrendingDown, Minus,
   FileText, BarChart3, Target,
-  ChevronLeft, ChevronRight, Presentation, FileDown,
+  ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Presentation, FileDown,
   ArrowRight, Hash, Edit3, Save, ShieldCheck,
   Eye, EyeOff, LayoutTemplate, ExternalLink, Package, Settings, KeyRound, PieChart,
   Bot, Sparkles, AlertTriangle, Send, Loader2, X, Compass, MessageSquare, CheckCircle, Activity, Image, Upload, Share2
@@ -147,6 +147,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
   const [isEditingBottleneck, setIsEditingBottleneck] = useState(false);
   const [isEditingRec, setIsEditingRec] = useState(false);
   const [selectedFocusProjects, setSelectedFocusProjects] = useState<string[]>([]);
+  const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
 
   // Customer comment analysis + extra AI context
   const [additionalContextText, setAdditionalContextText] = useState('');
@@ -1671,161 +1672,185 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
         </div>
       )}
 
-      {/* ── Block 5: Smart Project Cards & Volume Share ── */}
+      {/* ── Block 5: Smart Project Cards ── */}
       {visibleBlocks.teamAndProject && (
         <>
           <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: '24px 0 16px 0' }}>Dự án</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '14px', marginBottom: '14px' }}>
-            
-            {/* Smart Project Cards Grid */}
-            <div className="card" style={{ padding: '20px' }}>
-              <ChartHeader icon={<Target size={14} color="#fff" />} title="Tiến độ & Hạng mục Dự án trọng điểm" color="#10b981" />
-              {projectProgress.length > 0 ? (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '12px', marginTop: '16px' }}>
-                  {projectProgress.map((p) => {
-                    const statusColor = p.progress >= 80 ? '#16a34a' : p.progress >= 40 ? '#2563eb' : '#d97706';
-                    const statusBg = p.progress >= 80 ? '#dcfce7' : p.progress >= 40 ? '#dbeafe' : '#fef3c7';
-                    const statusLabel = p.progress >= 80 ? '🟢 Đạt tiến độ' : p.progress >= 40 ? '🔵 Đang triển khai' : '🟡 Cần tăng tốc';
+          
+          {/* 1. Smart Project Cards Grid */}
+          <div className="card" style={{ padding: '20px', marginBottom: '14px' }}>
+            <ChartHeader icon={<Target size={14} color="#fff" />} title="Tiến độ & Hạng mục Dự án trọng điểm" color="#10b981" />
+            {projectProgress.length > 0 ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '14px', marginTop: '16px' }}>
+                {projectProgress.map((p) => {
+                  const statusColor = p.progress >= 80 ? '#16a34a' : p.progress >= 40 ? '#2563eb' : '#d97706';
+                  const statusBg = p.progress >= 80 ? '#dcfce7' : p.progress >= 40 ? '#dbeafe' : '#fef3c7';
+                  const statusLabel = p.progress >= 80 ? '🟢 Đạt tiến độ' : p.progress >= 40 ? '🔵 Đang triển khai' : '🟡 Cần tăng tốc';
+                  const isExpanded = !!expandedProjects[p.id];
+                  const hasMoreTasks = p.taskBreakdown.length > 3;
+                  const visibleTasks = isExpanded ? p.taskBreakdown : p.taskBreakdown.slice(0, 3);
 
-                    return (
-                      <div key={p.id || p.name} style={{
-                        background: 'var(--bg-primary)',
-                        border: '1px solid var(--border-light)',
-                        borderRadius: '12px',
-                        padding: '16px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-                      }}>
-                        <div>
-                          {/* Header: Name + Type Tag + Status Badge */}
-                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '10px' }}>
-                            <div>
-                              <div style={{ fontWeight: 800, fontSize: '0.98rem', color: 'var(--text-primary)', lineHeight: 1.3 }}>
-                                {p.name}
-                              </div>
-                              <span style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: '4px', marginTop: '4px', display: 'inline-block' }}>
-                                📁 {p.type}
-                              </span>
+                  return (
+                    <div key={p.id || p.name} style={{
+                      background: 'var(--bg-primary)',
+                      border: '1px solid var(--border-light)',
+                      borderRadius: '12px',
+                      padding: '16px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                    }}>
+                      <div>
+                        {/* Header: Name + Type Tag + Status Badge */}
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '10px' }}>
+                          <div>
+                            <div style={{ fontWeight: 800, fontSize: '0.98rem', color: 'var(--text-primary)', lineHeight: 1.3 }}>
+                              {p.name}
                             </div>
-                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: statusColor, background: statusBg, padding: '3px 8px', borderRadius: '20px', whiteSpace: 'nowrap' }}>
-                              {statusLabel}
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: '4px', marginTop: '4px', display: 'inline-block' }}>
+                              📁 {p.type}
                             </span>
                           </div>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: statusColor, background: statusBg, padding: '3px 8px', borderRadius: '20px', whiteSpace: 'nowrap' }}>
+                            {statusLabel}
+                          </span>
+                        </div>
 
-                          {/* Progress Bar & Main Metrics */}
-                          <div style={{ margin: '12px 0 14px 0' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', marginBottom: '6px' }}>
-                              <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>Tiến độ tổng thể</span>
-                              <span style={{ fontWeight: 800, color: statusColor, fontSize: '0.95rem' }}>{p.progress}%</span>
+                        {/* Progress Bar & Main Metrics */}
+                        <div style={{ margin: '12px 0 14px 0' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', marginBottom: '6px' }}>
+                            <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>Tiến độ tổng thể</span>
+                            <span style={{ fontWeight: 800, color: statusColor, fontSize: '0.95rem' }}>{p.progress}%</span>
+                          </div>
+                          <div style={{ height: '8px', background: 'var(--bg-secondary)', borderRadius: '999px', overflow: 'hidden' }}>
+                            <div style={{
+                              width: `${Math.min(100, p.progress)}%`,
+                              height: '100%',
+                              background: `linear-gradient(90deg, ${statusColor}, #3b82f6)`,
+                              borderRadius: '999px',
+                              transition: 'width 0.4s ease'
+                            }} />
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.76rem', color: 'var(--text-tertiary)', marginTop: '6px' }}>
+                            <span>Output kỳ này: <strong>+{p.periodLinks.toLocaleString('vi-VN')}</strong></span>
+                            {p.totalTarget > 0 && <span>Lũy kế: <strong>{p.totalDone.toLocaleString('vi-VN')} / {p.totalTarget.toLocaleString('vi-VN')}</strong></span>}
+                          </div>
+                        </div>
+
+                        {/* Task Breakdown (Chi tiết công việc - Collapsible) */}
+                        {p.taskBreakdown.length > 0 ? (
+                          <div style={{ borderTop: '1px dashed var(--border-light)', paddingTop: '10px', marginTop: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.5px' }}>
+                                HẠNG MỤC CÔNG VIỆC CỤ THỂ ({p.taskBreakdown.length}):
+                              </span>
+                              {hasMoreTasks && (
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedProjects(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
+                                  style={{
+                                    background: 'none', border: 'none', cursor: 'pointer',
+                                    fontSize: '0.74rem', fontWeight: 600, color: '#2563eb',
+                                    display: 'inline-flex', alignItems: 'center', gap: '2px', padding: 0
+                                  }}
+                                >
+                                  {isExpanded ? (
+                                    <>Thu gọn <ChevronUp size={12} /></>
+                                  ) : (
+                                    <>Xem thêm {p.taskBreakdown.length - 3} <ChevronDown size={12} /></>
+                                  )}
+                                </button>
+                              )}
                             </div>
-                            <div style={{ height: '8px', background: 'var(--bg-secondary)', borderRadius: '999px', overflow: 'hidden' }}>
-                              <div style={{
-                                width: `${Math.min(100, p.progress)}%`,
-                                height: '100%',
-                                background: `linear-gradient(90deg, ${statusColor}, #3b82f6)`,
-                                borderRadius: '999px',
-                                transition: 'width 0.4s ease'
-                              }} />
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.76rem', color: 'var(--text-tertiary)', marginTop: '6px' }}>
-                              <span>Output kỳ này: <strong>+{p.periodLinks.toLocaleString('vi-VN')}</strong></span>
-                              {p.totalTarget > 0 && <span>Lũy kế: <strong>{p.totalDone.toLocaleString('vi-VN')} / {p.totalTarget.toLocaleString('vi-VN')}</strong></span>}
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              {visibleTasks.map((t) => (
+                                <div key={t.id} style={{ background: 'var(--bg-secondary)', padding: '6px 10px', borderRadius: '6px' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '4px' }}>
+                                    <span style={{ fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', maxWidth: '190px' }} title={t.title}>
+                                      • {t.title}
+                                    </span>
+                                    <span style={{ fontSize: '0.74rem', color: t.taskPct >= 80 ? '#16a34a' : '#2563eb', fontWeight: 700 }}>
+                                      {t.doneAll} / {t.target > 0 ? t.target : '∞'} ({t.taskPct}%)
+                                    </span>
+                                  </div>
+                                  {t.target > 0 && (
+                                    <div style={{ height: '4px', background: 'rgba(148,163,184,.2)', borderRadius: '999px', overflow: 'hidden' }}>
+                                      <div style={{ width: `${Math.min(100, t.taskPct)}%`, height: '100%', background: t.taskPct >= 80 ? '#16a34a' : '#6366f1', borderRadius: '999px' }} />
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
                             </div>
                           </div>
-
-                          {/* Task Breakdown (Chi tiết công việc & Hạng mục) */}
-                          {p.taskBreakdown.length > 0 ? (
-                            <div style={{ borderTop: '1px dashed var(--border-light)', paddingTop: '10px', marginTop: '8px' }}>
-                              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: '8px', letterSpacing: '0.5px' }}>HẠNG MỤC CÔNG VIỆC CỤ THỂ:</div>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                {p.taskBreakdown.map((t) => (
-                                  <div key={t.id} style={{ background: 'var(--bg-secondary)', padding: '6px 10px', borderRadius: '6px' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '4px' }}>
-                                      <span style={{ fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', maxWidth: '180px' }} title={t.title}>
-                                        • {t.title}
-                                      </span>
-                                      <span style={{ fontSize: '0.74rem', color: t.taskPct >= 80 ? '#16a34a' : '#2563eb', fontWeight: 700 }}>
-                                        {t.doneAll} / {t.target > 0 ? t.target : '∞'} ({t.taskPct}%)
-                                      </span>
-                                    </div>
-                                    {t.target > 0 && (
-                                      <div style={{ height: '4px', background: 'rgba(148,163,184,.2)', borderRadius: '999px', overflow: 'hidden' }}>
-                                        <div style={{ width: `${Math.min(100, t.taskPct)}%`, height: '100%', background: t.taskPct >= 80 ? '#16a34a' : '#6366f1', borderRadius: '999px' }} />
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ) : (
-                            <div style={{ borderTop: '1px dashed var(--border-light)', paddingTop: '8px', marginTop: '8px', fontSize: '0.76rem', color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
-                              Dự án tổng hợp (chưa phân chia hạng mục con)
-                            </div>
-                          )}
-                        </div>
+                        ) : (
+                          <div style={{ borderTop: '1px dashed var(--border-light)', paddingTop: '8px', marginTop: '8px', fontSize: '0.76rem', color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
+                            Dự án tổng hợp (chưa phân chia hạng mục con)
+                          </div>
+                        )}
                       </div>
-                    );
-                  })}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : <EmptyChart />}
+          </div>
+
+          {/* 2. Standalone Compact Volume Share Pie Chart Below */}
+          {visibleBlocks.topics && (
+            <div className="card" style={{ padding: '20px', marginBottom: '14px' }}>
+              <ChartHeader icon={<PieChart size={14} color="#fff" />} title="Tỷ trọng khối lượng theo dự án" color="#8b5cf6" />
+              
+              {isEditingMetrics && (
+                <div style={{ marginBottom: '16px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
+                  <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '8px', color: 'var(--text-secondary)' }}>Chọn dự án xuất hiện trong biểu đồ:</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxHeight: '150px', overflowY: 'auto' }}>
+                    {projects.filter(p => p.status === 'Đang chạy').map(p => (
+                      <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem', cursor: 'pointer' }}>
+                        <input type="checkbox" 
+                          checked={selectedFocusProjects.includes(p.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedFocusProjects([...selectedFocusProjects, p.id]);
+                            else setSelectedFocusProjects(selectedFocusProjects.filter(id => id !== p.id));
+                          }}
+                        />
+                        {p.name}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {projectsFocus.length > 0 ? (
+                <div style={{ height: '280px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '12px' }}>
+                  <Pie
+                    data={{
+                      labels: projectsFocus.map(p => p.name.length > 20 ? p.name.slice(0, 18) + '...' : p.name),
+                      datasets: [{
+                        data: projectsFocus.map(p => p.links),
+                        backgroundColor: CHART_PALETTE,
+                        borderWidth: 0,
+                        hoverOffset: 4
+                      }]
+                    }}
+                    options={{
+                      responsive: true, maintainAspectRatio: false,
+                      plugins: {
+                        legend: { position: 'bottom', labels: { padding: 14, usePointStyle: true, pointStyle: 'circle', font: { size: 11 } } },
+                        tooltip: {
+                          backgroundColor: 'rgba(15,23,42,.92)', padding: 10, cornerRadius: 8,
+                          callbacks: {
+                            label: (ctx: any) => ` ${ctx.raw} link (${Math.round((Number(ctx.raw) / projectsFocus.reduce((s,p) => s+p.links, 0)) * 100)}%)`
+                          }
+                        },
+                      }
+                    }}
+                  />
                 </div>
               ) : <EmptyChart />}
             </div>
-
-            {visibleBlocks.topics && (
-              <div className="card" style={{ padding: '20px' }}>
-                <ChartHeader icon={<PieChart size={14} color="#fff" />} title="Tỷ trọng khối lượng theo dự án" color="#8b5cf6" />
-                
-                {isEditingMetrics && (
-                  <div style={{ marginBottom: '16px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
-                    <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '8px', color: 'var(--text-secondary)' }}>Chọn dự án xuất hiện trong biểu đồ:</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxHeight: '150px', overflowY: 'auto' }}>
-                      {projects.filter(p => p.status === 'Đang chạy').map(p => (
-                        <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem', cursor: 'pointer' }}>
-                          <input type="checkbox" 
-                            checked={selectedFocusProjects.includes(p.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) setSelectedFocusProjects([...selectedFocusProjects, p.id]);
-                              else setSelectedFocusProjects(selectedFocusProjects.filter(id => id !== p.id));
-                            }}
-                          />
-                          {p.name}
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {projectsFocus.length > 0 ? (
-                  <div style={{ height: '320px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '16px' }}>
-                    <Pie
-                      data={{
-                        labels: projectsFocus.map(p => p.name.length > 20 ? p.name.slice(0, 18) + '...' : p.name),
-                        datasets: [{
-                          data: projectsFocus.map(p => p.links),
-                          backgroundColor: CHART_PALETTE,
-                          borderWidth: 0,
-                          hoverOffset: 4
-                        }]
-                      }}
-                      options={{
-                        responsive: true, maintainAspectRatio: false,
-                        plugins: {
-                          legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, pointStyle: 'circle', font: { size: 11 } } },
-                          tooltip: {
-                            backgroundColor: 'rgba(15,23,42,.92)', padding: 10, cornerRadius: 8,
-                            callbacks: {
-                              label: (ctx: any) => ` ${ctx.raw} link (${Math.round((Number(ctx.raw) / projectsFocus.reduce((s,p) => s+p.links, 0)) * 100)}%)`
-                            }
-                          },
-                        }
-                      }}
-                    />
-                  </div>
-                ) : <EmptyChart />}
-              </div>
-            )}
-          </div>
+          )}
         </>
       )}
 
