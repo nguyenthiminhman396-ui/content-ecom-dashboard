@@ -1740,8 +1740,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
                   const statusBg = p.progress >= 80 ? '#dcfce7' : p.progress >= 40 ? '#dbeafe' : '#fef3c7';
                   const statusLabel = p.progress >= 80 ? '🟢 Đạt tiến độ' : p.progress >= 40 ? '🔵 Đang triển khai' : '🟡 Cần tăng tốc';
                   const isExpanded = !!expandedProjects[p.id];
-                  const hasMoreTasks = p.taskBreakdown.length > 3;
-                  const visibleTasks = isExpanded ? p.taskBreakdown : p.taskBreakdown.slice(0, 3);
+                  const visibleTasks = isExpanded ? p.taskBreakdown : [];
 
                   return (
                     <div key={p.id || p.name} style={{
@@ -1780,7 +1779,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
                           border: '1px solid var(--border-light)',
                           borderRadius: '10px',
                           padding: '12px 14px',
-                          marginBottom: '14px'
+                          marginBottom: '12px'
                         }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '8px' }}>
                             <span style={{ fontSize: '0.74rem', fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -1817,78 +1816,78 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
                           </div>
                         </div>
 
-                        {/* ── THÔNG TIN PHỤ (CẤP 2): HẠNG MỤC CỤ THỂ ── */}
+                        {/* ── THÔNG TIN PHỤ (CẤP 2): HẠNG MỤC CỤ THỂ (AUTO-COLLAPSED) ── */}
                         {p.taskBreakdown.length > 0 ? (
-                          <div style={{ paddingTop: '4px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                          <div style={{ paddingTop: '2px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                               <span style={{ fontSize: '0.73rem', fontWeight: 800, color: '#475569', letterSpacing: '0.5px' }}>
-                                📌 HẠNG MỤC CỦA DỰ ÁN ({p.taskBreakdown.length}):
+                                📌 HẠNG MỤC DỰ ÁN ({p.taskBreakdown.length})
                               </span>
-                              {hasMoreTasks && (
-                                <button
-                                  type="button"
-                                  onClick={() => setExpandedProjects(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
-                                  style={{
-                                    background: isExpanded ? '#f1f5f9' : '#eff6ff',
-                                    border: `1px solid ${isExpanded ? '#cbd5e1' : '#bfdbfe'}`,
-                                    borderRadius: '6px',
-                                    cursor: 'pointer',
-                                    fontSize: '0.72rem', fontWeight: 700,
-                                    color: isExpanded ? '#475569' : '#1d4ed8',
-                                    display: 'inline-flex', alignItems: 'center', gap: '3px',
-                                    padding: '3px 8px', transition: 'all .2s'
-                                  }}
-                                >
-                                  {isExpanded ? (
-                                    <>Thu gọn <ChevronUp size={12} /></>
-                                  ) : (
-                                    <>+ Xem thêm {p.taskBreakdown.length - 3} <ChevronDown size={12} /></>
-                                  )}
-                                </button>
-                              )}
+                              <button
+                                type="button"
+                                onClick={() => setExpandedProjects(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
+                                style={{
+                                  background: isExpanded ? '#f1f5f9' : '#eff6ff',
+                                  border: `1px solid ${isExpanded ? '#cbd5e1' : '#bfdbfe'}`,
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.72rem', fontWeight: 700,
+                                  color: isExpanded ? '#475569' : '#1d4ed8',
+                                  display: 'inline-flex', alignItems: 'center', gap: '3px',
+                                  padding: '4px 10px', transition: 'all .2s'
+                                }}
+                              >
+                                {isExpanded ? (
+                                  <>Thu gọn <ChevronUp size={12} /></>
+                                ) : (
+                                  <>+ Xem {p.taskBreakdown.length} hạng mục chi tiết <ChevronDown size={12} /></>
+                                )}
+                              </button>
                             </div>
 
-                            {/* List Sub-task items with Left Accent Indicator */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                              {visibleTasks.map((t) => {
-                                const taskColor = t.taskPct >= 100 ? '#10b981' : t.taskPct >= 40 ? '#3b82f6' : '#f59e0b';
-                                const taskBg = t.taskPct >= 100 ? '#f0fdf4' : t.taskPct >= 40 ? '#eff6ff' : '#fffbeb';
-                                const taskBadgeBg = t.taskPct >= 100 ? '#dcfce7' : t.taskPct >= 40 ? '#dbeafe' : '#fef3c7';
+                            {/* List Sub-task items with Left Accent Indicator when expanded */}
+                            {isExpanded && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' }}>
+                                {visibleTasks.map((t) => {
+                                  const taskColor = t.taskPct >= 100 ? '#10b981' : t.taskPct >= 40 ? '#3b82f6' : '#f59e0b';
+                                  const taskBg = t.taskPct >= 100 ? '#f0fdf4' : t.taskPct >= 40 ? '#eff6ff' : '#fffbeb';
+                                  const taskBadgeBg = t.taskPct >= 100 ? '#dcfce7' : t.taskPct >= 40 ? '#dbeafe' : '#fef3c7';
 
-                                return (
-                                  <div key={t.id} style={{
-                                    background: taskBg,
-                                    borderLeft: `4px solid ${taskColor}`,
-                                    borderTop: '1px solid rgba(226,232,240,0.6)',
-                                    borderRight: '1px solid rgba(226,232,240,0.6)',
-                                    borderBottom: '1px solid rgba(226,232,240,0.6)',
-                                    padding: '8px 10px',
-                                    borderRadius: '0 8px 8px 0',
-                                    boxShadow: '0 1px 3px rgba(0,0,0,0.01)'
-                                  }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                                      <span style={{ fontWeight: 700, fontSize: '0.81rem', color: '#1e293b', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', maxWidth: '180px' }} title={t.title}>
-                                        {t.title}
-                                      </span>
-                                      <span style={{
-                                        fontSize: '0.74rem', fontWeight: 800, color: taskColor,
-                                        background: taskBadgeBg, padding: '2px 8px', borderRadius: '6px',
-                                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
-                                      }}>
-                                        {t.doneAll} / {t.target > 0 ? t.target : '∞'} ({t.taskPct}%)
-                                      </span>
-                                    </div>
-                                    {t.target > 0 && (
-                                      <div style={{ height: '5px', background: '#cbd5e1', borderRadius: '999px', overflow: 'hidden' }}>
-                                        <div style={{ width: `${Math.min(100, t.taskPct)}%`, height: '100%', background: taskColor, borderRadius: '999px' }} />
+                                  return (
+                                    <div key={t.id} style={{
+                                      background: taskBg,
+                                      borderLeft: `4px solid ${taskColor}`,
+                                      borderTop: '1px solid rgba(226,232,240,0.6)',
+                                      borderRight: '1px solid rgba(226,232,240,0.6)',
+                                      borderBottom: '1px solid rgba(226,232,240,0.6)',
+                                      padding: '8px 10px',
+                                      borderRadius: '0 8px 8px 0',
+                                      boxShadow: '0 1px 3px rgba(0,0,0,0.01)'
+                                    }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                        <span style={{ fontWeight: 700, fontSize: '0.81rem', color: '#1e293b', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', maxWidth: '180px' }} title={t.title}>
+                                          {t.title}
+                                        </span>
+                                        <span style={{
+                                          fontSize: '0.74rem', fontWeight: 800, color: taskColor,
+                                          background: taskBadgeBg, padding: '2px 8px', borderRadius: '6px',
+                                          boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+                                        }}>
+                                          {t.doneAll} / {t.target > 0 ? t.target : '∞'} ({t.taskPct}%)
+                                        </span>
                                       </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ) : (
+                                      {t.target > 0 && (
+                                        <div style={{ height: '5px', background: '#cbd5e1', borderRadius: '999px', overflow: 'hidden' }}>
+                                          <div style={{ width: `${Math.min(100, t.taskPct)}%`, height: '100%', background: taskColor, borderRadius: '999px' }} />
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                        </div>
+                      ) : (
                           <div style={{ borderTop: '1px dashed var(--border-light)', paddingTop: '8px', marginTop: '8px', fontSize: '0.76rem', color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
                             Dự án tổng hợp (chưa phân chia hạng mục con)
                           </div>
