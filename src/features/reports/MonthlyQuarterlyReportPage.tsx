@@ -1726,9 +1726,9 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
               </div>
             )}
             {projectProgress.length > 0 ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '14px', marginTop: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px', marginTop: '16px' }}>
                 {projectProgress.map((p) => {
-                  const statusColor = p.progress >= 80 ? '#16a34a' : p.progress >= 40 ? '#2563eb' : '#d97706';
+                  const statusColor = p.progress >= 80 ? '#10b981' : p.progress >= 40 ? '#2563eb' : '#d97706';
                   const statusBg = p.progress >= 80 ? '#dcfce7' : p.progress >= 40 ? '#dbeafe' : '#fef3c7';
                   const statusLabel = p.progress >= 80 ? '🟢 Đạt tiến độ' : p.progress >= 40 ? '🔵 Đang triển khai' : '🟡 Cần tăng tốc';
                   const isExpanded = !!expandedProjects[p.id];
@@ -1739,36 +1739,52 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
                     <div key={p.id || p.name} style={{
                       background: 'var(--bg-primary)',
                       border: '1px solid var(--border-light)',
+                      borderTop: `4px solid ${statusColor}`,
                       borderRadius: '12px',
-                      padding: '16px',
+                      padding: '18px',
                       display: 'flex',
                       flexDirection: 'column',
                       justifyContent: 'space-between',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+                      transition: 'transform .15s, boxShadow .15s',
                     }}>
                       <div>
-                        {/* Header: Name + Type Tag + Status Badge */}
-                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '10px' }}>
+                        {/* ── HEADER DỰ ÁN ── */}
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '12px' }}>
                           <div>
-                            <div style={{ fontWeight: 800, fontSize: '0.98rem', color: 'var(--text-primary)', lineHeight: 1.3 }}>
+                            <div style={{ fontWeight: 800, fontSize: '1.02rem', color: 'var(--text-primary)', lineHeight: 1.35 }}>
                               {p.name}
                             </div>
-                            <span style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: '4px', marginTop: '4px', display: 'inline-block' }}>
-                              📁 {p.type}
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-tertiary)', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: '4px' }}>
+                                📁 {p.type}
+                              </span>
+                            </div>
                           </div>
-                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: statusColor, background: statusBg, padding: '3px 8px', borderRadius: '20px', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 800, color: statusColor, background: statusBg, padding: '4px 10px', borderRadius: '20px', whiteSpace: 'nowrap', border: `1px solid ${statusColor}33` }}>
                             {statusLabel}
                           </span>
                         </div>
 
-                        {/* Progress Bar & Main Metrics */}
-                        <div style={{ margin: '12px 0 14px 0' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', marginBottom: '6px' }}>
-                            <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>Tiến độ tổng thể</span>
-                            <span style={{ fontWeight: 800, color: statusColor, fontSize: '0.95rem' }}>{p.progress}%</span>
+                        {/* ── HERO BANNER: THÔNG TIN CHÍNH (CẤP 1) ── */}
+                        <div style={{
+                          background: 'linear-gradient(135deg, rgba(248,250,252,0.9), rgba(241,245,249,0.9))',
+                          border: '1px solid var(--border-light)',
+                          borderRadius: '10px',
+                          padding: '12px 14px',
+                          marginBottom: '14px'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '8px' }}>
+                            <span style={{ fontSize: '0.74rem', fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                              TIẾN ĐỘ TỔNG THỂ
+                            </span>
+                            <span style={{ fontSize: '1.45rem', fontWeight: 900, color: statusColor, letterSpacing: '-0.5px' }}>
+                              {p.progress}%
+                            </span>
                           </div>
-                          <div style={{ height: '8px', background: 'var(--bg-secondary)', borderRadius: '999px', overflow: 'hidden' }}>
+
+                          {/* Progress Bar Thicker */}
+                          <div style={{ height: '10px', background: '#e2e8f0', borderRadius: '999px', overflow: 'hidden', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.06)' }}>
                             <div style={{
                               width: `${Math.min(100, p.progress)}%`,
                               height: '100%',
@@ -1777,56 +1793,91 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
                               transition: 'width 0.4s ease'
                             }} />
                           </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.76rem', color: 'var(--text-tertiary)', marginTop: '6px' }}>
-                            <span>Output kỳ này: <strong>+{p.periodLinks.toLocaleString('vi-VN')}</strong></span>
-                            {p.totalTarget > 0 && <span>Lũy kế: <strong>{p.totalDone.toLocaleString('vi-VN')} / {p.totalTarget.toLocaleString('vi-VN')}</strong></span>}
+
+                          {/* Hero Key Metrics */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.76rem', marginTop: '10px', paddingTop: '8px', borderTop: '1px solid rgba(226,232,240,0.7)' }}>
+                            <span style={{ color: 'var(--text-secondary)' }}>
+                              🚀 Kỳ này: <strong style={{ color: '#2563eb', fontSize: '0.85rem', fontWeight: 800 }}>+{p.periodLinks.toLocaleString('vi-VN')}</strong>
+                            </span>
+                            {p.totalTarget > 0 ? (
+                              <span style={{ color: 'var(--text-secondary)' }}>
+                                🎯 Lũy kế: <strong style={{ color: '#0f172a', fontWeight: 700 }}>{p.totalDone.toLocaleString('vi-VN')} / {p.totalTarget.toLocaleString('vi-VN')}</strong>
+                              </span>
+                            ) : (
+                              <span style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>Tự do output</span>
+                            )}
                           </div>
                         </div>
 
-                        {/* Task Breakdown (Chi tiết công việc - Collapsible) */}
+                        {/* ── THÔNG TIN PHỤ (CẤP 2): HẠNG MỤC CỤ THỂ ── */}
                         {p.taskBreakdown.length > 0 ? (
-                          <div style={{ borderTop: '1px dashed var(--border-light)', paddingTop: '10px', marginTop: '8px' }}>
+                          <div style={{ paddingTop: '4px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-tertiary)', letterSpacing: '0.5px' }}>
-                                HẠNG MỤC CÔNG VIỆC CỤ THỂ ({p.taskBreakdown.length}):
+                              <span style={{ fontSize: '0.73rem', fontWeight: 800, color: '#475569', letterSpacing: '0.5px' }}>
+                                📌 HẠNG MỤC CỦA DỰ ÁN ({p.taskBreakdown.length}):
                               </span>
                               {hasMoreTasks && (
                                 <button
                                   type="button"
                                   onClick={() => setExpandedProjects(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
                                   style={{
-                                    background: 'none', border: 'none', cursor: 'pointer',
-                                    fontSize: '0.74rem', fontWeight: 600, color: '#2563eb',
-                                    display: 'inline-flex', alignItems: 'center', gap: '2px', padding: 0
+                                    background: isExpanded ? '#f1f5f9' : '#eff6ff',
+                                    border: `1px solid ${isExpanded ? '#cbd5e1' : '#bfdbfe'}`,
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.72rem', fontWeight: 700,
+                                    color: isExpanded ? '#475569' : '#1d4ed8',
+                                    display: 'inline-flex', alignItems: 'center', gap: '3px',
+                                    padding: '3px 8px', transition: 'all .2s'
                                   }}
                                 >
                                   {isExpanded ? (
                                     <>Thu gọn <ChevronUp size={12} /></>
                                   ) : (
-                                    <>Xem thêm {p.taskBreakdown.length - 3} <ChevronDown size={12} /></>
+                                    <>+ Xem thêm {p.taskBreakdown.length - 3} <ChevronDown size={12} /></>
                                   )}
                                 </button>
                               )}
                             </div>
 
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              {visibleTasks.map((t) => (
-                                <div key={t.id} style={{ background: 'var(--bg-secondary)', padding: '6px 10px', borderRadius: '6px' }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '4px' }}>
-                                    <span style={{ fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', maxWidth: '190px' }} title={t.title}>
-                                      • {t.title}
-                                    </span>
-                                    <span style={{ fontSize: '0.74rem', color: t.taskPct >= 80 ? '#16a34a' : '#2563eb', fontWeight: 700 }}>
-                                      {t.doneAll} / {t.target > 0 ? t.target : '∞'} ({t.taskPct}%)
-                                    </span>
-                                  </div>
-                                  {t.target > 0 && (
-                                    <div style={{ height: '4px', background: 'rgba(148,163,184,.2)', borderRadius: '999px', overflow: 'hidden' }}>
-                                      <div style={{ width: `${Math.min(100, t.taskPct)}%`, height: '100%', background: t.taskPct >= 80 ? '#16a34a' : '#6366f1', borderRadius: '999px' }} />
+                            {/* List Sub-task items with Left Accent Indicator */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              {visibleTasks.map((t) => {
+                                const taskColor = t.taskPct >= 100 ? '#10b981' : t.taskPct >= 40 ? '#3b82f6' : '#f59e0b';
+                                const taskBg = t.taskPct >= 100 ? '#f0fdf4' : t.taskPct >= 40 ? '#eff6ff' : '#fffbeb';
+                                const taskBadgeBg = t.taskPct >= 100 ? '#dcfce7' : t.taskPct >= 40 ? '#dbeafe' : '#fef3c7';
+
+                                return (
+                                  <div key={t.id} style={{
+                                    background: taskBg,
+                                    borderLeft: `4px solid ${taskColor}`,
+                                    borderTop: '1px solid rgba(226,232,240,0.6)',
+                                    borderRight: '1px solid rgba(226,232,240,0.6)',
+                                    borderBottom: '1px solid rgba(226,232,240,0.6)',
+                                    padding: '8px 10px',
+                                    borderRadius: '0 8px 8px 0',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.01)'
+                                  }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                      <span style={{ fontWeight: 700, fontSize: '0.81rem', color: '#1e293b', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', maxWidth: '180px' }} title={t.title}>
+                                        {t.title}
+                                      </span>
+                                      <span style={{
+                                        fontSize: '0.74rem', fontWeight: 800, color: taskColor,
+                                        background: taskBadgeBg, padding: '2px 8px', borderRadius: '6px',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+                                      }}>
+                                        {t.doneAll} / {t.target > 0 ? t.target : '∞'} ({t.taskPct}%)
+                                      </span>
                                     </div>
-                                  )}
-                                </div>
-                              ))}
+                                    {t.target > 0 && (
+                                      <div style={{ height: '5px', background: '#cbd5e1', borderRadius: '999px', overflow: 'hidden' }}>
+                                        <div style={{ width: `${Math.min(100, t.taskPct)}%`, height: '100%', background: taskColor, borderRadius: '999px' }} />
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         ) : (
