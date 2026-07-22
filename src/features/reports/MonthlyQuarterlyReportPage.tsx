@@ -538,7 +538,10 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
 
   /* ── project progress ── */
   const projectProgress = useMemo(() => {
-    const activeProjects = projects.filter(p => p.status === 'Đang chạy');
+    let activeProjects = projects.filter(p => p.status === 'Đang chạy');
+    if (selectedFocusProjects.length > 0) {
+      activeProjects = activeProjects.filter(p => selectedFocusProjects.includes(p.id));
+    }
     return activeProjects.map(p => {
       const tasks = projectTasks.filter(t => t.projectId === p.id);
       const allSubs = submissions.filter(s => s.projectId === p.id);
@@ -615,7 +618,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
         taskBreakdown
       };
     }).sort((a, b) => Math.max(b.periodLinks, b.totalDone) - Math.max(a.periodLinks, a.totalDone));
-  }, [projects, projectTasks, submissions, currentSubs]);
+  }, [projects, projectTasks, submissions, currentSubs, selectedFocusProjects]);
 
   /* ── radar: current vs prev ── */
   const radarData = useMemo(() => {
@@ -1680,6 +1683,48 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
           {/* 1. Smart Project Cards Grid */}
           <div className="card" style={{ padding: '20px', marginBottom: '14px' }}>
             <ChartHeader icon={<Target size={14} color="#fff" />} title="Tiến độ & Hạng mục Dự án trọng điểm" color="#10b981" />
+            
+            {!isPublicShare && (
+              <div style={{ marginTop: '12px', padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                    🎯 TÙY CHỌN DỰ ÁN ĐƯA VÀO BÁO CÁO ({selectedFocusProjects.length > 0 ? `${selectedFocusProjects.length}/${projects.filter(p => p.status === 'Đang chạy').length} đã chọn` : 'Đang hiện tất cả'}):
+                  </span>
+                  {selectedFocusProjects.length > 0 && (
+                    <button 
+                      type="button"
+                      onClick={() => setSelectedFocusProjects([])}
+                      style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+                    >
+                      Hiện tất cả ({projects.filter(p => p.status === 'Đang chạy').length})
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxHeight: '120px', overflowY: 'auto' }}>
+                  {projects.filter(p => p.status === 'Đang chạy').map(p => {
+                    const isChecked = selectedFocusProjects.length === 0 || selectedFocusProjects.includes(p.id);
+                    return (
+                      <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', cursor: 'pointer', background: isChecked ? '#eff6ff' : 'var(--bg-primary)', padding: '4px 10px', borderRadius: '6px', border: isChecked ? '1px solid #bfdbfe' : '1px solid var(--border-light)', userSelect: 'none' }}>
+                        <input type="checkbox" 
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const allActive = projects.filter(p => p.status === 'Đang chạy').map(p => p.id);
+                            const currentSelected = selectedFocusProjects.length === 0 ? allActive : selectedFocusProjects;
+                            if (e.target.checked) {
+                              const next = [...currentSelected, p.id];
+                              setSelectedFocusProjects(next.length === allActive.length ? [] : next);
+                            } else {
+                              setSelectedFocusProjects(currentSelected.filter(id => id !== p.id));
+                            }
+                          }}
+                        />
+                        <span style={{ fontWeight: isChecked ? 600 : 400, color: isChecked ? '#1e40af' : 'var(--text-tertiary)' }}>{p.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             {projectProgress.length > 0 ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '14px', marginTop: '16px' }}>
                 {projectProgress.map((p) => {
