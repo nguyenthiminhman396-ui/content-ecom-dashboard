@@ -496,8 +496,9 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
       const end = new Date(monday); end.setDate(monday.getDate() + 6);
       const label = `${monday.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} — ${end.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}`;
       const prev = weekMap.get(key) || { nt: 0, tc: 0, label };
-      if (s.siteId === 's_tiemchung') prev.tc += s.links.length;
-      else prev.nt += s.links.length; // defaults to nt or others
+      const qty = (s.quantity && s.quantity > 0) ? s.quantity : (s.links?.length || 0);
+      if (s.siteId === 's_tiemchung') prev.tc += qty;
+      else prev.nt += qty; // defaults to nt or others
       weekMap.set(key, prev);
     });
     return Array.from(weekMap.entries()).sort(([a], [b]) => a.localeCompare(b));
