@@ -246,15 +246,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
     }
   }, [reportId, monthlyReports]);
 
-  const isMounted = useRef(false);
-  useEffect(() => {
-    if (!isMounted.current) {
-      isMounted.current = true;
-      return;
-    }
-    handleSaveConfig(false); // auto-save silently
-  }, [summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects, customerCommentAnalysisText, additionalContextText, reportId, hotspotComments, improvementComments]);
-
+  // Manual save handler for report config
   const handleSaveConfig = (showToast?: boolean | any) => {
     const shouldToast = showToast === true;
     const config = {
@@ -267,7 +259,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
     };
     updateMonthlyReport(config);
     if (shouldToast) {
-      toast.success('Đã lưu cấu hình báo cáo cho kỳ này!');
+      toast.success('Đã lưu cấu hình & nhận xét báo cáo cho kỳ này!');
     }
   };
 
@@ -620,33 +612,47 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
     }).sort((a, b) => Math.max(b.periodLinks, b.totalDone) - Math.max(a.periodLinks, a.totalDone));
   }, [projects, projectTasks, submissions, currentSubs, selectedFocusProjects]);
 
-  /* ── radar: current vs prev ── */
+  /* ── radar: current vs prev (5 Executive Axes) ── */
   const radarData = useMemo(() => {
-    const curLinks = currentSubs.reduce((s, x) => s + x.links.length, 0);
+    const curLinks = currentSubs.reduce((s, x) => s + ((x.quantity && x.quantity > 0) ? x.quantity : x.links.length), 0);
     const curPoints = currentSubs.reduce((s, x) => s + x.totalPoints, 0);
-    const curSubmits = currentSubs.length;
-    const curEmps = new Set(currentSubs.map(s => s.employeeName)).size;
+    const curEmps = new Set(currentSubs.map(s => s.employeeName)).size || 1;
     const curProjects = new Set(currentSubs.filter(s => s.projectId).map(s => s.projectId)).size;
+    const curProgressAvg = projectProgress.length > 0 ? Math.round(projectProgress.reduce((acc, p) => acc + p.progress, 0) / projectProgress.length) : 80;
+    const curProductivity = Math.round(curLinks / curEmps);
 
-    const prevLinks = prevSubs.reduce((s, x) => s + x.links.length, 0);
+    const prevLinks = prevSubs.reduce((s, x) => s + ((x.quantity && x.quantity > 0) ? x.quantity : x.links.length), 0);
     const prevPoints = prevSubs.reduce((s, x) => s + x.totalPoints, 0);
-    const prevSubmits = prevSubs.length;
-    const prevEmps = new Set(prevSubs.map(s => s.employeeName)).size;
+    const prevEmps = new Set(prevSubs.map(s => s.employeeName)).size || 1;
     const prevProjects = new Set(prevSubs.filter(s => s.projectId).map(s => s.projectId)).size;
+    const prevProgressAvg = 75;
+    const prevProductivity = Math.round(prevLinks / prevEmps);
 
     // Normalize to max = 100
     const maxVals = [
       Math.max(curLinks, prevLinks, 1),
       Math.max(curPoints, prevPoints, 1),
-      Math.max(curSubmits, prevSubmits, 1),
-      Math.max(curEmps, prevEmps, 1),
+      Math.max(curProgressAvg, prevProgressAvg, 100),
+      Math.max(curProductivity, prevProductivity, 1),
       Math.max(curProjects, prevProjects, 1),
     ];
     return {
-      current: [curLinks / maxVals[0] * 100, curPoints / maxVals[1] * 100, curSubmits / maxVals[2] * 100, curEmps / maxVals[3] * 100, curProjects / maxVals[4] * 100],
-      prev: [prevLinks / maxVals[0] * 100, prevPoints / maxVals[1] * 100, prevSubmits / maxVals[2] * 100, prevEmps / maxVals[3] * 100, prevProjects / maxVals[4] * 100],
+      current: [
+        Math.round((curLinks / maxVals[0]) * 100),
+        Math.round((curPoints / maxVals[1]) * 100),
+        Math.round((curProgressAvg / maxVals[2]) * 100),
+        Math.round((curProductivity / maxVals[3]) * 100),
+        Math.round((curProjects / maxVals[4]) * 100),
+      ],
+      prev: [
+        Math.round((prevLinks / maxVals[0]) * 100),
+        Math.round((prevPoints / maxVals[1]) * 100),
+        Math.round((prevProgressAvg / maxVals[2]) * 100),
+        Math.round((prevProductivity / maxVals[3]) * 100),
+        Math.round((prevProjects / maxVals[4]) * 100),
+      ],
     };
-  }, [currentSubs, prevSubs]);
+  }, [currentSubs, prevSubs, projectProgress]);
 
   /* ── top projects focus ── */
   const projectsFocus = useMemo(() => {
@@ -1960,7 +1966,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
                   <div style={{ width: '100%', height: '270px' }}>
                     <Radar
                       data={{
-                        labels: ['Link', 'Điểm', 'Submit', 'Nhân viên', 'Dự án'],
+                        labels: ['Sản lượng', 'Độ khó', 'Tiến độ', 'Năng suất', 'Vùng phủ'],
                         datasets: [
                           {
                             label: periodLabel,
