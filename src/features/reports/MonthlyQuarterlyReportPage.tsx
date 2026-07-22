@@ -1892,139 +1892,139 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
               </div>
             ) : <EmptyChart />}
           </div>
-
-          {/* 2. Standalone Compact Volume Share Pie Chart Below */}
-          {visibleBlocks.topics && (
-            <div className="card" style={{ padding: '20px', marginBottom: '14px' }}>
-              <ChartHeader icon={<PieChart size={14} color="#fff" />} title="Tỷ trọng khối lượng theo dự án" color="#8b5cf6" />
-              
-              {isEditingMetrics && (
-                <div style={{ marginBottom: '16px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
-                  <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '8px', color: 'var(--text-secondary)' }}>Chọn dự án xuất hiện trong biểu đồ:</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxHeight: '150px', overflowY: 'auto' }}>
-                    {projects.filter(p => p.status === 'Đang chạy').map(p => (
-                      <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem', cursor: 'pointer' }}>
-                        <input type="checkbox" 
-                          checked={selectedFocusProjects.includes(p.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) setSelectedFocusProjects([...selectedFocusProjects, p.id]);
-                            else setSelectedFocusProjects(selectedFocusProjects.filter(id => id !== p.id));
-                          }}
-                        />
-                        {p.name}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {projectsFocus.length > 0 ? (
-                <div style={{ height: '280px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '12px' }}>
-                  <Pie
-                    data={{
-                      labels: projectsFocus.map(p => p.name.length > 20 ? p.name.slice(0, 18) + '...' : p.name),
-                      datasets: [{
-                        data: projectsFocus.map(p => p.links),
-                        backgroundColor: CHART_PALETTE,
-                        borderWidth: 0,
-                        hoverOffset: 4
-                      }]
-                    }}
-                    options={{
-                      responsive: true, maintainAspectRatio: false,
-                      plugins: {
-                        legend: { position: 'bottom', labels: { padding: 14, usePointStyle: true, pointStyle: 'circle', font: { size: 11 } } },
-                        tooltip: {
-                          backgroundColor: 'rgba(15,23,42,.92)', padding: 10, cornerRadius: 8,
-                          callbacks: {
-                            label: (ctx: any) => ` ${ctx.raw} link (${Math.round((Number(ctx.raw) / projectsFocus.reduce((s,p) => s+p.links, 0)) * 100)}%)`
-                          }
-                        },
-                      }
-                    }}
-                  />
-                </div>
-              ) : <EmptyChart />}
-            </div>
-          )}
         </>
       )}
 
-      {/* ── 6. Phân bổ Team & So sánh kỳ ── */}
+      {/* ── Block 6: Tỷ trọng dự án & So sánh kỳ trước (2 Columns Layout) ── */}
       {visibleBlocks.teamAndProject && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '14px', marginBottom: '14px' }}>
-          {/* Radar — comparison vs prev period */}
-          <div className="card" style={{ padding: '20px' }}>
-            <ChartHeader icon={<BarChart3 size={14} color="#fff" />} title={`So sánh với kỳ trước`} color="#3b82f6" />
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ width: '380px', height: '320px' }}>
-                <Radar
-                  data={{
-                    labels: ['Link', 'Điểm', 'Submit', 'Nhân viên', 'Dự án'],
-                    datasets: [
-                      {
-                        label: periodLabel,
-                        data: radarData.current,
-                        borderColor: '#6366f1',
-                        backgroundColor: 'rgba(99,102,241,.15)',
-                        borderWidth: 2.5,
-                        pointBackgroundColor: '#6366f1',
-                        pointBorderColor: '#fff',
-                        pointBorderWidth: 2,
-                        pointRadius: 5,
-                      },
-                      {
-                        label: 'Kỳ trước',
-                        data: radarData.prev,
-                        borderColor: '#f59e0b',
-                        backgroundColor: 'rgba(245,158,11,.08)',
-                        borderWidth: 2,
-                        borderDash: [5, 5],
-                        pointBackgroundColor: '#f59e0b',
-                        pointBorderColor: '#fff',
-                        pointBorderWidth: 2,
-                        pointRadius: 4,
-                      },
-                    ],
-                  }}
-                  options={{
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: {
-                      legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, pointStyle: 'circle', font: { size: 11 } } },
-                      tooltip: { backgroundColor: 'rgba(15,23,42,.92)', padding: 10, cornerRadius: 8 },
-                    },
-                    scales: {
-                      r: {
-                        grid: { color: chartGridColor },
-                        angleLines: { color: chartGridColor },
-                        ticks: { display: false },
-                        pointLabels: { color: chartTextColor, font: { size: 12, weight: 'bold' } },
-                        suggestedMin: 0, suggestedMax: 100,
-                      },
-                    },
-                  }}
-                />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '16px', marginBottom: '14px' }}>
+              {/* Cột trái: Tỷ trọng khối lượng theo dự án (Pie Chart) */}
+              {visibleBlocks.topics && (
+                <div className="card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <ChartHeader icon={<PieChart size={14} color="#fff" />} title="Tỷ trọng khối lượng theo dự án" color="#8b5cf6" />
+                  
+                  {isEditingMetrics && (
+                    <div style={{ marginBottom: '16px', padding: '12px', background: 'var(--bg-primary)', borderRadius: '8px', border: '1px solid var(--border-light)' }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '8px', color: 'var(--text-secondary)' }}>Chọn dự án xuất hiện trong biểu đồ:</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxHeight: '150px', overflowY: 'auto' }}>
+                        {projects.filter(p => p.status === 'Đang chạy').map(p => (
+                          <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem', cursor: 'pointer' }}>
+                            <input type="checkbox" 
+                              checked={selectedFocusProjects.includes(p.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) setSelectedFocusProjects([...selectedFocusProjects, p.id]);
+                                else setSelectedFocusProjects(selectedFocusProjects.filter(id => id !== p.id));
+                              }}
+                            />
+                            {p.name}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {projectsFocus.length > 0 ? (
+                    <div style={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '12px' }}>
+                      <Pie
+                        data={{
+                          labels: projectsFocus.map(p => p.name.length > 20 ? p.name.slice(0, 18) + '...' : p.name),
+                          datasets: [{
+                            data: projectsFocus.map(p => p.links),
+                            backgroundColor: CHART_PALETTE,
+                            borderWidth: 0,
+                            hoverOffset: 4
+                          }]
+                        }}
+                        options={{
+                          responsive: true, maintainAspectRatio: false,
+                          plugins: {
+                            legend: { position: 'bottom', labels: { padding: 14, usePointStyle: true, pointStyle: 'circle', font: { size: 11 } } },
+                            tooltip: {
+                              backgroundColor: 'rgba(15,23,42,.92)', padding: 10, cornerRadius: 8,
+                              callbacks: {
+                                label: (ctx: any) => ` ${ctx.raw} link (${Math.round((Number(ctx.raw) / projectsFocus.reduce((s,p) => s+p.links, 0)) * 100)}%)`
+                              }
+                            },
+                          }
+                        }}
+                      />
+                    </div>
+                  ) : <EmptyChart />}
+                </div>
+              )}
+
+              {/* Cột phải: So sánh với kỳ trước (Radar Chart) */}
+              <div className="card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <ChartHeader icon={<BarChart3 size={14} color="#fff" />} title={`So sánh với kỳ trước`} color="#3b82f6" />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '12px' }}>
+                  <div style={{ width: '100%', height: '270px' }}>
+                    <Radar
+                      data={{
+                        labels: ['Link', 'Điểm', 'Submit', 'Nhân viên', 'Dự án'],
+                        datasets: [
+                          {
+                            label: periodLabel,
+                            data: radarData.current,
+                            borderColor: '#6366f1',
+                            backgroundColor: 'rgba(99,102,241,.15)',
+                            borderWidth: 2.5,
+                            pointBackgroundColor: '#6366f1',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            pointRadius: 5,
+                          },
+                          {
+                            label: 'Kỳ trước',
+                            data: radarData.prev,
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'rgba(245,158,11,.08)',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            pointBackgroundColor: '#f59e0b',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            pointRadius: 4,
+                          },
+                        ],
+                      }}
+                      options={{
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: {
+                          legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, pointStyle: 'circle', font: { size: 11 } } },
+                          tooltip: { backgroundColor: 'rgba(15,23,42,.92)', padding: 10, cornerRadius: 8 },
+                        },
+                        scales: {
+                          r: {
+                            grid: { color: chartGridColor },
+                            angleLines: { color: chartGridColor },
+                            ticks: { display: false },
+                            pointLabels: { color: chartTextColor, font: { size: 12, weight: 'bold' } },
+                            suggestedMin: 0, suggestedMax: 100,
+                          },
+                        },
+                      }}
+                    />
+                  </div>
+                </div>
+                
+                {/* Auto Insight for Radar */}
+                <div style={{ marginTop: '12px', padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: '8px', borderLeft: '3px solid #3b82f6' }}>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                    <span style={{ fontWeight: 600, color: '#3b82f6', marginRight: '4px' }}>💡 Nhận xét:</span>
+                    {(() => {
+                      const dL = stats.deltaLinks;
+                      const dP = stats.deltaPoints;
+                      if (dL > 0 && dP > 0) return `Vùng phủ hoạt động đang mở rộng tích cực so với kỳ trước (+${dL}% link, +${dP}% điểm).`;
+                      if (dL <= 0 && dP > 0) return `Số lượng link giảm (${dL}%), nhưng tổng điểm lại tăng (+${dP}%), cho thấy team tập trung làm task khó hơn.`;
+                      if (dL > 0 && dP <= 0) return `Số lượng link tăng (+${dL}%), nhưng tổng điểm giảm (${dP}%), tập trung công việc trọng số thấp.`;
+                      if (dL < 0 && dP < 0) return `Vùng phủ hoạt động giảm so với kỳ trước (link: ${dL}%, điểm: ${dP}%).`;
+                      return `Nhìn chung, vùng phủ hoạt động của team đang được duy trì ở mức độ ổn định so với kỳ trước.`;
+                    })()}
+                  </p>
+                </div>
               </div>
-            </div>
-            
-            {/* Auto Insight for Radar */}
-            <div style={{ marginTop: '16px', padding: '12px 16px', background: 'var(--bg-secondary)', borderRadius: '8px', borderLeft: '3px solid #3b82f6' }}>
-              <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                <span style={{ fontWeight: 600, color: '#3b82f6', marginRight: '4px' }}>💡 Nhận xét:</span>
-                {(() => {
-                  const dL = stats.deltaLinks;
-                  const dP = stats.deltaPoints;
-                  if (dL > 0 && dP > 0) return `Vùng phủ hoạt động đang mở rộng tích cực so với kỳ trước. Cả khối lượng công việc (+${dL}%) và chất lượng điểm số (+${dP}%) đều trên đà tăng.`;
-                  if (dL <= 0 && dP > 0) return `Số lượng link giảm (${dL}%), nhưng tổng điểm lại tăng (+${dP}%), cho thấy team đang tập trung xử lý các task khó, đòi hỏi nhiều chất xám hơn thay vì chạy số lượng.`;
-                  if (dL > 0 && dP <= 0) return `Số lượng link tăng (+${dL}%), nhưng tổng điểm lại giảm (${dP}%), cho thấy team đang làm nhiều công việc dễ và có trọng số điểm thấp.`;
-                  if (dL < 0 && dP < 0) return `Vùng phủ hoạt động đang bị thu hẹp. Cả số lượng (${dL}%) và điểm số (${dP}%) đều sụt giảm so với kỳ trước. Cần rà soát lại nguyên nhân.`;
-                  return `Nhìn chung, vùng phủ hoạt động của team đang được duy trì ở mức độ ổn định so với kỳ trước.`;
-                })()}
-              </p>
-            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* ── Block 5.5: Điểm nghẽn ── */}
       {visibleBlocks.bottleneck && (
