@@ -1519,34 +1519,39 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
               )}
             </div>
           </div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', margin: '0 0 8px 0' }}>
-            Dán hoặc import (CSV/Excel, hỗ trợ hàng nghìn dòng/tháng) nội dung comment/nhận xét khách hàng thực tế để AI đọc và phân tích chủ đề, trích dẫn cụ thể — thay vì chỉ đếm % tích cực/tiêu cực. File import sẽ tự tìm cột chứa văn bản comment.
-            Dữ liệu thô này chỉ dùng tạm trong phiên làm việc hiện tại để AI phân tích, <strong>không được lưu lại</strong> (tải lại trang hoặc đổi kỳ báo cáo sẽ mất, cần import lại); chỉ kết quả phân tích bên dưới mới được lưu.
-          </p>
-          {commentImportInfo && (
-            <p style={{ fontSize: '0.78rem', color: '#0f766e', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <CheckCircle size={13} /> Đã import {commentImportInfo.totalRows.toLocaleString('vi-VN')} dòng từ "{commentImportInfo.fileName}" (cột: "{commentImportInfo.columnUsed}")
-            </p>
+          {!isPublicShare && (
+            <>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', margin: '0 0 8px 0' }}>
+                Dán hoặc import (CSV/Excel, hỗ trợ hàng nghìn dòng/tháng) nội dung comment/nhận xét khách hàng thực tế để AI đọc và phân tích chủ đề, trích dẫn cụ thể — thay vì chỉ đếm % tích cực/tiêu cực. File import sẽ tự tìm cột chứa văn bản comment.
+                Dữ liệu thô này chỉ dùng tạm trong phiên làm việc hiện tại để AI phân tích, <strong>không được lưu lại</strong> (tải lại trang hoặc đổi kỳ báo cáo sẽ mất, cần import lại); chỉ kết quả phân tích bên dưới mới được lưu.
+              </p>
+              {commentImportInfo && (
+                <p style={{ fontSize: '0.78rem', color: '#0f766e', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <CheckCircle size={13} /> Đã import {commentImportInfo.totalRows.toLocaleString('vi-VN')} dòng từ "{commentImportInfo.fileName}" (cột: "{commentImportInfo.columnUsed}")
+                </p>
+              )}
+              <textarea
+                className="form-input"
+                placeholder={'Ví dụ:\nBài duyệt hơi chậm so với deadline\nNội dung sản phẩm rất chuẩn, khách yên tâm\nCần bổ sung ảnh minh hoạ cho bài tiêm chủng...\n\n(hoặc bấm "Import CSV/Excel" để nạp hàng loạt)'}
+                value={customerCommentsRawText}
+                onChange={e => { setCustomerCommentsRawText(e.target.value); setCommentImportInfo(null); }}
+                rows={4}
+                style={{ width: '100%', fontSize: '0.88rem', lineHeight: 1.6, marginBottom: '16px', fontFamily: 'inherit' }}
+              />
+            </>
           )}
-          <textarea
-            className="form-input"
-            placeholder={'Ví dụ:\nBài duyệt hơi chậm so với deadline\nNội dung sản phẩm rất chuẩn, khách yên tâm\nCần bổ sung ảnh minh hoạ cho bài tiêm chủng...\n\n(hoặc bấm "Import CSV/Excel" để nạp hàng loạt)'}
-            value={customerCommentsRawText}
-            onChange={e => { setCustomerCommentsRawText(e.target.value); setCommentImportInfo(null); }}
-            rows={4}
-            style={{ width: '100%', fontSize: '0.88rem', lineHeight: 1.6, marginBottom: '16px', fontFamily: 'inherit' }}
-          />
+
           {isEditingCustomerComments ? (
             <textarea className="form-input" value={customerCommentAnalysisText} onChange={e => setCustomerCommentAnalysisText(e.target.value)} rows={4} style={{ width: '100%', fontSize: '0.95rem', lineHeight: 1.6 }} />
           ) : customerCommentAnalysisText ? (
             <div style={{ fontSize: '0.95rem', lineHeight: 1.7, color: '#1e293b', fontWeight: 500, padding: '16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
               <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{customerCommentAnalysisText}</ReactMarkdown></div>
             </div>
-          ) : (
+          ) : !isPublicShare ? (
             <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', fontStyle: 'italic', padding: '16px', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #e2e8f0' }}>
               Chưa có phân tích. Dán comment khách hàng ở trên (không bắt buộc) rồi bấm nút AI để tạo phân tích.
             </div>
-          )}
+          ) : null}
         </div>
       )}
 
