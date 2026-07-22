@@ -247,8 +247,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
   }, [reportId, monthlyReports]);
 
   // Manual save handler for report config
-  const handleSaveConfig = (showToast?: boolean | any) => {
-    const shouldToast = showToast === true;
+  const handleSaveConfig = () => {
     const config = {
       id: reportId,
       summaryText, recommendationText, bottleneckText, metricOverrides, selectedFocusProjects,
@@ -258,9 +257,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
       updatedAt: new Date().toISOString(),
     };
     updateMonthlyReport(config);
-    if (shouldToast) {
-      toast.success('Đã lưu cấu hình & nhận xét báo cáo cho kỳ này!');
-    }
+    toast.success('🎉 Đã lưu tất cả nội dung & nhận xét báo cáo thành công!');
   };
 
   /** Export điểm nóng ra CSV */
