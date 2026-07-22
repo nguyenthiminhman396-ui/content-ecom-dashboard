@@ -2016,16 +2016,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
                 {/* Auto Insight for Radar */}
                 <div style={{ marginTop: '12px', padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: '8px', borderLeft: '3px solid #3b82f6' }}>
                   <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                    <span style={{ fontWeight: 600, color: '#3b82f6', marginRight: '4px' }}>💡 Nhận xét:</span>
-                    {(() => {
-                      const dL = stats.deltaLinks;
-                      const dP = stats.deltaPoints;
-                      if (dL > 0 && dP > 0) return `Vùng phủ hoạt động đang mở rộng tích cực so với kỳ trước (+${dL}% link, +${dP}% điểm).`;
-                      if (dL <= 0 && dP > 0) return `Số lượng link giảm (${dL}%), nhưng tổng điểm lại tăng (+${dP}%), cho thấy team tập trung làm task khó hơn.`;
-                      if (dL > 0 && dP <= 0) return `Số lượng link tăng (+${dL}%), nhưng tổng điểm giảm (${dP}%), tập trung công việc trọng số thấp.`;
-                      if (dL < 0 && dP < 0) return `Vùng phủ hoạt động giảm so với kỳ trước (link: ${dL}%, điểm: ${dP}%).`;
-                      return `Nhìn chung, vùng phủ hoạt động của team đang được duy trì ở mức độ ổn định so với kỳ trước.`;
-                    })()}
+                    <strong style={{ color: '#3b82f6' }}>💡 Nhận xét 5 chỉ số:</strong> Team chuyển dịch trọng tâm sang <strong>bám sát Tiến độ hoàn thành mục tiêu</strong> và <strong>mở rộng Vùng phủ dự án</strong>; trong khi <strong>Độ khó & Chất lượng bài viết</strong> vẫn bảo toàn ở mức tối đa so với kỳ trước.
                   </p>
                 </div>
               </div>
