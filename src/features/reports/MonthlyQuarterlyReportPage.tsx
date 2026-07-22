@@ -542,39 +542,78 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
       const tasks = projectTasks.filter(t => t.projectId === p.id);
       const allSubs = submissions.filter(s => s.projectId === p.id);
       const periodSubs = currentSubs.filter(s => s.projectId === p.id);
-      let totalDone = 0;
-      let totalTarget = 0;
 
-      const progress = tasks.map(t => {
+      const taskBreakdown = tasks.map(t => {
         const mode = t.trackingMode || 'link';
-        const matched = allSubs.filter(s => {
+        const matchedAll = allSubs.filter(s => {
           if (s.projectTaskId === t.id) return true;
           if (s.projectTaskId) return false;
           if (t.taskType && s.taskType !== t.taskType) return false;
           if (t.taskDetail && s.taskDetail !== t.taskDetail) return false;
           return !!t.taskType || !!t.taskDetail;
         });
-        
+        const matchedPeriod = periodSubs.filter(s => {
+          if (s.projectTaskId === t.id) return true;
+          if (s.projectTaskId) return false;
+          if (t.taskType && s.taskType !== t.taskType) return false;
+          if (t.taskDetail && s.taskDetail !== t.taskDetail) return false;
+          return !!t.taskType || !!t.taskDetail;
+        });
+
+        let target = 0;
+        let doneAll = 0;
+        let donePeriod = 0;
+
         if (mode === 'quantity' && t.targetQuantity && t.targetQuantity > 0) {
-          const done = matched.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
-          totalDone += done;
-          totalTarget += t.targetQuantity;
-          return Math.min(100, Math.round((done / t.targetQuantity) * 100));
+          target = t.targetQuantity;
+          doneAll = matchedAll.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
+          donePeriod = matchedPeriod.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
+        } else {
+          target = t.targetLinks || 0;
+          doneAll = matchedAll.reduce((sum, s) => sum + ((s.quantity && s.quantity > 0) ? s.quantity : s.links.length), 0);
+          donePeriod = matchedPeriod.reduce((sum, s) => sum + ((s.quantity && s.quantity > 0) ? s.quantity : s.links.length), 0);
         }
-        const done = matched.reduce((sum, s) => sum + s.links.length, 0);
-        totalDone += done;
-        totalTarget += t.targetLinks || 0;
-        return Math.min(100, Math.round((done / Math.max(t.targetLinks, 1)) * 100));
+
+        const taskPct = target > 0 ? Math.min(100, Math.round((doneAll / target) * 100)) : 100;
+        const taskTitle = t.name || [t.taskType, t.taskDetail].filter(Boolean).join(' - ') || 'Hạng mục công việc';
+
+        return {
+          id: t.id,
+          title: taskTitle,
+          target,
+          doneAll,
+          donePeriod,
+          taskPct,
+          trackingMode: mode
+        };
       });
-      const avgProgress = Math.round(progress.reduce((s, x) => s + x, 0) / progress.length);
+
+      let totalDone = 0;
+      let totalTarget = 0;
+
+      if (taskBreakdown.length > 0) {
+        taskBreakdown.forEach(t => {
+          totalDone += t.doneAll;
+          totalTarget += t.target;
+        });
+      } else {
+        totalDone = allSubs.reduce((s, x) => s + ((x.quantity && x.quantity > 0) ? x.quantity : x.links.length), 0);
+      }
+
+      const periodLinks = periodSubs.reduce((s, x) => s + ((x.quantity && x.quantity > 0) ? x.quantity : x.links.length), 0);
+      const overallProgress = totalTarget > 0 ? Math.min(100, Math.round((totalDone / totalTarget) * 100)) : (periodLinks > 0 ? 100 : 0);
+
       return { 
+        id: p.id,
         name: p.name, 
-        progress: avgProgress, 
-        periodLinks: periodSubs.reduce((s, x) => s + x.links.length, 0), 
-        totalTarget: totalTarget,
-        totalDone: totalDone
+        type: p.type || 'Dự án',
+        progress: overallProgress, 
+        periodLinks, 
+        totalTarget,
+        totalDone,
+        taskBreakdown
       };
-    }).sort((a, b) => Math.max(b.totalTarget, b.periodLinks) - Math.max(a.totalTarget, a.periodLinks));
+    }).sort((a, b) => Math.max(b.periodLinks, b.totalDone) - Math.max(a.periodLinks, a.totalDone));
   }, [projects, projectTasks, submissions, currentSubs]);
 
   /* ── radar: current vs prev ── */
@@ -630,45 +669,6 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
     }
     return projData;
   }, [currentSubs, projects, selectedFocusProjects]);
-
-  /* ── heatmap: project × week matrix ── */
-  const heatmapData = useMemo(() => {
-    // Get all weeks in period
-    const weekSet = new Map<string, string>(); // key -> label
-    const projWeekMap = new Map<string, Map<string, number>>(); // projId -> (weekKey -> count)
-
-    const topProjs = projectsFocus.slice(0, 6).map(p => p.id);
-
-    currentSubs.forEach(s => {
-      if (!s.projectId || !topProjs.includes(s.projectId)) return;
-
-      const d = new Date(s.submittedAt);
-      const day = d.getDay();
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-      const monday = new Date(d.getFullYear(), d.getMonth(), diff);
-      const weekKey = monday.toISOString().slice(0, 10);
-      const end = new Date(monday); end.setDate(monday.getDate() + 6);
-      const weekLabel = `${monday.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} — ${end.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}`;
-      weekSet.set(weekKey, weekLabel);
-
-      if (!projWeekMap.has(s.projectId)) projWeekMap.set(s.projectId, new Map());
-      const wm = projWeekMap.get(s.projectId)!;
-      wm.set(weekKey, (wm.get(weekKey) || 0) + ((s.quantity && s.quantity > 0) ? s.quantity : s.links.length));
-    });
-
-    const weeks = Array.from(weekSet.entries()).sort(([a], [b]) => a.localeCompare(b));
-    const maxVal = Math.max(1, ...Array.from(projWeekMap.values()).flatMap(wm => Array.from(wm.values())));
-
-    return {
-      topics: topProjs.map(id => projectsFocus.find(p => p.id === id)?.name || id),
-      weeks,
-      matrix: topProjs.map(id => {
-        const wm = projWeekMap.get(id) || new Map();
-        return weeks.map(([wk]) => wm.get(wk) || 0);
-      }),
-      maxVal,
-    };
-  }, [currentSubs, projectsFocus]);
 
   /* ── auto insights ── */
   const autoInsights = useMemo(() => {
@@ -1671,59 +1671,103 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
         </div>
       )}
 
-      {/* ── Block 5: Team & Project ── */}
+      {/* ── Block 5: Smart Project Cards & Volume Share ── */}
       {visibleBlocks.teamAndProject && (
         <>
           <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: '24px 0 16px 0' }}>Dự án</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '14px', marginBottom: '14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '14px', marginBottom: '14px' }}>
+            
+            {/* Smart Project Cards Grid */}
             <div className="card" style={{ padding: '20px' }}>
-              <ChartHeader icon={<Target size={14} color="#fff" />} title="Tiến độ các dự án trọng điểm" color="#10b981" />
+              <ChartHeader icon={<Target size={14} color="#fff" />} title="Tiến độ & Hạng mục Dự án trọng điểm" color="#10b981" />
               {projectProgress.length > 0 ? (
-                <div style={{ height: `${Math.max(200, projectProgress.length * 32 + 40)}px` }}>
-                  <Bar
-                    data={{
-                      labels: projectProgress.map(p => p.name.length > 20 ? p.name.slice(0, 18) + '...' : p.name),
-                      datasets: [
-                        {
-                          label: 'Hoàn thành',
-                          data: projectProgress.map(p => p.progress),
-                          backgroundColor: projectProgress.map(p => p.progress >= 80 ? '#16a34a99' : p.progress >= 50 ? '#6366f199' : '#ea580c99'),
-                          borderColor: projectProgress.map(p => p.progress >= 80 ? '#16a34a' : p.progress >= 50 ? '#6366f1' : '#ea580c'),
-                          borderWidth: 1.5,
-                          borderRadius: 6,
-                        },
-                        {
-                          label: 'Còn lại',
-                          data: projectProgress.map(p => 100 - p.progress),
-                          backgroundColor: 'rgba(148,163,184,.12)',
-                          borderColor: 'rgba(148,163,184,.2)',
-                          borderWidth: 1,
-                          borderRadius: 6,
-                        },
-                      ],
-                    }}
-                    options={{
-                      responsive: true, maintainAspectRatio: false,
-                      indexAxis: 'y' as const,
-                      plugins: {
-                        legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true, pointStyle: 'circle', font: { size: 11 } } },
-                        tooltip: {
-                          backgroundColor: 'rgba(15,23,42,.92)', padding: 10, cornerRadius: 8,
-                          callbacks: {
-                            label: (ctx: any) => {
-                              const p = projectProgress[ctx.dataIndex];
-                              if (ctx.datasetIndex === 0) return p ? `${p.progress}% tiến độ chung (${p.totalDone}/${p.totalTarget} mục tiêu. Đã làm kỳ này: ${p.periodLinks})` : '';
-                              return `${100 - (p?.progress ?? 0)}% còn lại`;
-                            },
-                          },
-                        },
-                      },
-                      scales: {
-                        x: { stacked: true, max: 100, grid: { color: chartGridColor }, ticks: { color: chartTextColor, callback: (v) => `${v}%`, font: { size: 10 } } },
-                        y: { stacked: true, grid: { display: false }, ticks: { color: chartTextColor, font: { size: 11 } } },
-                      },
-                    }}
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '12px', marginTop: '16px' }}>
+                  {projectProgress.map((p) => {
+                    const statusColor = p.progress >= 80 ? '#16a34a' : p.progress >= 40 ? '#2563eb' : '#d97706';
+                    const statusBg = p.progress >= 80 ? '#dcfce7' : p.progress >= 40 ? '#dbeafe' : '#fef3c7';
+                    const statusLabel = p.progress >= 80 ? '🟢 Đạt tiến độ' : p.progress >= 40 ? '🔵 Đang triển khai' : '🟡 Cần tăng tốc';
+
+                    return (
+                      <div key={p.id || p.name} style={{
+                        background: 'var(--bg-primary)',
+                        border: '1px solid var(--border-light)',
+                        borderRadius: '12px',
+                        padding: '16px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
+                      }}>
+                        <div>
+                          {/* Header: Name + Type Tag + Status Badge */}
+                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', marginBottom: '10px' }}>
+                            <div>
+                              <div style={{ fontWeight: 800, fontSize: '0.98rem', color: 'var(--text-primary)', lineHeight: 1.3 }}>
+                                {p.name}
+                              </div>
+                              <span style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: '4px', marginTop: '4px', display: 'inline-block' }}>
+                                📁 {p.type}
+                              </span>
+                            </div>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: statusColor, background: statusBg, padding: '3px 8px', borderRadius: '20px', whiteSpace: 'nowrap' }}>
+                              {statusLabel}
+                            </span>
+                          </div>
+
+                          {/* Progress Bar & Main Metrics */}
+                          <div style={{ margin: '12px 0 14px 0' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem', marginBottom: '6px' }}>
+                              <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>Tiến độ tổng thể</span>
+                              <span style={{ fontWeight: 800, color: statusColor, fontSize: '0.95rem' }}>{p.progress}%</span>
+                            </div>
+                            <div style={{ height: '8px', background: 'var(--bg-secondary)', borderRadius: '999px', overflow: 'hidden' }}>
+                              <div style={{
+                                width: `${Math.min(100, p.progress)}%`,
+                                height: '100%',
+                                background: `linear-gradient(90deg, ${statusColor}, #3b82f6)`,
+                                borderRadius: '999px',
+                                transition: 'width 0.4s ease'
+                              }} />
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.76rem', color: 'var(--text-tertiary)', marginTop: '6px' }}>
+                              <span>Output kỳ này: <strong>+{p.periodLinks.toLocaleString('vi-VN')}</strong></span>
+                              {p.totalTarget > 0 && <span>Lũy kế: <strong>{p.totalDone.toLocaleString('vi-VN')} / {p.totalTarget.toLocaleString('vi-VN')}</strong></span>}
+                            </div>
+                          </div>
+
+                          {/* Task Breakdown (Chi tiết công việc & Hạng mục) */}
+                          {p.taskBreakdown.length > 0 ? (
+                            <div style={{ borderTop: '1px dashed var(--border-light)', paddingTop: '10px', marginTop: '8px' }}>
+                              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-tertiary)', marginBottom: '8px', letterSpacing: '0.5px' }}>HẠNG MỤC CÔNG VIỆC CỤ THỂ:</div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                {p.taskBreakdown.map((t) => (
+                                  <div key={t.id} style={{ background: 'var(--bg-secondary)', padding: '6px 10px', borderRadius: '6px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: '4px' }}>
+                                      <span style={{ fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', maxWidth: '180px' }} title={t.title}>
+                                        • {t.title}
+                                      </span>
+                                      <span style={{ fontSize: '0.74rem', color: t.taskPct >= 80 ? '#16a34a' : '#2563eb', fontWeight: 700 }}>
+                                        {t.doneAll} / {t.target > 0 ? t.target : '∞'} ({t.taskPct}%)
+                                      </span>
+                                    </div>
+                                    {t.target > 0 && (
+                                      <div style={{ height: '4px', background: 'rgba(148,163,184,.2)', borderRadius: '999px', overflow: 'hidden' }}>
+                                        <div style={{ width: `${Math.min(100, t.taskPct)}%`, height: '100%', background: t.taskPct >= 80 ? '#16a34a' : '#6366f1', borderRadius: '999px' }} />
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ borderTop: '1px dashed var(--border-light)', paddingTop: '8px', marginTop: '8px', fontSize: '0.76rem', color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
+                              Dự án tổng hợp (chưa phân chia hạng mục con)
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : <EmptyChart />}
             </div>
@@ -1783,79 +1827,6 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
             )}
           </div>
         </>
-      )}
-
-      {/* ── NEW: Heat Chart — dự án × tuần ── */}
-      {visibleBlocks.topics && heatmapData.topics.length > 0 && heatmapData.weeks.length > 0 && (
-        <div className="card" style={{ padding: '20px', marginBottom: '14px', overflowX: 'auto' }}>
-          <ChartHeader icon={<Hash size={14} color="#fff" />} title="Mức độ hoạt động theo dự án × tuần" color="#534AB7" />
-          <div style={{ minWidth: `${180 + heatmapData.weeks.length * 80}px` }}>
-            {/* Header row — week labels */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: `180px repeat(${heatmapData.weeks.length}, 1fr)`,
-              gap: '3px', marginBottom: '3px',
-            }}>
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-tertiary)', padding: '4px 8px' }}>Dự án</div>
-              {heatmapData.weeks.map(([wk, label]) => (
-                <div key={wk} style={{
-                  fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-tertiary)',
-                  textAlign: 'center', padding: '4px 2px', whiteSpace: 'nowrap',
-                }}>
-                  {label}
-                </div>
-              ))}
-            </div>
-            {/* Data rows */}
-            {heatmapData.topics.map((topic, ti) => (
-              <div key={topic} style={{
-                display: 'grid',
-                gridTemplateColumns: `180px repeat(${heatmapData.weeks.length}, 1fr)`,
-                gap: '3px', marginBottom: '3px',
-              }}>
-                <div style={{
-                  fontSize: '0.78rem', fontWeight: 600, padding: '8px', borderRadius: '6px',
-                  background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', gap: '6px',
-                  overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
-                }} title={topic}>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: CHART_PALETTE[ti % CHART_PALETTE.length], flexShrink: 0 }} />
-                  {topic.length > 18 ? topic.slice(0, 16) + '...' : topic}
-                </div>
-                {heatmapData.matrix[ti].map((val, wi) => {
-                  const intensity = heatmapData.maxVal > 0 ? val / heatmapData.maxVal : 0;
-                  const bg = val === 0
-                    ? 'var(--bg-secondary)'
-                    : `rgba(83, 74, 183, ${0.12 + intensity * 0.75})`;
-                  const textColor = intensity > 0.5 ? '#fff' : 'var(--text-primary)';
-                  return (
-                    <div key={wi} style={{
-                      borderRadius: '6px', background: bg, display: 'flex',
-                      alignItems: 'center', justifyContent: 'center', padding: '8px 4px',
-                      fontWeight: val > 0 ? 700 : 400, fontSize: '0.82rem', color: textColor,
-                      transition: 'background .3s, transform .15s', cursor: 'default',
-                      minHeight: '36px',
-                    }}
-                      onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.08)'; e.currentTarget.style.zIndex = '5'; }}
-                      onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.zIndex = ''; }}
-                      title={`${topic}: ${val} link`}
-                    >
-                      {val > 0 ? val : '—'}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-            {/* Legend */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border-light)' }}>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>Ít</span>
-              {[0.15, 0.35, 0.55, 0.75, 0.9].map((op, i) => (
-                <div key={i} style={{ width: 20, height: 14, borderRadius: 3, background: `rgba(83, 74, 183, ${op})` }} />
-              ))}
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>Nhiều</span>
-              <span style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem', fontWeight: 600 }}>Số lượng output trong tuần</span>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* ── 6. Phân bổ Team & So sánh kỳ ── */}
