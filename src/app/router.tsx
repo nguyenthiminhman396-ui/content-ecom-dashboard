@@ -7,6 +7,7 @@ import ContentsPage from '@/features/projects/ContentsPage';
 import DailyWorkPage from '@/features/daily-work/DailyWorkPage';
 import ReportsPage from '@/features/reports/ReportsPage';
 import MonthlyQuarterlyReportPage from '@/features/reports/MonthlyQuarterlyReportPage';
+import WeeklyReportSharePage from '@/features/reports/WeeklyReportSharePage';
 import MembersPage from '@/features/members/MembersPage';
 import SettingsPage from '@/features/settings/SettingsPage';
 import PointConfigPage from '@/features/settings/PointConfigPage';
@@ -44,8 +45,9 @@ export default function AppRouter() {
         <Route path="/todo"           element={<TodoPage />} />
         <Route path="/expenses"       element={<ExpensesPage />} />
       </Route>
-      {/* Public Read-Only Share Route (No sidebar, no header, no login required) */}
+      {/* Public Read-Only Share Routes (No sidebar, no header, no login required) */}
       <Route path="/share/report" element={<MonthlyQuarterlyReportPage isShareMode={true} />} />
+      <Route path="/share/weekly-report" element={<WeeklyReportSharePage />} />
     </Routes>
   );
 }

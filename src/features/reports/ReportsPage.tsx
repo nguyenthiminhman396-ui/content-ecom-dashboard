@@ -5,7 +5,7 @@ import {
   BarChart3, Calendar, FileText, Plus, Edit3, Trash2, X, Save,
   Lock, Unlock, Sparkles, ChevronDown, ChevronUp, Download, Globe,
   TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle2,
-  ArrowRight, Zap, Target, Users,
+  ArrowRight, Zap, Target, Users, Share2, Star,
 } from 'lucide-react';
 import type { WeeklyReport, WeeklyReportProject } from '@/shared/types';
 import { exportCsv, makeId } from '@/shared/utils/helpers';
@@ -200,7 +200,7 @@ export default function ReportsPage() {
       period: formatWeek(report.weekStart),
       overview: [
         { label: 'Tổng link',    value: report.totalLinks },
-        { label: 'Tổng điểm',   value: report.totalPoints.toFixed(0) },
+        { label: 'Tổng điểm',   value: Math.round(report.totalPoints) },
         { label: 'Lượt submit',  value: report.totalTasksCompleted },
         { label: 'Dự án',        value: report.projectProgress.length },
       ],
@@ -217,6 +217,13 @@ export default function ReportsPage() {
     exportHtmlFile(html, `bao-cao-${report.weekStart}`);
     toast.success('Đã export HTML!');
   };
+
+  const handleShareLink = (report: WeeklyReport) => {
+    const url = `${window.location.origin}/share/weekly-report?id=${report.id}`;
+    navigator.clipboard.writeText(url);
+    toast.success('Đã sao chép link báo cáo công khai! Ai có link đều xem được.');
+  };
+
 
   /* ── render ── */
   return (
@@ -322,6 +329,7 @@ export default function ReportsPage() {
                 onDelete={() => { if (window.confirm('Xóa báo cáo này?')) { deleteWeeklyReport(report.id); toast.success('Đã xóa'); } }}
                 onCopy={() => handleExportText(report)}
                 onExportHtml={() => handleExportHTML(report)}
+                onShare={() => handleShareLink(report)}
               />
             );
           })}
@@ -581,10 +589,10 @@ function TrendChart({ last8Weeks, weekDataMap, maxLinks, currentWeekStart, hover
 
 /* ─────────────────────────────────────────────── ReportCard ── */
 
-function ReportCard({ report, isExpanded, linkDelta, canEdit, onToggle, onView, onEdit, onDelete, onCopy, onExportHtml }: {
+function ReportCard({ report, isExpanded, linkDelta, canEdit, onToggle, onView, onEdit, onDelete, onCopy, onExportHtml, onShare }: {
   report: WeeklyReport; isExpanded: boolean; linkDelta: number | null;
   canEdit: boolean; onToggle: () => void; onView: () => void; onEdit: () => void; onDelete: () => void;
-  onCopy: () => void; onExportHtml: () => void;
+  onCopy: () => void; onExportHtml: () => void; onShare: () => void;
 }) {
   const overallProgress = report.projectProgress.length > 0
     ? Math.round(report.projectProgress.reduce((s, p) => s + p.progress, 0) / report.projectProgress.length)
@@ -626,7 +634,7 @@ function ReportCard({ report, isExpanded, linkDelta, canEdit, onToggle, onView, 
               🔗 {report.totalLinks} link
             </span>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>
-              ⭐ {report.totalPoints.toFixed(0)} điểm
+              ⭐ {Math.round(report.totalPoints)} điểm
             </span>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>
               📦 {report.projectProgress.length} dự án
@@ -652,6 +660,8 @@ function ReportCard({ report, isExpanded, linkDelta, canEdit, onToggle, onView, 
             title="Xem báo cáo đẹp">
             👁 Xem
           </button>
+          <button className="btn btn-icon btn-ghost" onClick={onShare} title="Copy link chia sẻ công khai"
+            style={{ color: '#1d4ed8' }}><Share2 size={14} /></button>
           <button className="btn btn-icon btn-ghost" onClick={onCopy} title="Copy text"><Download size={14} /></button>
           <button className="btn btn-icon btn-ghost" onClick={onExportHtml} style={{ color: 'var(--primary-600)' }} title="Export HTML"><Globe size={14} /></button>
         </div>
@@ -794,6 +804,19 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
   const [tempAdditionalContext, setTempAdditionalContext] = useState('');
   const [tempCustomerComments, setTempCustomerComments] = useState('');
 
+  /* ── project selector state ── */
+  const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(
+    () => item
+      ? new Set(item.projectProgress.map(p => p.projectId))
+      : new Set(projects.filter(p => p.status === 'Đang chạy').map(p => p.id))
+  );
+  const [priorityProjectIds, setPriorityProjectIds] = useState<Set<string>>(
+    () => item
+      ? new Set(item.projectProgress.filter(p => p.isPriority).map(p => p.projectId))
+      : new Set<string>()
+  );
+
+
   /* ── recalc helper ── */
   const recalcFromWeek = (weekStart: string) => {
     const ws = new Date(weekStart);
@@ -805,7 +828,8 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
     const totalLinks  = inRange.reduce((sum, s) => sum + s.links.length, 0);
     const totalPoints = inRange.reduce((sum, s) => sum + s.totalPoints, 0);
 
-    const pp: WeeklyReportProject[] = activeProjects.map(p => {
+    const filteredProjects = activeProjects.filter(p => selectedProjectIds.size === 0 || selectedProjectIds.has(p.id));
+    const pp: WeeklyReportProject[] = filteredProjects.map(p => {
       const tasks   = projectTasks.filter(t => t.projectId === p.id);
       const allSubs = submissions.filter(s => s.projectId === p.id);
       const breakdown = tasks.map(t => {
@@ -842,8 +866,13 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
       const progress       = breakdown.length > 0
         ? Math.round(breakdown.reduce((s, x) => s + x.progress, 0) / breakdown.length)
         : (p.manualProgress ?? 0);
-      return { projectId: p.id, projectName: p.name, progress, tasksCompleted, tasksTotal, notes: '', taskBreakdown: breakdown };
+      return {
+        projectId: p.id, projectName: p.name, progress, tasksCompleted, tasksTotal, notes: '',
+        taskBreakdown: breakdown,
+        isPriority: priorityProjectIds.has(p.id),
+      };
     });
+
 
     /* team breakdown */
     const teamMap = new Map<string, { color: string; items: Map<string, { links: number; points: number }> }>();
@@ -1232,9 +1261,69 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
                   </div>
                 </div>
 
+                {/* project selector */}
+                <div style={{ padding: '12px 14px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg,#f8fafc,#f1f5f9)', border: '1px solid #e2e8f0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <label className="form-label" style={{ fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      📦 Chọn dự án đưa vào báo cáo
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', fontWeight: 400 }}>
+                        ({selectedProjectIds.size}/{activeProjects.length} dự án)
+                      </span>
+                    </label>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button type="button" onClick={() => setSelectedProjectIds(new Set(activeProjects.map(p => p.id)))}
+                        style={{ fontSize: '0.72rem', padding: '2px 8px', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', borderRadius: '999px', cursor: 'pointer', fontWeight: 600 }}>
+                        Chọn tất cả
+                      </button>
+                      <button type="button" onClick={() => setSelectedProjectIds(new Set())}
+                        style={{ fontSize: '0.72rem', padding: '2px 8px', background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#475569', borderRadius: '999px', cursor: 'pointer', fontWeight: 600 }}>
+                        Bỏ tất cả
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {activeProjects.map(p => {
+                      const isSelected = selectedProjectIds.has(p.id);
+                      const isPriority = priorityProjectIds.has(p.id);
+                      return (
+                        <div key={p.id} style={{
+                          display: 'flex', alignItems: 'center', gap: '4px',
+                          padding: '4px 10px', borderRadius: '8px',
+                          background: isSelected ? (isPriority ? '#fef9c3' : '#eff6ff') : '#f8fafc',
+                          border: `1px solid ${isSelected ? (isPriority ? '#fde047' : '#bfdbfe') : '#e2e8f0'}`,
+                          cursor: 'pointer', userSelect: 'none', transition: 'all .15s',
+                        }}>
+                          <input type="checkbox" checked={isSelected}
+                            onChange={e => {
+                              const next = new Set(selectedProjectIds);
+                              if (e.target.checked) next.add(p.id); else { next.delete(p.id); setPriorityProjectIds(prev => { const n = new Set(prev); n.delete(p.id); return n; }); }
+                              setSelectedProjectIds(next);
+                            }}
+                            style={{ accentColor: '#1d4ed8', cursor: 'pointer' }}
+                          />
+                          <span style={{ fontSize: '0.8rem', fontWeight: isSelected ? 600 : 400, color: isSelected ? '#1e40af' : 'var(--text-tertiary)' }}>
+                            {p.name}
+                          </span>
+                          {isSelected && (
+                            <button type="button"
+                              onClick={e => { e.stopPropagation(); setPriorityProjectIds(prev => { const n = new Set(prev); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; }); }}
+                              title={isPriority ? 'Bỏ trọng điểm' : 'Đánh dấu trọng điểm'}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', color: isPriority ? '#ca8a04' : '#cbd5e1', lineHeight: 1 }}>
+                              <Star size={12} fill={isPriority ? '#ca8a04' : 'none'} />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: '8px' }}>
+                    💡 Nhấn <Star size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> để đánh dấu dự án trọng điểm — sẽ hiển thị nổi bật trong báo cáo.
+                  </div>
+                </div>
+
                 {/* project progress */}
                 <div>
-                  <label className="form-label" style={{ fontWeight: 700 }}>📦 Tiến độ dự án</label>
+                  <label className="form-label" style={{ fontWeight: 700 }}>📊 Tiến độ dự án đã chọn</label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {(form.projectProgress || []).map((p, idx) => (
                       <div key={idx} style={{ padding: '10px 12px', background: 'var(--bg-secondary)',

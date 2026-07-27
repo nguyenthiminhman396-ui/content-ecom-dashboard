@@ -701,6 +701,8 @@ export interface WeeklyReportProject {
   tasksCompleted: number;
   tasksTotal: number;
   notes: string;
+  /** Dự án trọng điểm — hiển thị nổi bật trong báo cáo */
+  isPriority?: boolean;
   /** Chi tiết tiến độ task cứng — auto-fill từ ProjectTask + submissions */
   taskBreakdown?: Array<{
     taskName: string;
