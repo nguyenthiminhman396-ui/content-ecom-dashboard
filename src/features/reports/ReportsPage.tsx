@@ -784,10 +784,10 @@ function ReportCard({ report, isExpanded, linkDelta, canEdit, onToggle, onView, 
 /* ─────────────────────────────────────────── ReportFormModal ── */
 
 type TabKey = 'data' | 'review' | 'finalize';
-const TABS: { key: TabKey; label: string; icon: string }[] = [
-  { key: 'data',     label: 'Số liệu',  icon: '📊' },
-  { key: 'review',   label: 'Nhận xét', icon: '💬' },
-  { key: 'finalize', label: 'Chốt',     icon: '✅' },
+const SECTIONS: { key: TabKey; label: string; icon: string; desc: string }[] = [
+  { key: 'data',     label: 'Số liệu',  icon: '📊', desc: 'KPI, link, điểm, dự án' },
+  { key: 'review',   label: 'Nhận xét', icon: '💬', desc: 'Tổng quan, điểm nghẽn' },
+  { key: 'finalize', label: 'AI & Chốt', icon: '✅', desc: 'AI đánh giá, lưu báo cáo' },
 ];
 
 function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
@@ -801,6 +801,7 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
 
   const [tab, setTab] = useState<TabKey>('data');
   const [aiLoading, setAiLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [tempAdditionalContext, setTempAdditionalContext] = useState('');
   const [tempCustomerComments, setTempCustomerComments] = useState('');
 
@@ -815,7 +816,6 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
       ? new Set(item.projectProgress.filter(p => p.isPriority).map(p => p.projectId))
       : new Set<string>()
   );
-
 
   /* ── recalc helper ── */
   const recalcFromWeek = (weekStart: string) => {
@@ -840,11 +840,8 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
           if (t.taskDetail && s.taskDetail !== t.taskDetail) return false;
           return !!t.taskType || !!t.taskDetail;
         });
-        // Đồng bộ với ProjectDetailPage: tính theo trackingMode
         const mode = t.trackingMode || 'link';
-        let completed = 0;
-        let target = 1;
-        let progress = 0;
+        let completed = 0; let target = 1; let progress = 0;
         if (mode === 'quantity' && t.targetQuantity && t.targetQuantity > 0) {
           completed = matched.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
           target = t.targetQuantity;
@@ -854,12 +851,7 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
           target = Math.max(t.targetLinks, 1);
           progress = Math.min(100, Math.round((completed / target) * 100));
         }
-        return {
-          taskName: t.name,
-          targetLinks: target,      // giữ field name để tương thích type
-          completedLinks: completed, // giữ field name để tương thích type
-          progress,
-        };
+        return { taskName: t.name, targetLinks: target, completedLinks: completed, progress };
       });
       const tasksTotal     = breakdown.reduce((s, x) => s + x.targetLinks, 0);
       const tasksCompleted = breakdown.reduce((s, x) => s + x.completedLinks, 0);
@@ -868,13 +860,10 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
         : (p.manualProgress ?? 0);
       return {
         projectId: p.id, projectName: p.name, progress, tasksCompleted, tasksTotal, notes: '',
-        taskBreakdown: breakdown,
-        isPriority: priorityProjectIds.has(p.id),
+        taskBreakdown: breakdown, isPriority: priorityProjectIds.has(p.id),
       };
     });
 
-
-    /* team breakdown */
     const teamMap = new Map<string, { color: string; items: Map<string, { links: number; points: number }> }>();
     const teamColors: Record<string, string> = { 'Bài viết': '#1D9E75', 'Sản phẩm': '#8B5CF6', 'Multimedia - Tin nhanh': '#F59E0B' };
     inRange.forEach(s => {
@@ -889,30 +878,25 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
       items: Array.from(items.entries()).map(([label, v]) => ({ label, ...v })).sort((a, b) => b.points - a.points),
     }));
 
-    /* auto insights */
     const employees = new Set(inRange.map(s => s.employeeName));
     const empPoints = new Map<string, number>();
     inRange.forEach(s => empPoints.set(s.employeeName, (empPoints.get(s.employeeName) || 0) + s.totalPoints));
     const topEmp   = Array.from(empPoints.entries()).sort((a, b) => b[1] - a[1]);
     const avgPts   = employees.size > 0 ? totalPoints / employees.size : 0;
     const insights = [
-      `Tổng: ${totalLinks} link, ${totalPoints.toFixed(0)}đ từ ${employees.size} nhân viên.`,
+      `Tổng: ${totalLinks} link, ${Math.round(totalPoints)}đ từ ${employees.size} nhân viên.`,
       `Trung bình: ${avgPts.toFixed(1)}đ/người.`,
-      topEmp.length > 0 ? `Top: ${topEmp.slice(0, 3).map(([n, p]) => `${n} (${p.toFixed(0)}đ)`).join(', ')}.` : '',
+      topEmp.length > 0 ? `Top: ${topEmp.slice(0, 3).map(([n, p]) => `${n} (${Math.round(p)}đ)`).join(', ')}.` : '',
       taskBreakdownByTeam.map(t => `${t.team}: ${t.items.reduce((s, i) => s + i.links, 0)} link`).join(' | '),
     ].filter(Boolean).join('\n');
 
-    /* auto bottlenecks */
     const bottleneckItems: string[] = [];
     pp.forEach(p => {
       p.taskBreakdown?.forEach(t => {
         if (t.progress < 30 && t.targetLinks > 0) {
           bottleneckItems.push(
             `- Vấn đề: Tiến độ task "${t.taskName}" dự án ${p.projectName} quá chậm (${t.progress}%).\n` +
-            `  Ảnh hưởng: Chậm tiến độ chung dự án.\n` +
-            `  Mức độ: Cao\n` +
-            `  Owner: [Tên người phụ trách]\n` +
-            `  Hướng xử lý: [Ghi đề xuất giải quyết tại đây]`
+            `  Ảnh hưởng: Chậm tiến độ chung dự án.\n  Mức độ: Cao\n  Owner: [Tên người phụ trách]\n  Hướng xử lý: [Ghi đề xuất giải quyết tại đây]`
           );
         }
       });
@@ -922,54 +906,42 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
     if (lowEmps.length > 0) bottleneckItems.push(`- Vấn đề: Sản lượng thấp ở một số nhân sự: ${lowEmps.map(([n]) => n).join(', ')}`);
     const bottlenecks = bottleneckItems.join('\n\n');
 
-    /* auto summary */
-    const summaryParts = [`Tuần ${formatWeek(weekStart)}: ${totalLinks} link, ${totalPoints.toFixed(0)} điểm.`];
+    const summaryParts = [`Tuần ${formatWeek(weekStart)}: ${totalLinks} link, ${Math.round(totalPoints)} điểm.`];
     if (taskBreakdownByTeam.length > 0) {
-      const top = taskBreakdownByTeam.sort((a, b) => b.items.reduce((s, i) => s + i.links, 0) - a.items.reduce((s, i) => s + i.links, 0))[0];
+      const top = [...taskBreakdownByTeam].sort((a, b) => b.items.reduce((s, i) => s + i.links, 0) - a.items.reduce((s, i) => s + i.links, 0))[0];
       summaryParts.push(`${top.team} dẫn đầu.`);
     }
-    if (topEmp.length > 0) summaryParts.push(`Top: ${topEmp[0][0]} (${topEmp[0][1].toFixed(0)}đ).`);
+    if (topEmp.length > 0) summaryParts.push(`Top: ${topEmp[0][0]} (${Math.round(topEmp[0][1])}đ).`);
     const autoSummary = summaryParts.join(' ');
 
-    /* auto next week plan */
     const slowTasks = pp.flatMap(p => (p.taskBreakdown || []).filter(t => t.progress < 30 && t.targetLinks > 0));
     const autoNextPlan = slowTasks.length > 0
       ? slowTasks.slice(0, 3).map(t => `[High] Đẩy tiến độ task "${t.taskName}" | Target: 100% | Owner: [Tên] | Deadline: Thứ 6`).join('\n')
       : '[Medium] Duy trì nhịp độ hiện tại | Target: Đạt KPI | Owner: Cả team | Deadline: Cuối tuần\n[High] Kiểm tra chất lượng nội dung | Target: Pass 100% | Owner: [Leader] | Deadline: Thứ 4';
 
     return {
-      totalLinks, totalPoints, totalTasksCompleted: inRange.length, projectProgress: pp, taskBreakdownByTeam, insights, bottlenecks, autoSummary, autoNextPlan,
-      // Default KPI targets to the actuals for the first run, the user can edit them
+      totalLinks, totalPoints, totalTasksCompleted: inRange.length, projectProgress: pp,
+      taskBreakdownByTeam, insights, bottlenecks, autoSummary, autoNextPlan,
       kpiTargetLinks: totalLinks > 0 ? totalLinks : 0,
       kpiTargetPoints: totalPoints > 0 ? totalPoints : 0,
-      kpiQuality: 100, // Default to 100%
+      kpiQuality: 100,
     };
   };
 
-  /* ── initial state: auto-fill when opening ── */
+  /* ── initial form state ── */
   const [form, setForm] = useState<Partial<WeeklyReport>>(() => {
     if (item) return item;
     const ws = currentWeekStart;
     const auto = recalcFromWeek(ws);
     return {
-      weekStart: ws,
-      createdBy: currentUser?.name || '',
+      weekStart: ws, createdBy: currentUser?.name || '',
       projectProgress: auto.projectProgress,
       totalTasksCompleted: auto.totalTasksCompleted,
-      totalLinks: auto.totalLinks,
-      totalPoints: auto.totalPoints,
-      kpiTargetLinks: auto.kpiTargetLinks,
-      kpiTargetPoints: auto.kpiTargetPoints,
-      kpiQuality: auto.kpiQuality,
-      summary: auto.autoSummary,
-      aiAssessment: '',
-      managerAssessment: '',
-      nextWeekPlan: auto.autoNextPlan,
-      issues: '',
-      insights: auto.insights,
-      bottlenecks: auto.bottlenecks,
-      taskBreakdownByTeam: auto.taskBreakdownByTeam,
-      locked: false,
+      totalLinks: auto.totalLinks, totalPoints: auto.totalPoints,
+      kpiTargetLinks: auto.kpiTargetLinks, kpiTargetPoints: auto.kpiTargetPoints, kpiQuality: auto.kpiQuality,
+      summary: auto.autoSummary, aiAssessment: '', managerAssessment: '',
+      nextWeekPlan: auto.autoNextPlan, issues: '', insights: auto.insights,
+      bottlenecks: auto.bottlenecks, taskBreakdownByTeam: auto.taskBreakdownByTeam, locked: false,
     };
   });
 
@@ -990,7 +962,6 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
     try {
       const ws = form.weekStart || currentWeekStart;
       const calc = recalcFromWeek(ws);
-
       const getQty = (s: typeof submissions[0]) => (s.quantity && s.quantity > 0) ? s.quantity : s.links.length;
       const cat = (s: typeof submissions[0]) => {
         const t = s.taskType || '';
@@ -1005,41 +976,32 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
         if (tl.includes('tối ưu')) return 'toiUu';
         return 'khac';
       };
-
       const inRange = submissions.filter(s => {
         const t = new Date(s.submittedAt).getTime();
         const dStart = new Date(ws);
         const dEnd = new Date(dStart); dEnd.setDate(dStart.getDate() + 6); dEnd.setHours(23, 59, 59);
         return !isNaN(t) && t >= dStart.getTime() && t <= dEnd.getTime();
       });
-
       const baiMoi = inRange.filter(s => cat(s) === 'baiMoi').reduce((sum, s) => sum + getQty(s), 0);
       const sku = inRange.filter(s => cat(s) === 'sku').reduce((sum, s) => sum + getQty(s), 0);
       const multimedia = inRange.filter(s => cat(s) === 'multimedia').reduce((sum, s) => sum + getQty(s), 0);
       const toiUu = inRange.filter(s => cat(s) === 'toiUu').reduce((sum, s) => sum + getQty(s), 0);
-
       const employees = new Set(inRange.map(s => s.employeeName));
       const empPoints = new Map<string, { links: number; points: number }>();
       inRange.forEach(s => {
         const prev = empPoints.get(s.employeeName) || { links: 0, points: 0 };
-        empPoints.set(s.employeeName, {
-          links: prev.links + getQty(s),
-          points: prev.points + s.totalPoints
-        });
+        empPoints.set(s.employeeName, { links: prev.links + getQty(s), points: prev.points + s.totalPoints });
       });
       const topEmployees = Array.from(empPoints.entries())
         .map(([name, v]) => ({ name, links: v.links, points: v.points }))
         .sort((a, b) => b.points - a.points);
-
-      // Quality stats (QC)
       const withQc = inRange.filter(s => !!s.qualityCheck);
       const qcScores = withQc.map(s => s.qualityCheck!.score);
       const totalReviews = withQc.length;
       const avgScore = totalReviews > 0 ? (qcScores.reduce((a, b) => a + b, 0) / totalReviews) * 2 : 0;
       const comments = withQc.filter(s => s.qualityCheck!.note && s.qualityCheck!.note.trim().length > 0);
       const totalComments = comments.length;
-      let positiveCount = 0;
-      let negativeCount = 0;
+      let positiveCount = 0; let negativeCount = 0;
       comments.forEach(s => {
         const note = s.qualityCheck!.note!.toLowerCase();
         if (/(tốt|ok|duyệt|hay|xuất sắc|đạt)/i.test(note)) positiveCount++;
@@ -1047,86 +1009,41 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
       });
       const pctPositive = totalComments > 0 ? Math.round((positiveCount / totalComments) * 100) : 0;
       const pctNegative = totalComments > 0 ? Math.round((negativeCount / totalComments) * 100) : 0;
-
-      const teamMap = new Map<string, { links: number; points: number }>();
+      const teamMap2 = new Map<string, { links: number; points: number }>();
       inRange.forEach(s => {
         const team = s.teamGroup || 'Khác';
-        const prev = teamMap.get(team) || { links: 0, points: 0 };
-        teamMap.set(team, { links: prev.links + getQty(s), points: prev.points + s.totalPoints });
+        const prev = teamMap2.get(team) || { links: 0, points: 0 };
+        teamMap2.set(team, { links: prev.links + getQty(s), points: prev.points + s.totalPoints });
       });
-      const teamBreakdown = Array.from(teamMap.entries()).sort((a, b) => b[1].points - a[1].points);
-
-      const projProgress = (form.projectProgress || []).map(p => ({
-        name: p.projectName,
-        progress: p.progress
-      }));
-
+      const teamBreakdown = Array.from(teamMap2.entries()).sort((a, b) => b[1].points - a[1].points);
+      const projProgress = (form.projectProgress || []).map(p => ({ name: p.projectName, progress: p.progress }));
       const projectsFocus = (form.projectProgress || [])
-        .map(p => ({
-          name: p.projectName,
-          type: 'Campaign',
-          links: inRange.filter(s => s.projectId === p.projectId).reduce((sum, s) => sum + getQty(s), 0)
-        }))
-        .filter(p => p.links > 0)
-        .sort((a, b) => b.links - a.links);
-
+        .map(p => ({ name: p.projectName, type: 'Campaign', links: inRange.filter(s => s.projectId === p.projectId).reduce((sum, s) => sum + getQty(s), 0) }))
+        .filter(p => p.links > 0).sort((a, b) => b.links - a.links);
       const tMap = new Map<string, Map<string, { links: number; points: number }>>();
       inRange.forEach(s => {
-        const type = s.taskType || 'Khác';
-        const detail = s.taskDetail || s.taskType || 'Khác';
+        const type = s.taskType || 'Khác'; const detail = s.taskDetail || s.taskType || 'Khác';
         if (!tMap.has(type)) tMap.set(type, new Map());
         const typeMap = tMap.get(type)!;
         const prev = typeMap.get(detail) || { links: 0, points: 0 };
         typeMap.set(detail, { links: prev.links + getQty(s), points: prev.points + s.totalPoints });
       });
       const tasksBreakdown = Array.from(tMap.entries()).map(([type, details]) => ({
-        type,
-        details: Array.from(details.entries())
-          .map(([name, data]) => ({ name, links: data.links, points: data.points }))
-          .sort((a, b) => b.points - a.points)
+        type, details: Array.from(details.entries()).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.points - a.points)
       })).sort((a, b) => a.type.localeCompare(b.type));
-
-      const formatWeekLabel = (weekStart: string) => {
-        const d = new Date(weekStart);
-        const end = new Date(d);
-        end.setDate(d.getDate() + 6);
+      const formatWeekLabel = (ws2: string) => {
+        const d = new Date(ws2); const end = new Date(d); end.setDate(d.getDate() + 6);
         return `Tuần ${d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} — ${end.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
       };
-
       const context: ReportContext = {
         periodLabel: formatWeekLabel(ws),
-        stats: {
-          totalLinks: form.totalLinks ?? calc.totalLinks,
-          totalPoints: form.totalPoints ?? calc.totalPoints,
-          totalSubmits: form.totalTasksCompleted ?? calc.totalTasksCompleted,
-          baiMoi,
-          sku,
-          multimedia,
-          toiUu,
-          employeeCount: employees.size,
-          avgPointsPerEmp: employees.size > 0 ? (form.totalPoints ?? calc.totalPoints) / employees.size : 0,
-          deltaLinks: 0,
-          deltaPoints: 0,
-          deltaSubmits: 0,
-        },
-        teamBreakdown,
-        topEmployees,
-        qualityStats: {
-          avgScore,
-          totalReviews,
-          totalComments,
-          pctPositive,
-          pctNegative,
-        },
-        projectProgress: projProgress,
-        projectsFocus,
-        tasksBreakdown,
-        customerCommentsRaw: tempCustomerComments,
-        additionalContext: tempAdditionalContext,
+        stats: { totalLinks: form.totalLinks ?? calc.totalLinks, totalPoints: form.totalPoints ?? calc.totalPoints, totalSubmits: form.totalTasksCompleted ?? calc.totalTasksCompleted, baiMoi, sku, multimedia, toiUu, employeeCount: employees.size, avgPointsPerEmp: employees.size > 0 ? (form.totalPoints ?? calc.totalPoints) / employees.size : 0, deltaLinks: 0, deltaPoints: 0, deltaSubmits: 0 },
+        teamBreakdown, topEmployees,
+        qualityStats: { avgScore, totalReviews, totalComments, pctPositive, pctNegative },
+        projectProgress: projProgress, projectsFocus, tasksBreakdown,
+        customerCommentsRaw: tempCustomerComments, additionalContext: tempAdditionalContext,
       };
-
       const result = await generateWeeklyReport(context);
-      
       setForm(f => ({
         ...f,
         aiAssessment: result.aiAssessment || f.aiAssessment || '',
@@ -1148,401 +1065,476 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
     setForm(f => ({ ...f, projectProgress: pp }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); onSave(form); };
+  /* ── SAVE — works from any tab ── */
+  const handleSave = () => {
+    setSaving(true);
+    setTimeout(() => {
+      onSave(form);
+      setSaving(false);
+    }, 120);
+  };
 
-  /* progress indicator */
-  const tabIdx = TABS.findIndex(t => t.key === tab);
-  const pctDone = Math.round(((tabIdx + 1) / TABS.length) * 100);
+  /* ── shared textarea style ── */
+  const ta = (bg: string, border: string): React.CSSProperties => ({
+    width: '100%', border: `1.5px solid ${border}`, borderRadius: '10px',
+    padding: '10px 12px', fontSize: '13px', fontFamily: 'inherit',
+    resize: 'vertical', background: bg, outline: 'none', lineHeight: 1.65,
+    color: '#334155', transition: 'border-color .2s',
+  });
 
+  /* ── section header ── */
+  const secH = (title: string, sub?: string, action?: React.ReactNode) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '14px' }}>
+      <div>
+        <div style={{ fontWeight: 800, fontSize: '15px', color: '#0f172a' }}>{title}</div>
+        {sub && <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{sub}</div>}
+      </div>
+      {action}
+    </div>
+  );
+
+  /* ─────────────────────────────────────────────────────────── render ── */
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}
-        style={{ maxWidth: '720px', maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', borderRadius: 'var(--radius-xl)' }}>
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9100,
+      background: '#f1f5f9', display: 'flex', flexDirection: 'column',
+      fontFamily: 'Inter, sans-serif',
+    }}>
+      {/* ── STICKY TOP TOOLBAR ── */}
+      <div style={{
+        flexShrink: 0,
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 60%, #4f46e5 100%)',
+        padding: '0 24px',
+        display: 'flex', alignItems: 'center', gap: '12px',
+        height: '60px',
+        boxShadow: '0 4px 20px rgba(0,0,0,.18)',
+      }}>
+        {/* title */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 800, fontSize: '15px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {item ? <><Edit3 size={15} /> Chỉnh sửa báo cáo</> : <><Plus size={15} /> Tạo báo cáo tuần</>}
+          </div>
+          <div style={{ fontSize: '12px', color: 'rgba(255,255,255,.65)', marginTop: '1px' }}>
+            {formatWeek(form.weekStart || currentWeekStart)}
+          </div>
+        </div>
 
-        {/* header */}
-        <div style={{ padding: '20px 24px 0', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-            <div>
-              <h3 style={{ fontWeight: 800, fontSize: '1.05rem', color: '#fff', margin: 0 }}>
-                {item ? '✏️ Chỉnh sửa báo cáo' : '✨ Tạo báo cáo tuần'}
-              </h3>
-              <div style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,.75)', marginTop: '2px' }}>
-                {formatWeek(form.weekStart || currentWeekStart)}
+        {/* Làm mới số liệu */}
+        <button type="button" onClick={handleAutoFill}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 600,
+            padding: '7px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+            background: 'rgba(255,255,255,.12)', color: '#fff', backdropFilter: 'blur(8px)',
+            transition: 'background .15s' }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,.2)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,.12)')}>
+          <Zap size={13} /> Làm mới số liệu
+        </button>
+
+        {/* Divider */}
+        <div style={{ width: '1px', height: '28px', background: 'rgba(255,255,255,.2)' }} />
+
+        {/* SAVE — always visible */}
+        <button type="button" onClick={handleSave} disabled={saving}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 700,
+            padding: '8px 20px', borderRadius: '10px', border: 'none', cursor: 'pointer',
+            background: saving ? '#94a3b8' : 'linear-gradient(135deg, #16a34a, #15803d)',
+            color: '#fff', boxShadow: '0 4px 12px rgba(22,163,74,.4)', transition: 'all .15s' }}>
+          <Save size={15} /> {saving ? 'Đang lưu...' : item ? 'Cập nhật' : 'Lưu báo cáo'}
+        </button>
+
+        {/* close */}
+        <button onClick={onClose}
+          style={{ width: '36px', height: '36px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+            background: 'rgba(255,255,255,.12)', color: '#fff', display: 'grid', placeItems: 'center',
+            transition: 'background .15s' }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,.4)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,.12)')}>
+          <X size={18} />
+        </button>
+      </div>
+
+      {/* ── BODY: sidebar + content ── */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+
+        {/* LEFT SIDEBAR NAV */}
+        <div style={{
+          width: '200px', flexShrink: 0,
+          background: '#fff', borderRight: '1px solid #e2e8f0',
+          display: 'flex', flexDirection: 'column', padding: '20px 12px', gap: '4px',
+        }}>
+          {/* week picker in sidebar */}
+          <div style={{ marginBottom: '20px', padding: '10px 12px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', marginBottom: '6px', letterSpacing: '.3px' }}>📅 TUẦN BÁO CÁO</div>
+            <input type="date" value={form.weekStart || ''}
+              onChange={e => handleWeekChange(e.target.value)}
+              style={{ width: '100%', border: '1.5px solid #e2e8f0', borderRadius: '7px', padding: '5px 8px', fontSize: '12px', fontFamily: 'inherit', outline: 'none', color: '#0f172a', fontWeight: 600 }} />
+          </div>
+
+          {SECTIONS.map((s) => {
+            const isActive = s.key === tab;
+            return (
+              <button key={s.key} onClick={() => setTab(s.key)}
+                style={{
+                  display: 'flex', alignItems: 'flex-start', gap: '10px',
+                  padding: '10px 12px', borderRadius: '10px', border: 'none', cursor: 'pointer',
+                  background: isActive ? 'linear-gradient(135deg,#eff6ff,#dbeafe)' : 'transparent',
+                  color: isActive ? '#1e40af' : '#475569', textAlign: 'left', width: '100%',
+                  transition: 'all .15s',
+                  boxShadow: isActive ? '0 0 0 1.5px #bfdbfe' : 'none',
+                }}
+                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#f8fafc'; }}
+                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '8px', flexShrink: 0,
+                  display: 'grid', placeItems: 'center', fontSize: '16px',
+                  background: isActive ? '#dbeafe' : '#f1f5f9', }}>
+                  {s.icon}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '13px', lineHeight: 1.2 }}>{s.label}</div>
+                  <div style={{ fontSize: '11px', opacity: .7, marginTop: '2px', lineHeight: 1.3 }}>{s.desc}</div>
+                </div>
+              </button>
+            );
+          })}
+
+          {/* stats preview */}
+          <div style={{ marginTop: 'auto', padding: '12px', background: 'linear-gradient(135deg,#f8fafc,#f1f5f9)', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', marginBottom: '8px' }}>📌 NHANH</div>
+            {[
+              { label: 'Links', val: form.totalLinks ?? 0, color: '#6366f1' },
+              { label: 'Điểm', val: Math.round(form.totalPoints ?? 0), color: '#f59e0b' },
+              { label: 'Dự án', val: (form.projectProgress || []).length, color: '#16a34a' },
+            ].map(r => (
+              <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
+                <span style={{ color: '#64748b' }}>{r.label}</span>
+                <b style={{ color: r.color }}>{r.val}</b>
               </div>
-            </div>
-            <button onClick={onClose} style={{ background: 'rgba(255,255,255,.15)', border: 'none', borderRadius: 'var(--radius-md)',
-              width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff' }}>
-              <X size={16} />
-            </button>
-          </div>
-
-          {/* tab bar */}
-          <div style={{ display: 'flex', gap: '0' }}>
-            {TABS.map((t, i) => {
-              const isActive = t.key === tab;
-              const isDone   = i < tabIdx;
-              return (
-                <button key={t.key} onClick={() => setTab(t.key)}
-                  style={{ flex: 1, padding: '10px 8px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', gap: '6px', fontSize: '0.82rem', fontWeight: isActive ? 700 : 500,
-                    background: isActive ? '#fff' : 'transparent',
-                    color: isActive ? '#6366f1' : isDone ? 'rgba(255,255,255,.9)' : 'rgba(255,255,255,.6)',
-                    borderBottom: 'none', transition: 'background .2s, color .2s',
-                    borderRadius: i === 0 ? '8px 0 0 0' : i === TABS.length - 1 ? '0 8px 0 0' : '0',
-                  }}>
-                  <span>{t.icon}</span>
-                  <span>{t.label}</span>
-                  {isDone && <span style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,.2)', borderRadius: '999px', padding: '0 5px' }}>✓</span>}
-                </button>
-              );
-            })}
+            ))}
           </div>
         </div>
 
-        {/* progress bar */}
-        <div style={{ height: 3, background: '#e2e8f0' }}>
-          <div style={{ height: '100%', width: `${pctDone}%`, background: 'linear-gradient(90deg,#6366f1,#8b5cf6)', transition: 'width .3s' }} />
-        </div>
+        {/* MAIN CONTENT AREA */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px' }}>
 
-        <form onSubmit={handleSubmit} style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '20px 24px', flex: 1 }}>
+          {/* ═══════════ TAB 1: SỐ LIỆU ═══════════ */}
+          {tab === 'data' && (
+            <div style={{ maxWidth: '900px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
-            {/* ── TAB 1: Số liệu ── */}
-            {tab === 'data' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {/* week + refresh */}
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
-                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                    <label className="form-label">📅 Tuần bắt đầu (Thứ 2)</label>
-                    <input className="form-input" type="date" value={form.weekStart || ''}
-                      onChange={e => handleWeekChange(e.target.value)} />
+              {/* KPI row */}
+              {secH('📊 KPI & Sản lượng tuần', 'Nhập thực tế / target hoặc nhấn "Làm mới số liệu" để tự động fill')}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
+                {([
+                  { icon: '🔗', label: 'Link thực tế', field: 'totalLinks', target: 'kpiTargetLinks', color: '#6366f1', bg: '#eff6ff', border: '#c7d2fe' },
+                  { icon: '⭐', label: 'Điểm thực tế', field: 'totalPoints', target: 'kpiTargetPoints', color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
+                ] as const).map(k => (
+                  <div key={k.field} style={{ background: '#fff', border: `1.5px solid ${k.border}`, borderRadius: '14px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,.04)' }}>
+                    <div style={{ fontSize: '20px', marginBottom: '8px' }}>{k.icon}</div>
+                    <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '6px' }}>{k.label} / Target</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <input type="number" min="0" value={form[k.field] ?? 0}
+                        onChange={e => setForm(f => ({ ...f, [k.field]: parseFloat(e.target.value) || 0 }))}
+                        style={{ width: '70px', textAlign: 'center', fontWeight: 800, fontSize: '20px', color: k.color,
+                          border: 'none', background: k.bg, padding: '4px 6px', borderRadius: '6px', outline: 'none' }} />
+                      <span style={{ color: '#94a3b8', fontSize: '16px' }}>/</span>
+                      <input type="number" min="0" value={form[k.target] ?? 0}
+                        onChange={e => setForm(f => ({ ...f, [k.target]: parseFloat(e.target.value) || 0 }))}
+                        style={{ width: '70px', textAlign: 'center', fontWeight: 700, fontSize: '16px', color: '#64748b',
+                          border: 'none', background: '#f8fafc', padding: '4px 6px', borderRadius: '6px', outline: 'none' }} />
+                    </div>
+                    {/* mini bar */}
+                    <div style={{ marginTop: '8px', height: '4px', background: '#f1f5f9', borderRadius: '999px' }}>
+                      <div style={{ height: '100%', width: `${Math.min(100, ((form[k.field] ?? 0) / Math.max(1, form[k.target] ?? 1)) * 100)}%`,
+                        background: k.color, borderRadius: '999px', transition: 'width .3s' }} />
+                    </div>
                   </div>
-                  <button type="button" className="btn btn-secondary" onClick={handleAutoFill}
-                    style={{ height: '38px', background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', border: '1px solid #86efac', color: '#16a34a', fontWeight: 600 }}>
-                    <Zap size={13} /> Làm mới số liệu
-                  </button>
+                ))}
+                <div style={{ background: '#fff', border: '1.5px solid #bbf7d0', borderRadius: '14px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,.04)' }}>
+                  <div style={{ fontSize: '20px', marginBottom: '8px' }}>📥</div>
+                  <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '6px' }}>Lượt Submit</div>
+                  <input type="number" min="0" value={form.totalTasksCompleted ?? 0}
+                    onChange={e => setForm(f => ({ ...f, totalTasksCompleted: parseFloat(e.target.value) || 0 }))}
+                    style={{ width: '90px', textAlign: 'center', fontWeight: 800, fontSize: '22px', color: '#16a34a',
+                      border: 'none', background: '#f0fdf4', padding: '4px 8px', borderRadius: '6px', outline: 'none' }} />
                 </div>
-
-                {/* stats cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
-                  <div style={{ padding: '14px', borderRadius: 'var(--radius-lg)', background: `linear-gradient(135deg,#6366f112,#6366f106)`, border: `1px solid #6366f122`, textAlign: 'center' }}>
-                    <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>🔗</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                      <input type="number" min="0" value={form.totalLinks ?? 0} onChange={e => setForm(f => ({ ...f, totalLinks: parseFloat(e.target.value) || 0 }))} style={{ width: '45px', textAlign: 'center', fontWeight: 800, fontSize: '1.2rem', color: '#6366f1', border: 'none', background: 'transparent', padding: '0', outline: 'none' }} />
-                      <span style={{ color: 'var(--text-tertiary)', fontSize: '1.1rem' }}>/</span>
-                      <input type="number" min="0" value={form.kpiTargetLinks ?? 0} onChange={e => setForm(f => ({ ...f, kpiTargetLinks: parseFloat(e.target.value) || 0 }))} style={{ width: '45px', textAlign: 'center', fontWeight: 800, fontSize: '1.2rem', color: '#6366f1', border: 'none', background: 'transparent', padding: '0', outline: 'none' }} />
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>Link (Thực tế/Target)</div>
-                  </div>
-                  
-                  <div style={{ padding: '14px', borderRadius: 'var(--radius-lg)', background: `linear-gradient(135deg,#f59e0b12,#f59e0b06)`, border: `1px solid #f59e0b22`, textAlign: 'center' }}>
-                    <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>⭐</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                      <input type="number" min="0" step="0.1" value={Math.round((form.totalPoints ?? 0) * 10) / 10} onChange={e => setForm(f => ({ ...f, totalPoints: parseFloat(e.target.value) || 0 }))} style={{ width: '45px', textAlign: 'center', fontWeight: 800, fontSize: '1.2rem', color: '#f59e0b', border: 'none', background: 'transparent', padding: '0', outline: 'none' }} />
-                      <span style={{ color: 'var(--text-tertiary)', fontSize: '1.1rem' }}>/</span>
-                      <input type="number" min="0" step="0.1" value={Math.round((form.kpiTargetPoints ?? 0) * 10) / 10} onChange={e => setForm(f => ({ ...f, kpiTargetPoints: parseFloat(e.target.value) || 0 }))} style={{ width: '45px', textAlign: 'center', fontWeight: 800, fontSize: '1.2rem', color: '#f59e0b', border: 'none', background: 'transparent', padding: '0', outline: 'none' }} />
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>Điểm (Thực tế/Target)</div>
-                  </div>
-
-                  <div style={{ padding: '14px', borderRadius: 'var(--radius-lg)', background: `linear-gradient(135deg,#10b98112,#10b98106)`, border: `1px solid #10b98122`, textAlign: 'center' }}>
-                    <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>📥</div>
-                    <input type="number" min="0" value={form.totalTasksCompleted ?? 0} onChange={e => setForm(f => ({ ...f, totalTasksCompleted: parseFloat(e.target.value) || 0 }))} style={{ width: '80px', textAlign: 'center', fontWeight: 800, fontSize: '1.4rem', color: '#10b981', border: 'none', background: 'transparent', padding: '0', margin: '0 auto', display: 'block', outline: 'none' }} />
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>Lượt Submit</div>
-                  </div>
-
-                  <div style={{ padding: '14px', borderRadius: 'var(--radius-lg)', background: `linear-gradient(135deg,#8b5cf612,#8b5cf606)`, border: `1px solid #8b5cf622`, textAlign: 'center' }}>
-                    <div style={{ fontSize: '1.2rem', marginBottom: '4px' }}>✨</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <input type="number" min="0" max="100" value={form.kpiQuality ?? 100} onChange={e => setForm(f => ({ ...f, kpiQuality: parseFloat(e.target.value) || 0 }))} style={{ width: '50px', textAlign: 'center', fontWeight: 800, fontSize: '1.4rem', color: '#8b5cf6', border: 'none', background: 'transparent', padding: '0', outline: 'none' }} />
-                      <span style={{ fontWeight: 800, fontSize: '1.2rem', color: '#8b5cf6' }}>%</span>
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>Chất lượng (Pass)</div>
+                <div style={{ background: '#fff', border: '1.5px solid #ddd6fe', borderRadius: '14px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,.04)' }}>
+                  <div style={{ fontSize: '20px', marginBottom: '8px' }}>✨</div>
+                  <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '6px' }}>Chất lượng Pass</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <input type="number" min="0" max="100" value={form.kpiQuality ?? 100}
+                      onChange={e => setForm(f => ({ ...f, kpiQuality: parseFloat(e.target.value) || 0 }))}
+                      style={{ width: '60px', textAlign: 'center', fontWeight: 800, fontSize: '22px', color: '#7c3aed',
+                        border: 'none', background: '#f5f3ff', padding: '4px 6px', borderRadius: '6px', outline: 'none' }} />
+                    <span style={{ fontWeight: 800, fontSize: '18px', color: '#7c3aed' }}>%</span>
                   </div>
                 </div>
+              </div>
 
-                {/* project selector */}
-                <div style={{ padding: '12px 14px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg,#f8fafc,#f1f5f9)', border: '1px solid #e2e8f0' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                    <label className="form-label" style={{ fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      📦 Chọn dự án đưa vào báo cáo
-                      <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', fontWeight: 400 }}>
-                        ({selectedProjectIds.size}/{activeProjects.length} dự án)
-                      </span>
-                    </label>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <button type="button" onClick={() => setSelectedProjectIds(new Set(activeProjects.map(p => p.id)))}
-                        style={{ fontSize: '0.72rem', padding: '2px 8px', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', borderRadius: '999px', cursor: 'pointer', fontWeight: 600 }}>
-                        Chọn tất cả
-                      </button>
-                      <button type="button" onClick={() => setSelectedProjectIds(new Set())}
-                        style={{ fontSize: '0.72rem', padding: '2px 8px', background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#475569', borderRadius: '999px', cursor: 'pointer', fontWeight: 600 }}>
-                        Bỏ tất cả
-                      </button>
-                    </div>
+              {/* project selector */}
+              <div>
+                {secH('📦 Chọn dự án đưa vào báo cáo',
+                  `${selectedProjectIds.size}/${activeProjects.length} dự án được chọn`,
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button type="button" onClick={() => setSelectedProjectIds(new Set(activeProjects.map(p => p.id)))}
+                      style={{ fontSize: '12px', padding: '4px 12px', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', borderRadius: '999px', cursor: 'pointer', fontWeight: 600 }}>
+                      Chọn tất cả
+                    </button>
+                    <button type="button" onClick={() => setSelectedProjectIds(new Set())}
+                      style={{ fontSize: '12px', padding: '4px 12px', background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#475569', borderRadius: '999px', cursor: 'pointer', fontWeight: 600 }}>
+                      Bỏ tất cả
+                    </button>
                   </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                    {activeProjects.map(p => {
-                      const isSelected = selectedProjectIds.has(p.id);
-                      const isPriority = priorityProjectIds.has(p.id);
+                )}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {activeProjects.map(p => {
+                    const isSelected = selectedProjectIds.has(p.id);
+                    const isPriority = priorityProjectIds.has(p.id);
+                    return (
+                      <div key={p.id} style={{
+                        display: 'flex', alignItems: 'center', gap: '6px',
+                        padding: '6px 12px', borderRadius: '10px', cursor: 'pointer',
+                        background: isSelected ? (isPriority ? '#fef9c3' : '#eff6ff') : '#f8fafc',
+                        border: `1.5px solid ${isSelected ? (isPriority ? '#fde047' : '#bfdbfe') : '#e2e8f0'}`,
+                        transition: 'all .15s', userSelect: 'none',
+                      }}>
+                        <input type="checkbox" checked={isSelected}
+                          onChange={e => {
+                            const next = new Set(selectedProjectIds);
+                            if (e.target.checked) next.add(p.id);
+                            else { next.delete(p.id); setPriorityProjectIds(prev => { const n = new Set(prev); n.delete(p.id); return n; }); }
+                            setSelectedProjectIds(next);
+                          }}
+                          style={{ accentColor: '#1d4ed8', cursor: 'pointer', width: '14px', height: '14px' }} />
+                        <span style={{ fontSize: '13px', fontWeight: isSelected ? 600 : 400, color: isSelected ? '#1e40af' : '#64748b' }}>
+                          {p.name}
+                        </span>
+                        {isSelected && (
+                          <button type="button"
+                            onClick={e => { e.stopPropagation(); setPriorityProjectIds(prev => { const n = new Set(prev); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; }); }}
+                            title={isPriority ? 'Bỏ trọng điểm' : 'Đánh dấu trọng điểm'}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0', color: isPriority ? '#ca8a04' : '#cbd5e1', lineHeight: 1, display: 'flex' }}>
+                            <Star size={13} fill={isPriority ? '#ca8a04' : 'none'} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '8px' }}>
+                  💡 Nhấn <Star size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> để đánh dấu dự án trọng điểm — hiển thị nổi bật trong báo cáo.
+                </div>
+              </div>
+
+              {/* project progress list */}
+              {(form.projectProgress || []).length > 0 && (
+                <div>
+                  {secH('📋 Tiến độ dự án đã chọn', 'Chỉnh sửa trực tiếp — progress tự tính từ task con')}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {(form.projectProgress || []).map((p, idx) => {
+                      const pColor = p.progress >= 80 ? '#16a34a' : p.progress >= 40 ? '#6366f1' : '#ea580c';
+                      const pBg = p.progress >= 80 ? '#f0fdf4' : p.progress >= 40 ? '#eff6ff' : '#fef2f2';
                       return (
-                        <div key={p.id} style={{
-                          display: 'flex', alignItems: 'center', gap: '4px',
-                          padding: '4px 10px', borderRadius: '8px',
-                          background: isSelected ? (isPriority ? '#fef9c3' : '#eff6ff') : '#f8fafc',
-                          border: `1px solid ${isSelected ? (isPriority ? '#fde047' : '#bfdbfe') : '#e2e8f0'}`,
-                          cursor: 'pointer', userSelect: 'none', transition: 'all .15s',
+                        <div key={idx} style={{
+                          background: '#fff', border: '1.5px solid #e2e8f0',
+                          borderLeft: `4px solid ${pColor}`, borderRadius: '12px', overflow: 'hidden',
                         }}>
-                          <input type="checkbox" checked={isSelected}
-                            onChange={e => {
-                              const next = new Set(selectedProjectIds);
-                              if (e.target.checked) next.add(p.id); else { next.delete(p.id); setPriorityProjectIds(prev => { const n = new Set(prev); n.delete(p.id); return n; }); }
-                              setSelectedProjectIds(next);
-                            }}
-                            style={{ accentColor: '#1d4ed8', cursor: 'pointer' }}
-                          />
-                          <span style={{ fontSize: '0.8rem', fontWeight: isSelected ? 600 : 400, color: isSelected ? '#1e40af' : 'var(--text-tertiary)' }}>
-                            {p.name}
-                          </span>
-                          {isSelected && (
-                            <button type="button"
-                              onClick={e => { e.stopPropagation(); setPriorityProjectIds(prev => { const n = new Set(prev); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; }); }}
-                              title={isPriority ? 'Bỏ trọng điểm' : 'Đánh dấu trọng điểm'}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', color: isPriority ? '#ca8a04' : '#cbd5e1', lineHeight: 1 }}>
-                              <Star size={12} fill={isPriority ? '#ca8a04' : 'none'} />
-                            </button>
+                          {/* project header row */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto', gap: '10px', alignItems: 'center', padding: '14px 16px', background: pBg }}>
+                            <div style={{ fontWeight: 700, fontSize: '14px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              {p.isPriority && <Star size={12} fill="#ca8a04" color="#ca8a04" />}
+                              {p.projectName}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ fontSize: '12px', color: '#64748b' }}>Tiến độ:</span>
+                              <input type="number" min="0" max="100"
+                                value={p.progress}
+                                onChange={e => updateProjectProgress(idx, 'progress', parseInt(e.target.value) || 0)}
+                                style={{ width: '60px', textAlign: 'center', fontWeight: 800, fontSize: '14px', color: pColor,
+                                  border: `1.5px solid ${pColor}33`, borderRadius: '6px', padding: '3px 6px', outline: 'none', background: '#fff' }} />
+                              <span style={{ fontWeight: 700, color: pColor }}>%</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span style={{ fontSize: '12px', color: '#64748b' }}>Done:</span>
+                              <input type="number" min="0" value={p.tasksCompleted}
+                                onChange={e => updateProjectProgress(idx, 'tasksCompleted', parseInt(e.target.value) || 0)}
+                                style={{ width: '60px', textAlign: 'center', fontSize: '13px', border: '1.5px solid #e2e8f0', borderRadius: '6px', padding: '3px 6px', outline: 'none', fontWeight: 600 }} />
+                              <span style={{ color: '#94a3b8' }}>/</span>
+                              <input type="number" min="0" value={p.tasksTotal}
+                                onChange={e => updateProjectProgress(idx, 'tasksTotal', parseInt(e.target.value) || 0)}
+                                style={{ width: '60px', textAlign: 'center', fontSize: '13px', border: '1.5px solid #e2e8f0', borderRadius: '6px', padding: '3px 6px', outline: 'none', fontWeight: 600 }} />
+                            </div>
+                            <input value={p.notes || ''}
+                              onChange={e => updateProjectProgress(idx, 'notes', e.target.value)}
+                              placeholder="Ghi chú tiến độ..."
+                              style={{ fontSize: '12px', border: '1.5px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', outline: 'none', width: '220px', fontFamily: 'inherit' }} />
+                          </div>
+                          {/* progress bar */}
+                          <div style={{ height: '5px', background: '#f1f5f9' }}>
+                            <div style={{ height: '100%', width: `${p.progress}%`, background: `linear-gradient(90deg,${pColor},${pColor}99)`, transition: 'width .3s' }} />
+                          </div>
+                          {/* task breakdown */}
+                          {p.taskBreakdown && p.taskBreakdown.length > 0 && (
+                            <div style={{ padding: '10px 16px', background: '#fafafa', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '.3px', marginBottom: '4px' }}>📌 HẠNG MỤC TASK</div>
+                              {p.taskBreakdown.map((t, ti) => {
+                                const tProg = t.targetLinks > 0 ? Math.min(100, Math.round((t.completedLinks / t.targetLinks) * 100)) : 0;
+                                const tColor = tProg >= 80 ? '#16a34a' : tProg >= 40 ? '#6366f1' : '#ea580c';
+                                return (
+                                  <div key={ti} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto', gap: '8px', alignItems: 'center', padding: '6px 8px', background: '#fff', borderRadius: '7px', border: '1px solid #f1f5f9' }}>
+                                    <span style={{ fontSize: '12px', color: '#334155', fontWeight: 500 }}>↳ {t.taskName}</span>
+                                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>Đạt:</span>
+                                    <input type="number" min="0" value={t.completedLinks}
+                                      onChange={e => {
+                                        const pp2 = [...(form.projectProgress || [])];
+                                        const bd = [...(pp2[idx].taskBreakdown || [])];
+                                        const newC = parseInt(e.target.value) || 0;
+                                        bd[ti] = { ...bd[ti], completedLinks: newC, progress: bd[ti].targetLinks > 0 ? Math.min(100, Math.round((newC / bd[ti].targetLinks) * 100)) : 0 };
+                                        pp2[idx] = { ...pp2[idx], taskBreakdown: bd, progress: Math.round(bd.reduce((s, x) => s + x.progress, 0) / bd.length), tasksCompleted: bd.reduce((s, x) => s + x.completedLinks, 0), tasksTotal: bd.reduce((s, x) => s + x.targetLinks, 0) };
+                                        setForm(f => ({ ...f, projectProgress: pp2 }));
+                                      }}
+                                      style={{ width: '52px', textAlign: 'center', fontSize: '12px', border: '1.5px solid #e2e8f0', borderRadius: '5px', padding: '2px 4px', outline: 'none', fontWeight: 600 }} />
+                                    <span style={{ color: '#94a3b8', fontSize: '11px' }}>/ {t.targetLinks}</span>
+                                    <span style={{ fontWeight: 700, fontSize: '12px', minWidth: '38px', textAlign: 'right', color: tColor }}>{tProg}%</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           )}
                         </div>
                       );
                     })}
                   </div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: '8px' }}>
-                    💡 Nhấn <Star size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> để đánh dấu dự án trọng điểm — sẽ hiển thị nổi bật trong báo cáo.
-                  </div>
                 </div>
+              )}
+            </div>
+          )}
 
-                {/* project progress */}
-                <div>
-                  <label className="form-label" style={{ fontWeight: 700 }}>📊 Tiến độ dự án đã chọn</label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {(form.projectProgress || []).map((p, idx) => (
-                      <div key={idx} style={{ padding: '10px 12px', background: 'var(--bg-secondary)',
-                        borderRadius: 'var(--radius-md)', borderLeft: `3px solid ${p.progress >= 80 ? '#16a34a' : p.progress >= 40 ? '#6366f1' : '#ea580c'}` }}>
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: '0.85rem', fontWeight: 600, minWidth: '120px' }}>{p.projectName}</span>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <input className="form-input" type="number" min="0" max="100" value={p.progress}
-                              onChange={e => updateProjectProgress(idx, 'progress', parseInt(e.target.value) || 0)}
-                              style={{ width: '56px', fontSize: '0.82rem', padding: '4px 6px' }} />
-                            <span style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>%</span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <input className="form-input" type="number" min="0" value={p.tasksCompleted}
-                              onChange={e => updateProjectProgress(idx, 'tasksCompleted', parseInt(e.target.value) || 0)}
-                              style={{ width: '56px', fontSize: '0.82rem', padding: '4px 6px' }} />
-                            <span style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>/</span>
-                            <input className="form-input" type="number" min="0" value={p.tasksTotal}
-                              onChange={e => updateProjectProgress(idx, 'tasksTotal', parseInt(e.target.value) || 0)}
-                              style={{ width: '56px', fontSize: '0.82rem', padding: '4px 6px' }} />
-                          </div>
-                          <input className="form-input" value={p.notes || ''}
-                            onChange={e => updateProjectProgress(idx, 'notes', e.target.value)}
-                            style={{ flex: 1, minWidth: '100px', fontSize: '0.82rem', padding: '4px 6px' }} placeholder="Ghi chú..." />
-                        </div>
-                        {/* mini progress bar in form */}
-                        <div style={{ marginTop: '6px', height: '4px', borderRadius: '999px', background: 'var(--border-light)', overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${p.progress}%`, borderRadius: '999px',
-                            background: p.progress >= 80 ? '#16a34a' : p.progress >= 40 ? '#6366f1' : '#ea580c',
-                            transition: 'width .3s' }} />
-                        </div>
-                        {/* task breakdown */}
-                        {p.taskBreakdown && p.taskBreakdown.length > 0 && (
-                          <div style={{ marginTop: '8px', paddingLeft: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            {p.taskBreakdown.map((t, ti) => {
-                              const updProg = t.targetLinks > 0 ? Math.min(100, Math.round((t.completedLinks / t.targetLinks) * 100)) : 0;
-                              return (
-                                <div key={ti} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.76rem' }}>
-                                  <span style={{ flex: 1, color: 'var(--text-secondary)' }}>↳ {t.taskName}</span>
-                                  <input type="number" min="0" className="form-input" value={t.completedLinks}
-                                    onChange={e => {
-                                      const pp = [...(form.projectProgress || [])];
-                                      const bd = [...(pp[idx].taskBreakdown || [])];
-                                      const newC = parseInt(e.target.value) || 0;
-                                      bd[ti] = { ...bd[ti], completedLinks: newC, progress: bd[ti].targetLinks > 0 ? Math.min(100, Math.round((newC / bd[ti].targetLinks) * 100)) : 0 };
-                                      pp[idx] = { ...pp[idx], taskBreakdown: bd, progress: Math.round(bd.reduce((s, x) => s + x.progress, 0) / bd.length), tasksCompleted: bd.reduce((s, x) => s + x.completedLinks, 0), tasksTotal: bd.reduce((s, x) => s + x.targetLinks, 0) };
-                                      setForm(f => ({ ...f, projectProgress: pp }));
-                                    }}
-                                    style={{ width: '46px', fontSize: '0.74rem', padding: '2px 4px', textAlign: 'center' }} />
-                                  <span style={{ color: 'var(--text-tertiary)' }}>/</span>
-                                  <input type="number" min="0" className="form-input" value={t.targetLinks}
-                                    onChange={e => {
-                                      const pp = [...(form.projectProgress || [])];
-                                      const bd = [...(pp[idx].taskBreakdown || [])];
-                                      const newT = parseInt(e.target.value) || 0;
-                                      bd[ti] = { ...bd[ti], targetLinks: newT, progress: newT > 0 ? Math.min(100, Math.round((bd[ti].completedLinks / newT) * 100)) : 0 };
-                                      pp[idx] = { ...pp[idx], taskBreakdown: bd, progress: Math.round(bd.reduce((s, x) => s + x.progress, 0) / bd.length), tasksCompleted: bd.reduce((s, x) => s + x.completedLinks, 0), tasksTotal: bd.reduce((s, x) => s + x.targetLinks, 0) };
-                                      setForm(f => ({ ...f, projectProgress: pp }));
-                                    }}
-                                    style={{ width: '46px', fontSize: '0.74rem', padding: '2px 4px', textAlign: 'center' }} />
-                                  <span style={{ fontWeight: 700, minWidth: 36, textAlign: 'right',
-                                    color: updProg >= 100 ? '#16a34a' : updProg >= 50 ? '#6366f1' : '#ea580c' }}>
-                                    {updProg}%
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+          {/* ═══════════ TAB 2: NHẬN XÉT ═══════════ */}
+          {tab === 'review' && (
+            <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {secH('💬 Nhận xét & Đánh giá', 'Viết thủ công hoặc để AI hỗ trợ ở tab tiếp theo')}
+
+              {[
+                { label: '📝 Tổng quan tuần', field: 'summary' as const, rows: 4, note: '(tự động gợi ý — sửa lại nếu cần)', bg: 'linear-gradient(135deg,#f8faff,#f0f4ff)', border: '#c7d2fe' },
+                { label: '💡 Nhận xét từ số liệu', field: 'insights' as const, rows: 4, note: '(tự động tạo)', bg: 'linear-gradient(135deg,#eff6ff,#dbeafe)', border: '#bfdbfe' },
+                { label: '🚧 Điểm nghẽn', field: 'bottlenecks' as const, rows: 5, note: '(tự động phát hiện)', bg: 'linear-gradient(135deg,#fff1f2,#ffe4e6)', border: '#fda4af' },
+                { label: '⚠️ Việc cần chốt / Cần hỗ trợ', field: 'issues' as const, rows: 3, note: '', bg: 'linear-gradient(135deg,#fff7ed,#fed7aa)', border: '#fdba74' },
+              ].map(f => (
+                <div key={f.field}>
+                  <label style={{ fontWeight: 700, fontSize: '13px', color: '#0f172a', display: 'block', marginBottom: '8px' }}>
+                    {f.label}
+                    {f.note && <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 400, marginLeft: '6px' }}>{f.note}</span>}
+                  </label>
+                  <textarea
+                    value={(form[f.field] as string) || ''}
+                    onChange={e => setForm(prev => ({ ...prev, [f.field]: e.target.value }))}
+                    rows={f.rows}
+                    style={ta(f.bg, f.border)}
+                    onFocus={e => { e.currentTarget.style.borderColor = '#6366f1'; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = f.border; }}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ═══════════ TAB 3: AI & CHỐT ═══════════ */}
+          {tab === 'finalize' && (
+            <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {secH('✅ AI đánh giá & Chốt báo cáo', 'Cấu hình ngữ cảnh AI rồi nhấn "AI gợi ý" để tự động điền')}
+
+              {/* AI config */}
+              <div style={{ padding: '16px 18px', background: '#f8fafc', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontWeight: 700, fontSize: '13px', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+                  <Sparkles size={14} color="#7c3aed" /> Cấu hình ngữ cảnh AI (tùy chọn)
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '5px' }}>📝 Thông tin bổ sung cho AI</label>
+                    <textarea value={tempAdditionalContext} onChange={e => setTempAdditionalContext(e.target.value)}
+                      rows={3} placeholder="Ví dụ: Campaign tiêm chủng đột biến, sự cố kĩ thuật duyệt bài chậm..."
+                      style={ta('#fff', '#e2e8f0')} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '5px' }}>💬 Dán comment khách hàng thô</label>
+                    <textarea value={tempCustomerComments} onChange={e => setTempCustomerComments(e.target.value)}
+                      rows={3} placeholder={'Bài duyệt hơi chậm so với deadline\nNội dung sản phẩm rất chuẩn...'}
+                      style={ta('#fff', '#e2e8f0')} />
                   </div>
                 </div>
+                <button type="button" onClick={handleAIGenerate} disabled={aiLoading}
+                  style={{ marginTop: '10px', display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 18px',
+                    borderRadius: '8px', cursor: aiLoading ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: '13px',
+                    background: aiLoading ? '#e2e8f0' : 'linear-gradient(135deg,#faf5ff,#ede9fe)',
+                    border: '1px solid #c4b5fd', color: '#7c3aed', transition: 'all .15s' }}>
+                  <Sparkles size={14} /> {aiLoading ? 'Đang tạo đánh giá AI...' : '✨ AI gợi ý nhận xét'}
+                </button>
               </div>
-            )}
 
-            {/* ── TAB 2: Nhận xét ── */}
-            {tab === 'review' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">📝 Tổng quan tuần
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', fontWeight: 400, marginLeft: '6px' }}>
-                      (tự động gợi ý — sửa lại nếu cần)
-                    </span>
-                  </label>
-                  <textarea className="form-textarea" value={form.summary || ''} onChange={e => setForm(f => ({ ...f, summary: e.target.value }))}
-                    rows={3} placeholder="Tóm tắt tình hình chung..."
-                    style={{ background: 'linear-gradient(135deg,#f8faff,#f0f4ff)', borderColor: '#c7d2fe' }} />
-                </div>
-
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span>💡 Nhận xét từ số liệu
-                      <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', fontWeight: 400, marginLeft: '6px' }}>(tự động tạo)</span>
-                    </span>
-                  </label>
-                  <textarea className="form-textarea" value={form.insights || ''} onChange={e => setForm(f => ({ ...f, insights: e.target.value }))}
-                    rows={3} style={{ background: 'linear-gradient(135deg,#eff6ff,#dbeafe)', borderColor: '#bfdbfe' }} />
-                </div>
-
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">🚧 Điểm nghẽn
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', fontWeight: 400, marginLeft: '6px' }}>(tự động phát hiện)</span>
-                  </label>
-                  <textarea className="form-textarea" value={form.bottlenecks || ''} onChange={e => setForm(f => ({ ...f, bottlenecks: e.target.value }))}
-                    rows={2} style={{ background: 'linear-gradient(135deg,#fef2f2,#fee2e2)', borderColor: '#fecaca' }} />
-                </div>
-
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">⚠️ Việc cần chốt / Cần hỗ trợ</label>
-                  <textarea className="form-textarea" value={form.issues || ''} onChange={e => setForm(f => ({ ...f, issues: e.target.value }))}
-                    rows={2} style={{ background: 'linear-gradient(135deg,#fff7ed,#fed7aa)', borderColor: '#fdba74' }} />
-                </div>
-              </div>
-            )}
-
-            {/* ── TAB 3: Chốt ── */}
-            {tab === 'finalize' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {/* AI Input Context Configuration */}
-                <div style={{ padding: '14px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Sparkles size={14} color="#7c3aed" /> Cấu hình ngữ cảnh AI (tùy chọn)
-                  </div>
-                  
-                  <div className="form-group" style={{ margin: 0 }}>
-                    <label className="form-label" style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>📝 Thông tin bổ sung cho AI</label>
-                    <textarea 
-                      className="form-textarea" 
-                      value={tempAdditionalContext} 
-                      onChange={e => setTempAdditionalContext(e.target.value)}
-                      rows={2} 
-                      placeholder="Ví dụ: Campaign tiêm chủng đột biến, sự cố kĩ thuật duyệt bài chậm..."
-                      style={{ fontSize: '0.8rem', padding: '6px 8px', background: '#fff' }} 
-                    />
-                  </div>
-
-                  <div className="form-group" style={{ margin: 0 }}>
-                    <label className="form-label" style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>💬 Dán comment khách hàng thô (mỗi dòng một nhận xét)</label>
-                    <textarea 
-                      className="form-textarea" 
-                      value={tempCustomerComments} 
-                      onChange={e => setTempCustomerComments(e.target.value)}
-                      rows={2} 
-                      placeholder="Bài duyệt hơi chậm so với deadline&#10;Nội dung sản phẩm rất chuẩn..."
-                      style={{ fontSize: '0.8rem', padding: '6px 8px', background: '#fff' }} 
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group" style={{ margin: 0 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label className="form-label" style={{ margin: 0 }}>🤖 AI đánh giá</label>
-                    <button type="button" className="btn btn-secondary" onClick={handleAIGenerate} disabled={aiLoading}
-                      style={{ fontSize: '0.78rem', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: '4px',
-                        background: 'linear-gradient(135deg,#faf5ff,#ede9fe)', border: '1px solid #c4b5fd', color: '#7c3aed' }}>
-                      <Sparkles size={12} /> {aiLoading ? 'Đang tạo...' : 'AI gợi ý'}
-                    </button>
-                  </div>
-                  <textarea className="form-textarea" value={form.aiAssessment || ''} onChange={e => setForm(f => ({ ...f, aiAssessment: e.target.value }))}
-                    rows={3} placeholder="Bấm 'AI gợi ý' hoặc nhập thủ công..."
-                    style={{ background: 'linear-gradient(135deg,#faf5ff,#ede9fe)', borderColor: '#c4b5fd' }} />
-                </div>
-
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">👤 Manager đánh giá (chỉnh sửa tự do)</label>
-                  <textarea className="form-textarea" value={form.managerAssessment || ''} onChange={e => setForm(f => ({ ...f, managerAssessment: e.target.value }))}
-                    rows={3} placeholder="Nhận xét, đánh giá của bạn..."
-                    style={{ background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', borderColor: '#bbf7d0' }} />
-                </div>
-
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label className="form-label">📋 Kế hoạch tuần tới
-                    <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', fontWeight: 400, marginLeft: '6px' }}>(tự động gợi ý)</span>
-                  </label>
-                  <textarea className="form-textarea" value={form.nextWeekPlan || ''} onChange={e => setForm(f => ({ ...f, nextWeekPlan: e.target.value }))}
-                    rows={3} style={{ background: 'linear-gradient(135deg,#f8faff,#f0f4ff)', borderColor: '#c7d2fe' }} />
-                </div>
-
-                {/* lock toggle */}
-                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.88rem', cursor: 'pointer',
-                  padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)',
-                  background: form.locked ? 'linear-gradient(135deg,#fef2f2,#fee2e2)' : 'var(--bg-secondary)' }}>
-                  <input type="checkbox" checked={form.locked || false} onChange={e => setForm(f => ({ ...f, locked: e.target.checked }))}
-                    style={{ accentColor: form.locked ? '#dc2626' : 'var(--primary-500)', width: 16, height: 16 }} />
-                  {form.locked ? <Lock size={15} color="#dc2626" /> : <Unlock size={15} color="var(--text-tertiary)" />}
-                  <span style={{ fontWeight: 600, color: form.locked ? '#dc2626' : 'var(--text-primary)' }}>
-                    {form.locked ? 'Đã chốt — không thể sửa sau khi lưu' : 'Chốt báo cáo (không sửa được sau khi chốt)'}
-                  </span>
+              {/* AI assessment */}
+              <div>
+                <label style={{ fontWeight: 700, fontSize: '13px', color: '#0f172a', display: 'block', marginBottom: '8px' }}>
+                  🤖 AI đánh giá
                 </label>
+                <textarea value={form.aiAssessment || ''} onChange={e => setForm(f => ({ ...f, aiAssessment: e.target.value }))}
+                  rows={5} placeholder="Bấm 'AI gợi ý' hoặc nhập thủ công..."
+                  style={ta('linear-gradient(135deg,#faf5ff,#ede9fe)', '#c4b5fd')} />
               </div>
-            )}
-          </div>
 
-          {/* footer */}
-          <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              {tabIdx > 0 && (
-                <button type="button" className="btn btn-secondary" onClick={() => setTab(TABS[tabIdx - 1].key)}>
-                  ← {TABS[tabIdx - 1].label}
+              {/* manager assessment */}
+              <div>
+                <label style={{ fontWeight: 700, fontSize: '13px', color: '#0f172a', display: 'block', marginBottom: '8px' }}>
+                  👤 Manager đánh giá <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 400 }}>(chỉnh sửa tự do)</span>
+                </label>
+                <textarea value={form.managerAssessment || ''} onChange={e => setForm(f => ({ ...f, managerAssessment: e.target.value }))}
+                  rows={4} placeholder="Nhận xét, đánh giá của bạn..."
+                  style={ta('linear-gradient(135deg,#f0fdf4,#dcfce7)', '#bbf7d0')} />
+              </div>
+
+              {/* next week plan */}
+              <div>
+                <label style={{ fontWeight: 700, fontSize: '13px', color: '#0f172a', display: 'block', marginBottom: '8px' }}>
+                  📋 Kế hoạch tuần tới <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 400 }}>(tự động gợi ý)</span>
+                </label>
+                <textarea value={form.nextWeekPlan || ''} onChange={e => setForm(f => ({ ...f, nextWeekPlan: e.target.value }))}
+                  rows={5}
+                  style={ta('linear-gradient(135deg,#f8faff,#f0f4ff)', '#c7d2fe')} />
+              </div>
+
+              {/* lock */}
+              <label style={{
+                display: 'flex', alignItems: 'center', gap: '12px', fontSize: '14px', cursor: 'pointer',
+                padding: '14px 16px', borderRadius: '12px', border: '1.5px solid',
+                borderColor: form.locked ? '#fecaca' : '#e2e8f0',
+                background: form.locked ? 'linear-gradient(135deg,#fef2f2,#fee2e2)' : '#f8fafc',
+                transition: 'all .2s',
+              }}>
+                <input type="checkbox" checked={form.locked || false} onChange={e => setForm(f => ({ ...f, locked: e.target.checked }))}
+                  style={{ accentColor: form.locked ? '#dc2626' : '#6366f1', width: 18, height: 18 }} />
+                {form.locked ? <Lock size={16} color="#dc2626" /> : <Unlock size={16} color="#94a3b8" />}
+                <div>
+                  <div style={{ fontWeight: 700, color: form.locked ? '#dc2626' : '#334155' }}>
+                    {form.locked ? 'Đã chốt — không thể sửa sau khi lưu' : 'Chốt báo cáo'}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
+                    Sau khi chốt, báo cáo sẽ được khóa và không thể chỉnh sửa.
+                  </div>
+                </div>
+              </label>
+
+              {/* bottom save CTA */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '4px' }}>
+                <button type="button" onClick={handleSave} disabled={saving}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '12px 32px',
+                    borderRadius: '12px', border: 'none', cursor: 'pointer', fontWeight: 800, fontSize: '15px',
+                    background: saving ? '#94a3b8' : 'linear-gradient(135deg,#16a34a,#15803d)',
+                    color: '#fff', boxShadow: '0 6px 20px rgba(22,163,74,.35)', transition: 'all .15s' }}>
+                  <Save size={17} /> {saving ? 'Đang lưu...' : item ? '✅ Cập nhật báo cáo' : '✅ Lưu báo cáo'}
                 </button>
-              )}
+              </div>
             </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button type="button" className="btn btn-secondary" onClick={onClose}>Hủy</button>
-              {tabIdx < TABS.length - 1 ? (
-                <button type="button" className="btn btn-primary" onClick={() => setTab(TABS[tabIdx + 1].key)}
-                  style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', border: 'none' }}>
-                  {TABS[tabIdx + 1].label} →
-                </button>
-              ) : (
-                <button type="submit" className="btn btn-primary"
-                  style={{ background: 'linear-gradient(135deg,#16a34a,#15803d)', border: 'none', boxShadow: '0 4px 12px rgba(22,163,74,.3)' }}>
-                  <Save size={14} /> {item ? 'Cập nhật' : 'Lưu báo cáo'}
-                </button>
-              )}
-            </div>
-          </div>
-        </form>
+          )}
+
+        </div>
       </div>
     </div>
   );
