@@ -15,6 +15,7 @@ import WeeklyReportViewer from './WeeklyReportViewer';
 import { generateWeeklyReport, type ReportContext } from '@/shared/services/aiService';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import ErrorBoundary from '@/shared/components/ErrorBoundary';
 
 /* ─────────────────────────────────────────────────────────── helpers ── */
 
@@ -342,21 +343,23 @@ export default function ReportsPage() {
       )}
 
       {showForm && (
-        <ReportFormModal
-          item={editItem}
-          currentWeekStart={currentWeekStart}
-          onClose={() => { setShowForm(false); setEditItem(null); }}
-          onSave={data => {
-            if (editItem) {
-              updateWeeklyReport(editItem.id, { ...data, updatedAt: new Date().toISOString() });
-              toast.success('Đã cập nhật báo cáo');
-            } else {
-              addWeeklyReport({ ...data, id: generateId(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as WeeklyReport);
-              toast.success('Đã tạo báo cáo');
-            }
-            setShowForm(false); setEditItem(null);
-          }}
-        />
+        <ErrorBoundary fallbackTitle="Lỗi hiển thị Form Báo cáo">
+          <ReportFormModal
+            item={editItem}
+            currentWeekStart={currentWeekStart}
+            onClose={() => { setShowForm(false); setEditItem(null); }}
+            onSave={data => {
+              if (editItem) {
+                updateWeeklyReport(editItem.id, { ...data, updatedAt: new Date().toISOString() });
+                toast.success('Đã cập nhật báo cáo');
+              } else {
+                addWeeklyReport({ ...data, id: generateId(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as WeeklyReport);
+                toast.success('Đã tạo báo cáo');
+              }
+              setShowForm(false); setEditItem(null);
+            }}
+          />
+        </ErrorBoundary>
       )}
 
       {/* ── full-screen report viewer ── */}
@@ -868,15 +871,15 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
 
   /* ── project selector state ── */
   const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(() => {
-    if (item) return new Set(item.projectProgress.map(p => p.projectId));
+    if (item) return new Set((item.projectProgress || []).map(p => p.projectId));
     const set = new Set<string>();
     const wsTime = new Date(currentWeekStart).getTime();
     const weTime = wsTime + 7 * 86400000;
-    availableProjects.forEach(p => {
+    (availableProjects || []).forEach(p => {
       if (p.status === 'Đang chạy') {
         set.add(p.id);
       } else if (p.status === 'Hoàn thành') {
-        const hasSubThisWeek = submissions.some(s => {
+        const hasSubThisWeek = (submissions || []).some(s => {
           if (s.projectId !== p.id) return false;
           const t = new Date(s.submittedAt).getTime();
           return !isNaN(t) && t >= wsTime && t <= weTime;
@@ -889,24 +892,28 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
 
   const [priorityProjectIds, setPriorityProjectIds] = useState<Set<string>>(
     () => item
-      ? new Set(item.projectProgress.filter(p => p.isPriority).map(p => p.projectId))
+      ? new Set((item.projectProgress || []).filter(p => p.isPriority).map(p => p.projectId))
       : new Set<string>()
   );
 
   /* ── recalc helper ── */
-  const recalcFromWeek = (weekStart: string, targetProjectIds?: Set<string>) => {
+  const recalcFromWeek = (
+    weekStart: string,
+    targetProjectIds?: Set<string>,
+    existingProjectProgress?: WeeklyReportProject[]
+  ) => {
     const ws = new Date(weekStart);
     const we = new Date(ws); we.setDate(ws.getDate() + 6); we.setHours(23, 59, 59);
-    const inRange = submissions.filter(s => {
+    const inRange = (submissions || []).filter(s => {
       const t = new Date(s.submittedAt).getTime();
       return !isNaN(t) && t >= ws.getTime() && t <= we.getTime();
     });
-    const totalLinks  = inRange.reduce((sum, s) => sum + s.links.length, 0);
-    const totalPoints = inRange.reduce((sum, s) => sum + s.totalPoints, 0);
+    const totalLinks  = inRange.reduce((sum, s) => sum + (s.links ? s.links.length : 0), 0);
+    const totalPoints = inRange.reduce((sum, s) => sum + (s.totalPoints || 0), 0);
 
     const activeSelected = targetProjectIds || selectedProjectIds;
     const filteredProjects = availableProjects.filter(p => activeSelected.has(p.id));
-    const existingMap = new Map((form?.projectProgress || []).map(p => [p.projectId, p]));
+    const existingMap = new Map((existingProjectProgress || []).map(p => [p.projectId, p]));
     const pp: WeeklyReportProject[] = filteredProjects.map(p => {
       const isPriority = priorityProjectIds.has(p.id);
       return buildWeeklyReportProject(p, isPriority, existingMap.get(p.id));
@@ -994,13 +1001,13 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
   });
 
   const handleWeekChange = (weekStart: string) => {
-    const auto = recalcFromWeek(weekStart);
+    const auto = recalcFromWeek(weekStart, undefined, form.projectProgress);
     setForm(f => ({ ...f, weekStart, ...auto, summary: auto.autoSummary, nextWeekPlan: auto.autoNextPlan }));
   };
 
   const handleAutoFill = () => {
     if (!form.weekStart) return;
-    const auto = recalcFromWeek(form.weekStart);
+    const auto = recalcFromWeek(form.weekStart, undefined, form.projectProgress);
     setForm(f => ({ ...f, ...auto, summary: auto.autoSummary, nextWeekPlan: auto.autoNextPlan }));
     toast.success('Đã làm mới toàn bộ số liệu!');
   };
@@ -1009,7 +1016,7 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
     setAiLoading(true);
     try {
       const ws = form.weekStart || currentWeekStart;
-      const calc = recalcFromWeek(ws);
+      const calc = recalcFromWeek(ws, undefined, form.projectProgress);
       const getQty = (s: typeof submissions[0]) => (s.quantity && s.quantity > 0) ? s.quantity : s.links.length;
       const cat = (s: typeof submissions[0]) => {
         const t = s.taskType || '';

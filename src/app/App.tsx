@@ -6,6 +6,8 @@ import AppRouter from './router';
 import { useAppStore, initFromDB } from '@/shared/store/appStore';
 import '@/index.css';
 
+import ErrorBoundary from '@/shared/components/ErrorBoundary';
+
 export default function App() {
   const { currentUser } = useAppStore();
   const [bootstrapped, setBootstrapped] = useState(false);
@@ -42,7 +44,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <Toaster position="top-right" />
-      <AppRouter />
+      <ErrorBoundary>
+        <AppRouter />
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }
