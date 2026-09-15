@@ -55,7 +55,9 @@ export default function Projects() {
         return !!t.taskType || !!t.taskDetail;
       });
       const mode = t.trackingMode || 'link';
-      if (mode === 'quantity' && t.targetQuantity && t.targetQuantity > 0) {
+      if (mode === 'milestone') {
+        return t.manualProgress !== undefined ? t.manualProgress : (t.isDone ? 100 : 0);
+      } else if (mode === 'quantity' && t.targetQuantity && t.targetQuantity > 0) {
         const qty = matched.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
         return Math.min(100, Math.round((qty / t.targetQuantity) * 100));
       } else if (t.targetLinks > 0) {

@@ -4,7 +4,8 @@ import { useAppStore } from '@/shared/store/appStore';
 import { formatFullCurrency, getProjectStatusClass, makeId } from '@/shared/utils/helpers';
 import {
   ArrowLeft, Calendar, Users, Wallet, FileText, ExternalLink,
-  Plus, X, Edit3, Trash2, Save, Target, Sparkles, ChevronDown, ChevronUp
+  Plus, X, Edit3, Trash2, Save, Target, Sparkles, ChevronDown, ChevronUp,
+  CheckCircle2, Circle
 } from 'lucide-react';
 import type { ProjectTask, Expense } from '@/shared/types';
 import { defaultTaskCategories } from '@/shared/data/mockData';
@@ -94,7 +95,9 @@ export default function ProjectDetailPage() {
       // Progress: dựa theo trackingMode của task
       let progress = 0;
       const mode = t.trackingMode || 'link';
-      if (mode === 'quantity' && t.targetQuantity && t.targetQuantity > 0) {
+      if (mode === 'milestone') {
+        progress = t.manualProgress !== undefined ? t.manualProgress : (t.isDone ? 100 : 0);
+      } else if (mode === 'quantity' && t.targetQuantity && t.targetQuantity > 0) {
         progress = Math.min(100, Math.round((qty / t.targetQuantity) * 100));
       } else if (t.targetLinks > 0) {
         progress = Math.min(100, Math.round((links / t.targetLinks) * 100));
@@ -290,13 +293,22 @@ export default function ProjectDetailPage() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>{task.name}</span>
-                      {task.taskType && (
-                        <span style={{ fontSize: '0.72rem', background: 'var(--primary-50)', color: 'var(--primary-700)',
-                                       padding: '1px 8px', borderRadius: 4 }}>{task.taskType}</span>
-                      )}
-                      {task.taskDetail && (
-                        <span style={{ fontSize: '0.72rem', background: 'var(--accent-100)', color: 'var(--primary-700)',
-                                       padding: '1px 8px', borderRadius: 4 }}>{task.taskDetail}</span>
+                      {task.trackingMode === 'milestone' ? (
+                        <span style={{ fontSize: '0.72rem', background: '#fef3c7', color: '#b45309',
+                                       border: '1px solid #fde68a', padding: '1px 8px', borderRadius: 4, fontWeight: 700 }}>
+                          🎯 MỐC DỰ ÁN (QUẢN LÝ)
+                        </span>
+                      ) : (
+                        <>
+                          {task.taskType && (
+                            <span style={{ fontSize: '0.72rem', background: 'var(--primary-50)', color: 'var(--primary-700)',
+                                           padding: '1px 8px', borderRadius: 4 }}>{task.taskType}</span>
+                          )}
+                          {task.taskDetail && (
+                            <span style={{ fontSize: '0.72rem', background: 'var(--accent-100)', color: 'var(--primary-700)',
+                                           padding: '1px 8px', borderRadius: 4 }}>{task.taskDetail}</span>
+                          )}
+                        </>
                       )}
                       {task.assignees && task.assignees.length > 0 && (
                         <span style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>
@@ -313,11 +325,11 @@ export default function ProjectDetailPage() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem',
                                     marginBottom: '3px', color: 'var(--text-secondary)' }}>
                         <span>
-                          {(task.trackingMode || 'link') === 'quantity'
-                            ? `📊 ${qty} / ${task.targetQuantity ?? 0} SL`
-                            : `🔗 ${links} / ${task.targetLinks} link`}
-                          {' '}· {points.toFixed(0)}đ
-                          {(task.trackingMode || 'link') === 'quantity' && links > 0 && ` · ${links} link`}
+                          {task.trackingMode === 'milestone'
+                            ? (progress >= 100 ? '✓ Đã hoàn thành mốc · Không tính KPI' : '🎯 Đang thực hiện mốc · Không tính KPI')
+                            : (task.trackingMode || 'link') === 'quantity'
+                            ? `📊 ${qty} / ${task.targetQuantity ?? 0} SL · ${points.toFixed(0)}đ${links > 0 ? ` · ${links} link` : ''}`
+                            : `🔗 ${links} / ${task.targetLinks} link · ${points.toFixed(0)}đ`}
                         </span>
                         <span style={{ fontWeight: 700,
                                        color: progress >= 100 ? 'var(--success)' : progress >= 50 ? 'var(--primary-600)' : 'var(--warning)' }}>
@@ -330,11 +342,45 @@ export default function ProjectDetailPage() {
                       </div>
                     </div>
                   </div>
-                  <button className="btn btn-icon btn-ghost"
-                    onClick={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
-                    title="Xem submissions">
-                    {expandedTask === task.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                  </button>
+                  {task.trackingMode === 'milestone' ? (
+                    <button
+                      className="btn btn-sm"
+                      style={{
+                        background: progress >= 100 ? '#ecfdf5' : '#f8fafc',
+                        color: progress >= 100 ? '#16a34a' : '#475569',
+                        border: `1.5px solid ${progress >= 100 ? '#86efac' : '#cbd5e1'}`,
+                        borderRadius: '6px',
+                        fontWeight: 700,
+                        fontSize: '0.78rem',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        padding: '6px 12px',
+                        cursor: isManagerOrLeader ? 'pointer' : 'default',
+                        whiteSpace: 'nowrap',
+                      }}
+                      onClick={() => {
+                        if (!isManagerOrLeader) return;
+                        const nextDone = progress < 100;
+                        updateProjectTask(task.id, {
+                          isDone: nextDone,
+                          manualProgress: nextDone ? 100 : 0,
+                          status: nextDone ? 'done' : 'todo',
+                        });
+                        toast.success(nextDone ? `Đã hoàn thành mốc "${task.name}"` : `Chuyển về chưa hoàn thành`);
+                      }}
+                      title={isManagerOrLeader ? "Nhấn để chuyển trạng thái Hoàn thành / Chưa hoàn thành" : ""}
+                    >
+                      {progress >= 100 ? <CheckCircle2 size={15} color="#16a34a" /> : <Circle size={15} color="#94a3b8" />}
+                      {progress >= 100 ? 'Đã xong' : 'Đánh dấu xong'}
+                    </button>
+                  ) : (
+                    <button className="btn btn-icon btn-ghost"
+                      onClick={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
+                      title="Xem submissions">
+                      {expandedTask === task.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+                  )}
                   {isManagerOrLeader && (
                     <>
                       <button className="btn btn-icon btn-ghost"
@@ -578,8 +624,8 @@ function TaskFormModal({ item, projectId, members, onClose, onSave }: {
                             border: '1px solid var(--border-medium)' }}>
                 <button type="button" onClick={() => setForm({ ...form, trackingMode: 'link' })}
                   style={{
-                    flex: 1, padding: '10px 16px', border: 'none', cursor: 'pointer',
-                    fontWeight: 600, fontSize: '0.85rem', transition: 'all 0.2s ease',
+                    flex: 1, padding: '10px 12px', border: 'none', cursor: 'pointer',
+                    fontWeight: 600, fontSize: '0.82rem', transition: 'all 0.2s ease',
                     background: mode === 'link' ? 'var(--primary-500)' : 'var(--bg-secondary)',
                     color: mode === 'link' ? '#fff' : 'var(--text-secondary)',
                   }}>
@@ -587,39 +633,102 @@ function TaskFormModal({ item, projectId, members, onClose, onSave }: {
                 </button>
                 <button type="button" onClick={() => setForm({ ...form, trackingMode: 'quantity' })}
                   style={{
-                    flex: 1, padding: '10px 16px', border: 'none', cursor: 'pointer',
+                    flex: 1, padding: '10px 12px', border: 'none', cursor: 'pointer',
                     borderLeft: '1px solid var(--border-medium)',
-                    fontWeight: 600, fontSize: '0.85rem', transition: 'all 0.2s ease',
+                    fontWeight: 600, fontSize: '0.82rem', transition: 'all 0.2s ease',
                     background: mode === 'quantity' ? 'var(--primary-500)' : 'var(--bg-secondary)',
                     color: mode === 'quantity' ? '#fff' : 'var(--text-secondary)',
                   }}>
                   📊 Theo số lượng
                 </button>
+                <button type="button" onClick={() => setForm({
+                    ...form,
+                    trackingMode: 'milestone',
+                    targetLinks: 1,
+                    targetQuantity: 1,
+                    isDone: form.isDone ?? false,
+                    manualProgress: form.manualProgress ?? (form.isDone ? 100 : 0),
+                  })}
+                  style={{
+                    flex: 1.1, padding: '10px 12px', border: 'none', cursor: 'pointer',
+                    borderLeft: '1px solid var(--border-medium)',
+                    fontWeight: 600, fontSize: '0.82rem', transition: 'all 0.2s ease',
+                    background: mode === 'milestone' ? '#d97706' : 'var(--bg-secondary)',
+                    color: mode === 'milestone' ? '#fff' : 'var(--text-secondary)',
+                  }}>
+                  🎯 Mốc / Quản lý
+                </button>
               </div>
             </div>
 
             {/* ── Target field based on tracking mode ── */}
-            <div className="form-group">
-              {mode === 'link' ? (
-                <>
-                  <label className="form-label">Target số link *</label>
-                  <input className="form-input" type="number" min="1" value={form.targetLinks ?? 1}
-                    onChange={e => setForm({ ...form, targetLinks: parseInt(e.target.value) || 1 })} />
-                  <p style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: 4 }}>
-                    Tiến độ = số link đã submit / target link
-                  </p>
-                </>
-              ) : (
-                <>
-                  <label className="form-label">Target số lượng *</label>
-                  <input className="form-input" type="number" min="1" value={form.targetQuantity ?? 1}
-                    onChange={e => setForm({ ...form, targetQuantity: parseInt(e.target.value) || 1 })} />
-                  <p style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: 4 }}>
-                    Tiến độ = số lượng đã submit ở KPI / target số lượng
-                  </p>
-                </>
-              )}
-            </div>
+            {mode === 'milestone' ? (
+              <div style={{ padding: '14px', background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 'var(--radius-sm)', marginBottom: '16px' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#92400e', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  🎯 Chế độ Mốc dự án / Task Quản lý
+                </div>
+                <div style={{ fontSize: '0.78rem', color: '#b45309', lineHeight: 1.5, marginBottom: '12px' }}>
+                  Dành cho task của Manager/Leader (Lập plan, Brief, Kickoff, Nghiệm thu, Duyệt bài...).
+                  <b> Đóng góp vào % tiến độ dự án nhưng hoàn toàn KHÔNG tính vào KPI sản xuất của team.</b>
+                </div>
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.84rem', fontWeight: 600, color: '#92400e' }}>
+                    <input
+                      type="checkbox"
+                      checked={form.isDone ?? (form.manualProgress === 100)}
+                      onChange={e => {
+                        const checked = e.target.checked;
+                        setForm({
+                          ...form,
+                          isDone: checked,
+                          manualProgress: checked ? 100 : 0,
+                          status: checked ? 'done' : 'todo',
+                        });
+                      }}
+                    />
+                    Đã hoàn thành mốc này
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '0.78rem', color: '#78350f' }}>Tiến độ:</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={form.manualProgress ?? (form.isDone ? 100 : 0)}
+                      onChange={e => {
+                        const p = Math.max(0, Math.min(100, parseInt(e.target.value) || 0));
+                        setForm({
+                          ...form,
+                          manualProgress: p,
+                          isDone: p === 100,
+                          status: p === 100 ? 'done' : p > 0 ? 'in_progress' : 'todo',
+                        });
+                      }}
+                      style={{ width: '60px', padding: '3px 6px', borderRadius: '4px', border: '1px solid #fde68a', textAlign: 'center', fontWeight: 700 }}
+                    />
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#78350f' }}>%</span>
+                  </div>
+                </div>
+              </div>
+            ) : mode === 'link' ? (
+              <div className="form-group">
+                <label className="form-label">Target số link *</label>
+                <input className="form-input" type="number" min="1" value={form.targetLinks ?? 1}
+                  onChange={e => setForm({ ...form, targetLinks: parseInt(e.target.value) || 1 })} />
+                <p style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: 4 }}>
+                  Tiến độ = số link đã submit / target link
+                </p>
+              </div>
+            ) : (
+              <div className="form-group">
+                <label className="form-label">Target số lượng *</label>
+                <input className="form-input" type="number" min="1" value={form.targetQuantity ?? 1}
+                  onChange={e => setForm({ ...form, targetQuantity: parseInt(e.target.value) || 1 })} />
+                <p style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: 4 }}>
+                  Tiến độ = số lượng đã submit ở KPI / target số lượng
+                </p>
+              </div>
+            )}
 
             <div className="form-row">
               <div className="form-group">
@@ -662,7 +771,9 @@ function TaskFormModal({ item, projectId, members, onClose, onSave }: {
             </div>
             <div style={{ padding: '10px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-sm)',
                           fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-              💡 {mode === 'link'
+              💡 {mode === 'milestone'
+                ? '🎯 Task quản lý: Cập nhật trực tiếp trạng thái Hoàn thành / % tiến độ ngay trên thẻ task. Hoàn toàn không sinh ra KPI hay làm lệch điểm/link của team.'
+                : mode === 'link'
                 ? 'Member submit link sẽ tự động cập nhật tiến độ task này.'
                 : 'Member submit KPI và nhập "Số lượng hoàn thành" sẽ tự động cập nhật tiến độ.'}
             </div>

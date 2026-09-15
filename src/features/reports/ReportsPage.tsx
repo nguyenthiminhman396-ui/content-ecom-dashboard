@@ -179,9 +179,13 @@ export default function ReportsPage() {
       `━━━━━━━━━━━━━━━━━━━━━━━━━━`,
       `📝 Tổng quan: ${report.summary}`,
       '', '📦 TIẾN ĐỘ DỰ ÁN:',
-      ...report.projectProgress.map(p =>
-        `  • ${p.projectName}: ${p.progress}% (${p.tasksCompleted}/${p.tasksTotal} việc)${p.notes ? ' — ' + p.notes : ''}`
-      ),
+      ...report.projectProgress.flatMap(p => {
+        const arr = [`  • ${p.projectName}: ${p.progress}% (${p.tasksCompleted}/${p.tasksTotal} việc)`];
+        if (p.remarks) arr.push(`    💬 Đánh giá: ${p.remarks}`);
+        if (p.attentionNotes) arr.push(`    ⚠️ Lưu ý: ${p.attentionNotes}`);
+        if (!p.remarks && !p.attentionNotes && p.notes) arr.push(`    ↳ ${p.notes}`);
+        return arr;
+      }),
       '', `📊 SỐ LIỆU: ${report.totalLinks} link | ${report.totalPoints.toFixed(0)} điểm | ${report.totalTasksCompleted} việc`,
       report.insights     ? `\n💡 NHẬN XÉT: ${report.insights}`                    : '',
       report.bottlenecks  ? `\n🚧 ĐIỂM NGHẼN: ${report.bottlenecks}`               : '',
@@ -208,6 +212,7 @@ export default function ReportsPage() {
       projectProgress: report.projectProgress.map(p => ({
         name: p.projectName, progress: p.progress,
         done: p.tasksCompleted, total: p.tasksTotal, notes: p.notes,
+        remarks: p.remarks, attentionNotes: p.attentionNotes,
       })),
       insights:    report.insights    || '',
       bottlenecks: report.bottlenecks || '',
@@ -797,20 +802,91 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
   onSave: (data: Partial<WeeklyReport>) => void;
 }) {
   const { projects, currentUser, projectTasks, submissions } = useAppStore();
-  const activeProjects = projects.filter(p => p.status === 'Đang chạy');
+  const availableProjects = useMemo(() => projects.filter(p => p.status !== 'Hủy'), [projects]);
+  const activeCount = useMemo(() => availableProjects.filter(p => p.status === 'Đang chạy').length, [availableProjects]);
+  const doneCount = useMemo(() => availableProjects.filter(p => p.status === 'Hoàn thành').length, [availableProjects]);
 
   const [tab, setTab] = useState<TabKey>('data');
+  const [projFilterTab, setProjFilterTab] = useState<'active' | 'done' | 'all'>('active');
   const [aiLoading, setAiLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [tempAdditionalContext, setTempAdditionalContext] = useState('');
   const [tempCustomerComments, setTempCustomerComments] = useState('');
 
+  /* ── build 1 project helper ── */
+  const buildWeeklyReportProject = (p: (typeof projects)[0], isPriority = false, existing?: WeeklyReportProject): WeeklyReportProject => {
+    const tasks   = projectTasks.filter(t => t.projectId === p.id);
+    const allSubs = submissions.filter(s => s.projectId === p.id);
+    const breakdown = tasks.map(t => {
+      const matched = allSubs.filter(s => {
+        if (s.projectTaskId === t.id) return true;
+        if (s.projectTaskId) return false;
+        if (t.taskType && s.taskType !== t.taskType) return false;
+        if (t.taskDetail && s.taskDetail !== t.taskDetail) return false;
+        return !!t.taskType || !!t.taskDetail;
+      });
+      const mode = t.trackingMode || 'link';
+      let completed = 0; let target = 1; let progress = 0;
+      if (mode === 'milestone') {
+        target = 1;
+        progress = t.manualProgress !== undefined ? t.manualProgress : (t.isDone ? 100 : 0);
+        completed = progress >= 100 ? 1 : (progress > 0 ? 0.5 : 0);
+      } else if (mode === 'quantity' && t.targetQuantity && t.targetQuantity > 0) {
+        completed = matched.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
+        target = t.targetQuantity;
+        progress = Math.min(100, Math.round((completed / target) * 100));
+      } else {
+        completed = matched.reduce((sum, s) => sum + s.links.length, 0);
+        target = Math.max(t.targetLinks, 1);
+        progress = Math.min(100, Math.round((completed / target) * 100));
+      }
+      return {
+        taskName: t.name,
+        targetLinks: target,
+        completedLinks: completed,
+        progress,
+        trackingMode: mode,
+        isMilestone: mode === 'milestone',
+      };
+    });
+    const tasksTotal     = breakdown.reduce((s, x) => s + x.targetLinks, 0);
+    const tasksCompleted = Math.round(breakdown.reduce((s, x) => s + x.completedLinks, 0));
+    const progress       = breakdown.length > 0
+      ? Math.round(breakdown.reduce((s, x) => s + x.progress, 0) / breakdown.length)
+      : (p.manualProgress ?? (p.status === 'Hoàn thành' ? 100 : 0));
+    return {
+      projectId: p.id, projectName: p.name,
+      progress: existing?.progress ?? progress,
+      tasksCompleted: existing?.tasksCompleted ?? tasksCompleted,
+      tasksTotal: existing?.tasksTotal ?? tasksTotal,
+      notes: existing?.notes ?? '',
+      remarks: existing?.remarks ?? '',
+      attentionNotes: existing?.attentionNotes ?? '',
+      taskBreakdown: breakdown, isPriority,
+    };
+  };
+
   /* ── project selector state ── */
-  const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(
-    () => item
-      ? new Set(item.projectProgress.map(p => p.projectId))
-      : new Set(projects.filter(p => p.status === 'Đang chạy').map(p => p.id))
-  );
+  const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(() => {
+    if (item) return new Set(item.projectProgress.map(p => p.projectId));
+    const set = new Set<string>();
+    const wsTime = new Date(currentWeekStart).getTime();
+    const weTime = wsTime + 7 * 86400000;
+    availableProjects.forEach(p => {
+      if (p.status === 'Đang chạy') {
+        set.add(p.id);
+      } else if (p.status === 'Hoàn thành') {
+        const hasSubThisWeek = submissions.some(s => {
+          if (s.projectId !== p.id) return false;
+          const t = new Date(s.submittedAt).getTime();
+          return !isNaN(t) && t >= wsTime && t <= weTime;
+        });
+        if (hasSubThisWeek) set.add(p.id);
+      }
+    });
+    return set;
+  });
+
   const [priorityProjectIds, setPriorityProjectIds] = useState<Set<string>>(
     () => item
       ? new Set(item.projectProgress.filter(p => p.isPriority).map(p => p.projectId))
@@ -818,7 +894,7 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
   );
 
   /* ── recalc helper ── */
-  const recalcFromWeek = (weekStart: string) => {
+  const recalcFromWeek = (weekStart: string, targetProjectIds?: Set<string>) => {
     const ws = new Date(weekStart);
     const we = new Date(ws); we.setDate(ws.getDate() + 6); we.setHours(23, 59, 59);
     const inRange = submissions.filter(s => {
@@ -828,40 +904,12 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
     const totalLinks  = inRange.reduce((sum, s) => sum + s.links.length, 0);
     const totalPoints = inRange.reduce((sum, s) => sum + s.totalPoints, 0);
 
-    const filteredProjects = activeProjects.filter(p => selectedProjectIds.size === 0 || selectedProjectIds.has(p.id));
+    const activeSelected = targetProjectIds || selectedProjectIds;
+    const filteredProjects = availableProjects.filter(p => activeSelected.has(p.id));
+    const existingMap = new Map((form?.projectProgress || []).map(p => [p.projectId, p]));
     const pp: WeeklyReportProject[] = filteredProjects.map(p => {
-      const tasks   = projectTasks.filter(t => t.projectId === p.id);
-      const allSubs = submissions.filter(s => s.projectId === p.id);
-      const breakdown = tasks.map(t => {
-        const matched = allSubs.filter(s => {
-          if (s.projectTaskId === t.id) return true;
-          if (s.projectTaskId) return false;
-          if (t.taskType && s.taskType !== t.taskType) return false;
-          if (t.taskDetail && s.taskDetail !== t.taskDetail) return false;
-          return !!t.taskType || !!t.taskDetail;
-        });
-        const mode = t.trackingMode || 'link';
-        let completed = 0; let target = 1; let progress = 0;
-        if (mode === 'quantity' && t.targetQuantity && t.targetQuantity > 0) {
-          completed = matched.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
-          target = t.targetQuantity;
-          progress = Math.min(100, Math.round((completed / target) * 100));
-        } else {
-          completed = matched.reduce((sum, s) => sum + s.links.length, 0);
-          target = Math.max(t.targetLinks, 1);
-          progress = Math.min(100, Math.round((completed / target) * 100));
-        }
-        return { taskName: t.name, targetLinks: target, completedLinks: completed, progress };
-      });
-      const tasksTotal     = breakdown.reduce((s, x) => s + x.targetLinks, 0);
-      const tasksCompleted = breakdown.reduce((s, x) => s + x.completedLinks, 0);
-      const progress       = breakdown.length > 0
-        ? Math.round(breakdown.reduce((s, x) => s + x.progress, 0) / breakdown.length)
-        : (p.manualProgress ?? 0);
-      return {
-        projectId: p.id, projectName: p.name, progress, tasksCompleted, tasksTotal, notes: '',
-        taskBreakdown: breakdown, isPriority: priorityProjectIds.has(p.id),
-      };
+      const isPriority = priorityProjectIds.has(p.id);
+      return buildWeeklyReportProject(p, isPriority, existingMap.get(p.id));
     });
 
     const teamMap = new Map<string, { color: string; items: Map<string, { links: number; points: number }> }>();
@@ -1064,6 +1112,76 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
     pp[idx] = { ...pp[idx], [field]: value };
     setForm(f => ({ ...f, projectProgress: pp }));
   };
+
+  const toggleProjectSelect = (p: (typeof projects)[0]) => {
+    const isSelected = selectedProjectIds.has(p.id);
+    const nextSelected = new Set(selectedProjectIds);
+    let nextPP = [...(form.projectProgress || [])];
+
+    if (isSelected) {
+      nextSelected.delete(p.id);
+      nextPP = nextPP.filter(x => x.projectId !== p.id);
+      setPriorityProjectIds(prev => {
+        const n = new Set(prev);
+        n.delete(p.id);
+        return n;
+      });
+    } else {
+      nextSelected.add(p.id);
+      if (!nextPP.some(x => x.projectId === p.id)) {
+        nextPP.push(buildWeeklyReportProject(p, priorityProjectIds.has(p.id)));
+      }
+    }
+
+    setSelectedProjectIds(nextSelected);
+    setForm(f => ({ ...f, projectProgress: nextPP }));
+  };
+
+  const toggleProjectPriority = (pId: string) => {
+    const nextPriority = new Set(priorityProjectIds);
+    const willBePriority = !nextPriority.has(pId);
+    if (willBePriority) nextPriority.add(pId);
+    else nextPriority.delete(pId);
+    setPriorityProjectIds(nextPriority);
+
+    const nextPP = (form.projectProgress || []).map(p =>
+      p.projectId === pId ? { ...p, isPriority: willBePriority } : p
+    );
+    setForm(f => ({ ...f, projectProgress: nextPP }));
+  };
+
+  const displayedProjects = useMemo(() => {
+    if (projFilterTab === 'active') return availableProjects.filter(p => p.status === 'Đang chạy');
+    if (projFilterTab === 'done') return availableProjects.filter(p => p.status === 'Hoàn thành');
+    return availableProjects;
+  }, [availableProjects, projFilterTab]);
+
+  const handleSelectAll = (projs: (typeof projects)) => {
+    const nextSelected = new Set(selectedProjectIds);
+    const nextPP = [...(form.projectProgress || [])];
+
+    projs.forEach(p => {
+      nextSelected.add(p.id);
+      if (!nextPP.some(x => x.projectId === p.id)) {
+        nextPP.push(buildWeeklyReportProject(p, priorityProjectIds.has(p.id)));
+      }
+    });
+
+    setSelectedProjectIds(nextSelected);
+    setForm(f => ({ ...f, projectProgress: nextPP }));
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedProjectIds(new Set());
+    setPriorityProjectIds(new Set());
+    setForm(f => ({ ...f, projectProgress: [] }));
+  };
+
+  const selectedProjectsAvgProgress = useMemo(() => {
+    const pps = form.projectProgress || [];
+    if (pps.length === 0) return 0;
+    return Math.round(pps.reduce((s, p) => s + p.progress, 0) / pps.length);
+  }, [form.projectProgress]);
 
   /* ── SAVE — works from any tab ── */
   const handleSave = () => {
@@ -1270,57 +1388,135 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
               </div>
 
               {/* project selector */}
-              <div>
+              <div style={{ background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: '14px', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,.03)' }}>
                 {secH('📦 Chọn dự án đưa vào báo cáo',
-                  `${selectedProjectIds.size}/${activeProjects.length} dự án được chọn`,
+                  `Đã chọn ${selectedProjectIds.size}/${availableProjects.length} dự án · Tiến độ TB: ${selectedProjectsAvgProgress}%`,
                   <div style={{ display: 'flex', gap: '6px' }}>
-                    <button type="button" onClick={() => setSelectedProjectIds(new Set(activeProjects.map(p => p.id)))}
-                      style={{ fontSize: '12px', padding: '4px 12px', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', borderRadius: '999px', cursor: 'pointer', fontWeight: 600 }}>
-                      Chọn tất cả
+                    <button type="button" onClick={() => handleSelectAll(displayedProjects)}
+                      style={{ fontSize: '12px', padding: '5px 12px', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>
+                      Chọn tab này ({displayedProjects.length})
                     </button>
-                    <button type="button" onClick={() => setSelectedProjectIds(new Set())}
-                      style={{ fontSize: '12px', padding: '4px 12px', background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#475569', borderRadius: '999px', cursor: 'pointer', fontWeight: 600 }}>
-                      Bỏ tất cả
+                    <button type="button" onClick={handleDeselectAll}
+                      style={{ fontSize: '12px', padding: '5px 12px', background: '#f8fafc', border: '1px solid #cbd5e1', color: '#64748b', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>
+                      Bỏ chọn tất cả
                     </button>
                   </div>
                 )}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                  {activeProjects.map(p => {
-                    const isSelected = selectedProjectIds.has(p.id);
-                    const isPriority = priorityProjectIds.has(p.id);
+
+                {/* Filter tabs: Đang chạy / Hoàn thành / Tất cả */}
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+                  {[
+                    { key: 'active', label: `Đang chạy (${activeCount})` },
+                    { key: 'done', label: `Đã hoàn thành (${doneCount})` },
+                    { key: 'all', label: `Tất cả (${availableProjects.length})` },
+                  ].map(tabItem => {
+                    const isActive = projFilterTab === tabItem.key;
                     return (
-                      <div key={p.id} style={{
-                        display: 'flex', alignItems: 'center', gap: '6px',
-                        padding: '6px 12px', borderRadius: '10px', cursor: 'pointer',
-                        background: isSelected ? (isPriority ? '#fef9c3' : '#eff6ff') : '#f8fafc',
-                        border: `1.5px solid ${isSelected ? (isPriority ? '#fde047' : '#bfdbfe') : '#e2e8f0'}`,
-                        transition: 'all .15s', userSelect: 'none',
-                      }}>
-                        <input type="checkbox" checked={isSelected}
-                          onChange={e => {
-                            const next = new Set(selectedProjectIds);
-                            if (e.target.checked) next.add(p.id);
-                            else { next.delete(p.id); setPriorityProjectIds(prev => { const n = new Set(prev); n.delete(p.id); return n; }); }
-                            setSelectedProjectIds(next);
-                          }}
-                          style={{ accentColor: '#1d4ed8', cursor: 'pointer', width: '14px', height: '14px' }} />
-                        <span style={{ fontSize: '13px', fontWeight: isSelected ? 600 : 400, color: isSelected ? '#1e40af' : '#64748b' }}>
-                          {p.name}
-                        </span>
-                        {isSelected && (
-                          <button type="button"
-                            onClick={e => { e.stopPropagation(); setPriorityProjectIds(prev => { const n = new Set(prev); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; }); }}
-                            title={isPriority ? 'Bỏ trọng điểm' : 'Đánh dấu trọng điểm'}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0', color: isPriority ? '#ca8a04' : '#cbd5e1', lineHeight: 1, display: 'flex' }}>
-                            <Star size={13} fill={isPriority ? '#ca8a04' : 'none'} />
-                          </button>
-                        )}
-                      </div>
+                      <button
+                        key={tabItem.key}
+                        type="button"
+                        onClick={() => setProjFilterTab(tabItem.key as 'active' | 'done' | 'all')}
+                        style={{
+                          fontSize: '12px',
+                          fontWeight: isActive ? 700 : 500,
+                          padding: '4px 12px',
+                          borderRadius: '20px',
+                          border: isActive ? '1.5px solid #2563eb' : '1px solid #e2e8f0',
+                          background: isActive ? '#eff6ff' : '#fff',
+                          color: isActive ? '#1d4ed8' : '#64748b',
+                          cursor: 'pointer',
+                          transition: 'all .15s',
+                        }}>
+                        {tabItem.label}
+                      </button>
                     );
                   })}
                 </div>
-                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '8px' }}>
-                  💡 Nhấn <Star size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> để đánh dấu dự án trọng điểm — hiển thị nổi bật trong báo cáo.
+
+                {/* Project chips list */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {displayedProjects.length === 0 ? (
+                    <div style={{ fontSize: '13px', color: '#94a3b8', padding: '12px 0' }}>
+                      Không có dự án nào trong mục này.
+                    </div>
+                  ) : (
+                    displayedProjects.map(p => {
+                      const isSelected = selectedProjectIds.has(p.id);
+                      const isPriority = priorityProjectIds.has(p.id);
+                      const currentProgress = form.projectProgress?.find(x => x.projectId === p.id)?.progress ?? p.manualProgress ?? (p.status === 'Hoàn thành' ? 100 : 0);
+                      const isDone = p.status === 'Hoàn thành';
+                      const isPaused = p.status === 'Tạm dừng';
+
+                      return (
+                        <div
+                          key={p.id}
+                          onClick={() => toggleProjectSelect(p)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '8px',
+                            padding: '6px 12px', borderRadius: '10px', cursor: 'pointer',
+                            background: isSelected ? (isPriority ? '#fef9c3' : '#eff6ff') : '#f8fafc',
+                            border: `1.5px solid ${isSelected ? (isPriority ? '#fde047' : '#bfdbfe') : '#e2e8f0'}`,
+                            transition: 'all .15s', userSelect: 'none',
+                          }}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleProjectSelect(p)}
+                            onClick={e => e.stopPropagation()}
+                            style={{ accentColor: '#1d4ed8', cursor: 'pointer', width: '14px', height: '14px' }}
+                          />
+                          <span style={{ fontSize: '13px', fontWeight: isSelected ? 600 : 500, color: isSelected ? '#1e40af' : '#475569' }}>
+                            {p.name}
+                          </span>
+
+                          {/* Status badge */}
+                          {isDone ? (
+                            <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '4px', background: '#dcfce7', color: '#15803d', fontWeight: 700 }}>
+                              ✓ Xong
+                            </span>
+                          ) : isPaused ? (
+                            <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '4px', background: '#fef3c7', color: '#b45309', fontWeight: 600 }}>
+                              Tạm dừng
+                            </span>
+                          ) : null}
+
+                          {/* Progress pill */}
+                          <span style={{
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            color: currentProgress >= 80 ? '#16a34a' : currentProgress >= 40 ? '#2563eb' : '#ea580c',
+                            background: currentProgress >= 80 ? '#f0fdf4' : currentProgress >= 40 ? '#f0f9ff' : '#fff7ed',
+                            padding: '1px 5px',
+                            borderRadius: '4px',
+                          }}>
+                            {currentProgress}%
+                          </span>
+
+                          {/* Priority Star */}
+                          {isSelected && (
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.stopPropagation();
+                                toggleProjectPriority(p.id);
+                              }}
+                              title={isPriority ? 'Bỏ trọng điểm' : 'Đánh dấu trọng điểm'}
+                              style={{
+                                background: 'none', border: 'none', cursor: 'pointer', padding: '0',
+                                color: isPriority ? '#ca8a04' : '#cbd5e1', lineHeight: 1, display: 'flex',
+                              }}>
+                              <Star size={13} fill={isPriority ? '#ca8a04' : 'none'} />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <div>💡 Dự án được chọn sẽ xuất hiện trong báo cáo và tính vào tiến độ trung bình (<b>{selectedProjectsAvgProgress}%</b>).</div>
+                  <div>💡 Với dự án mới tạo (chưa triển khai), bạn có thể bỏ chọn để không kéo giảm tiến độ chung của toàn team.</div>
                 </div>
               </div>
 
@@ -1338,34 +1534,32 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
                           borderLeft: `4px solid ${pColor}`, borderRadius: '12px', overflow: 'hidden',
                         }}>
                           {/* project header row */}
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto', gap: '10px', alignItems: 'center', padding: '14px 16px', background: pBg }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: pBg, flexWrap: 'wrap', gap: '10px' }}>
                             <div style={{ fontWeight: 700, fontSize: '14px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
                               {p.isPriority && <Star size={12} fill="#ca8a04" color="#ca8a04" />}
                               {p.projectName}
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span style={{ fontSize: '12px', color: '#64748b' }}>Tiến độ:</span>
-                              <input type="number" min="0" max="100"
-                                value={p.progress}
-                                onChange={e => updateProjectProgress(idx, 'progress', parseInt(e.target.value) || 0)}
-                                style={{ width: '60px', textAlign: 'center', fontWeight: 800, fontSize: '14px', color: pColor,
-                                  border: `1.5px solid ${pColor}33`, borderRadius: '6px', padding: '3px 6px', outline: 'none', background: '#fff' }} />
-                              <span style={{ fontWeight: 700, color: pColor }}>%</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ fontSize: '12px', color: '#64748b' }}>Tiến độ:</span>
+                                <input type="number" min="0" max="100"
+                                  value={p.progress}
+                                  onChange={e => updateProjectProgress(idx, 'progress', parseInt(e.target.value) || 0)}
+                                  style={{ width: '60px', textAlign: 'center', fontWeight: 800, fontSize: '14px', color: pColor,
+                                    border: `1.5px solid ${pColor}33`, borderRadius: '6px', padding: '3px 6px', outline: 'none', background: '#fff' }} />
+                                <span style={{ fontWeight: 700, color: pColor }}>%</span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <span style={{ fontSize: '12px', color: '#64748b' }}>Done:</span>
+                                <input type="number" min="0" value={p.tasksCompleted}
+                                  onChange={e => updateProjectProgress(idx, 'tasksCompleted', parseInt(e.target.value) || 0)}
+                                  style={{ width: '55px', textAlign: 'center', fontSize: '13px', border: '1.5px solid #e2e8f0', borderRadius: '6px', padding: '3px 6px', outline: 'none', fontWeight: 600 }} />
+                                <span style={{ color: '#94a3b8' }}>/</span>
+                                <input type="number" min="0" value={p.tasksTotal}
+                                  onChange={e => updateProjectProgress(idx, 'tasksTotal', parseInt(e.target.value) || 0)}
+                                  style={{ width: '55px', textAlign: 'center', fontSize: '13px', border: '1.5px solid #e2e8f0', borderRadius: '6px', padding: '3px 6px', outline: 'none', fontWeight: 600 }} />
+                              </div>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <span style={{ fontSize: '12px', color: '#64748b' }}>Done:</span>
-                              <input type="number" min="0" value={p.tasksCompleted}
-                                onChange={e => updateProjectProgress(idx, 'tasksCompleted', parseInt(e.target.value) || 0)}
-                                style={{ width: '60px', textAlign: 'center', fontSize: '13px', border: '1.5px solid #e2e8f0', borderRadius: '6px', padding: '3px 6px', outline: 'none', fontWeight: 600 }} />
-                              <span style={{ color: '#94a3b8' }}>/</span>
-                              <input type="number" min="0" value={p.tasksTotal}
-                                onChange={e => updateProjectProgress(idx, 'tasksTotal', parseInt(e.target.value) || 0)}
-                                style={{ width: '60px', textAlign: 'center', fontSize: '13px', border: '1.5px solid #e2e8f0', borderRadius: '6px', padding: '3px 6px', outline: 'none', fontWeight: 600 }} />
-                            </div>
-                            <input value={p.notes || ''}
-                              onChange={e => updateProjectProgress(idx, 'notes', e.target.value)}
-                              placeholder="Ghi chú tiến độ..."
-                              style={{ fontSize: '12px', border: '1.5px solid #e2e8f0', borderRadius: '6px', padding: '4px 8px', outline: 'none', width: '220px', fontFamily: 'inherit' }} />
                           </div>
                           {/* progress bar */}
                           <div style={{ height: '5px', background: '#f1f5f9' }}>
@@ -1376,11 +1570,14 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
                             <div style={{ padding: '10px 16px', background: '#fafafa', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                               <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', letterSpacing: '.3px', marginBottom: '4px' }}>📌 HẠNG MỤC TASK</div>
                               {p.taskBreakdown.map((t, ti) => {
+                                const isM = t.isMilestone || t.trackingMode === 'milestone';
                                 const tProg = t.targetLinks > 0 ? Math.min(100, Math.round((t.completedLinks / t.targetLinks) * 100)) : 0;
                                 const tColor = tProg >= 80 ? '#16a34a' : tProg >= 40 ? '#6366f1' : '#ea580c';
                                 return (
                                   <div key={ti} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto auto', gap: '8px', alignItems: 'center', padding: '6px 8px', background: '#fff', borderRadius: '7px', border: '1px solid #f1f5f9' }}>
-                                    <span style={{ fontSize: '12px', color: '#334155', fontWeight: 500 }}>↳ {t.taskName}</span>
+                                    <span style={{ fontSize: '12px', color: '#334155', fontWeight: 500 }}>
+                                      {isM ? '🎯 ' : '↳ '}{t.taskName}{isM ? ' (Mốc quản lý)' : ''}
+                                    </span>
                                     <span style={{ fontSize: '11px', color: '#94a3b8' }}>Đạt:</span>
                                     <input type="number" min="0" value={t.completedLinks}
                                       onChange={e => {
@@ -1399,6 +1596,77 @@ function ReportFormModal({ item, currentWeekStart, onClose, onSave }: {
                               })}
                             </div>
                           )}
+
+                          {/* Remarks & Attention Notes section */}
+                          <div style={{ padding: '12px 16px', background: '#fafbfc', borderTop: '1px solid #f1f5f9', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+                              {/* Remarks */}
+                              <div>
+                                <div style={{ fontSize: '11px', fontWeight: 700, color: '#2563eb', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  💬 NHẬN XÉT TIẾN ĐỘ & CHẤT LƯỢNG TUẦN
+                                </div>
+                                <textarea
+                                  rows={2}
+                                  value={p.remarks || ''}
+                                  onChange={e => updateProjectProgress(idx, 'remarks', e.target.value)}
+                                  placeholder="Đánh giá chất lượng, tiến độ, phản hồi brand..."
+                                  style={{
+                                    width: '100%', fontSize: '12px', border: '1.5px solid #bfdbfe',
+                                    borderRadius: '8px', padding: '6px 10px', outline: 'none',
+                                    fontFamily: 'inherit', resize: 'vertical', background: '#f8fafc',
+                                    boxSizing: 'border-box',
+                                  }}
+                                />
+                              </div>
+
+                              {/* Attention Notes */}
+                              <div>
+                                <div style={{ fontSize: '11px', fontWeight: 700, color: '#b45309', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  ⚠️ LƯU Ý & ĐIỂM NGHẼN CẦN THÁO GỠ
+                                </div>
+                                <textarea
+                                  rows={2}
+                                  value={p.attentionNotes || ''}
+                                  onChange={e => updateProjectProgress(idx, 'attentionNotes', e.target.value)}
+                                  placeholder="Lưu ý rủi ro, chờ duyệt, thiếu visual, deadline dồn..."
+                                  style={{
+                                    width: '100%', fontSize: '12px', border: '1.5px solid #fed7aa',
+                                    borderRadius: '8px', padding: '6px 10px', outline: 'none',
+                                    fontFamily: 'inherit', resize: 'vertical', background: '#fffbeb',
+                                    boxSizing: 'border-box',
+                                  }}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Quick chips */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '11px', color: '#94a3b8' }}>Gợi ý nhanh:</span>
+                              {[
+                                { text: '✓ Đúng tiến độ', target: 'remarks' as const },
+                                { text: '⏳ Chờ khách/brand duyệt', target: 'attentionNotes' as const },
+                                { text: '🎨 Thiếu visual/ảnh', target: 'attentionNotes' as const },
+                                { text: '👥 Cần thêm nhân sự', target: 'attentionNotes' as const },
+                                { text: '🔥 Đẩy mạnh tuần tới', target: 'remarks' as const },
+                              ].map(chip => (
+                                <button
+                                  key={chip.text}
+                                  type="button"
+                                  onClick={() => {
+                                    const curr = p[chip.target] || '';
+                                    const next = curr ? `${curr}; ${chip.text}` : chip.text;
+                                    updateProjectProgress(idx, chip.target, next);
+                                  }}
+                                  style={{
+                                    background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '999px',
+                                    padding: '2px 8px', fontSize: '11px', color: '#475569', cursor: 'pointer',
+                                  }}
+                                >
+                                  + {chip.text}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       );
                     })}

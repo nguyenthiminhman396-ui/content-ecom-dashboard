@@ -387,7 +387,9 @@ export default function DashboardPage() {
           // Tính tiến độ đúng theo trackingMode — giống ProjectDetailPage
           const mode = t.trackingMode || 'link';
           let tPct = 0;
-          if (mode === 'quantity' && t.targetQuantity && t.targetQuantity > 0) {
+          if (mode === 'milestone') {
+            tPct = t.manualProgress !== undefined ? t.manualProgress : (t.isDone ? 100 : 0);
+          } else if (mode === 'quantity' && t.targetQuantity && t.targetQuantity > 0) {
             const qty = matched.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
             tPct = Math.min(100, Math.round((qty / t.targetQuantity) * 100));
           } else if (t.targetLinks > 0) {

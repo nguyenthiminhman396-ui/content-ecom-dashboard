@@ -27,6 +27,7 @@ function pStatus(p: number): { label: string; color: string; bg: string; bar: st
   if (p < 30)  return { label: 'Risk',         color: '#dc2626', bg: '#fef2f2', bar: 'linear-gradient(90deg,#dc2626,#fb7185)' };
   if (p < 60)  return { label: 'Watch',        color: '#b45309', bg: '#fffbeb', bar: 'linear-gradient(90deg,#f59e0b,#f97316)' };
   if (p < 80)  return { label: 'In progress',  color: '#2563eb', bg: '#eff6ff', bar: 'linear-gradient(90deg,#2563eb,#7c3aed)' };
+  if (p >= 100) return { label: '✓ Hoàn thành', color: '#16a34a', bg: '#ecfdf5', bar: 'linear-gradient(90deg,#16a34a,#059669)' };
   return              { label: '✓ On track',   color: '#16a34a', bg: '#ecfdf5', bar: 'linear-gradient(90deg,#16a34a,#059669)' };
 }
 
@@ -51,10 +52,14 @@ function buildWeeklyHtml(report: WeeklyReport, weekLabel: string): string {
     const s = pStatus(p.progress);
     const backlog = Math.max(0, p.tasksTotal - p.tasksCompleted);
     const taskRows = (p.taskBreakdown || []).map(t => {
+      const isMilestone = t.isMilestone || t.trackingMode === 'milestone';
       const tColor = t.progress >= 80 ? '#16a34a' : t.progress >= 40 ? '#2563eb' : '#ea580c';
+      const tProgressText = isMilestone
+        ? (t.progress >= 100 ? '✓ Đã xong (Mốc)' : `${t.progress}% (Mốc)`)
+        : `${t.completedLinks}/${t.targetLinks} (${t.progress}%)`;
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#f8fafc;border-left:3px solid ${tColor};border-radius:0 6px 6px 0;margin-bottom:4px">
-        <span style="font-size:12px;color:#475569">↳ ${t.taskName}</span>
-        <span style="font-size:12px;font-weight:700;color:${tColor}">${t.completedLinks}/${t.targetLinks} (${t.progress}%)</span>
+        <span style="font-size:12px;color:#475569">${isMilestone ? '🎯' : '↳'} ${t.taskName}</span>
+        <span style="font-size:12px;font-weight:700;color:${tColor}">${tProgressText}</span>
       </div>`;
     }).join('');
     const priorityBadge = p.isPriority
@@ -76,6 +81,9 @@ function buildWeeklyHtml(report: WeeklyReport, weekLabel: string): string {
           <div style="height:100%;width:${p.progress}%;background:${s.bar};border-radius:999px"></div>
         </div>
         <b style="color:#0f172a;font-size:14px">${p.progress}%</b>
+        ${p.remarks ? `<div style="background:#f8fafc;border-left:3px solid #3b82f6;padding:6px 10px;border-radius:0 6px 6px 0;margin-top:8px;font-size:12px;color:#1e293b">💬 <b>Đánh giá:</b> ${p.remarks}</div>` : ''}
+        ${p.attentionNotes ? `<div style="background:#fffbeb;border-left:3px solid #f59e0b;padding:6px 10px;border-radius:0 6px 6px 0;margin-top:6px;font-size:12px;color:#92400e">⚠️ <b>Lưu ý/Rủi ro:</b> ${p.attentionNotes}</div>` : ''}
+        ${!p.remarks && !p.attentionNotes && p.notes ? `<div style="font-size:12px;color:#64748b;font-style:italic;margin-top:6px">↳ ${p.notes}</div>` : ''}
         ${taskRows ? `<div style="margin-top:10px">${taskRows}</div>` : ''}
       </div>`;
   }).join('');
@@ -532,8 +540,38 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave, i
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#64748b', fontSize: '12px' }}>
                       <b style={{ color: '#0f172a', fontSize: '14px' }}>{p.progress}%</b>
-                      <span style={{ fontStyle: 'italic', maxWidth: '70%', textAlign: 'right', lineHeight: 1.4 }}>{p.notes}</span>
+                      {!p.remarks && !p.attentionNotes && p.notes && (
+                        <span style={{ fontStyle: 'italic', maxWidth: '70%', textAlign: 'right', lineHeight: 1.4 }}>{p.notes}</span>
+                      )}
                     </div>
+
+                    {/* Remarks box */}
+                    {p.remarks && (
+                      <div style={{
+                        background: '#f8fafc', borderLeft: '3px solid #3b82f6',
+                        borderRadius: '0 8px 8px 0', padding: '8px 10px', marginTop: '8px',
+                        fontSize: '12px', color: '#1e293b',
+                      }}>
+                        <div style={{ fontWeight: 700, fontSize: '11px', color: '#1d4ed8', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          💬 ĐÁNH GIÁ TIẾN ĐỘ & CHẤT LƯỢNG
+                        </div>
+                        <div style={{ lineHeight: 1.5, whiteSpace: 'pre-line' }}>{p.remarks}</div>
+                      </div>
+                    )}
+
+                    {/* Attention / Risks box */}
+                    {p.attentionNotes && (
+                      <div style={{
+                        background: '#fffbeb', borderLeft: '3px solid #f59e0b',
+                        borderRadius: '0 8px 8px 0', padding: '8px 10px', marginTop: '6px',
+                        fontSize: '12px', color: '#92400e',
+                      }}>
+                        <div style={{ fontWeight: 700, fontSize: '11px', color: '#b45309', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          ⚠️ LƯU Ý & ĐIỂM NGHẼN CẦN THÁO GỠ
+                        </div>
+                        <div style={{ lineHeight: 1.5, whiteSpace: 'pre-line' }}>{p.attentionNotes}</div>
+                      </div>
+                    )}
 
                     {/* expandable task breakdown */}
                     {hasTasks && (
@@ -564,9 +602,13 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave, i
                         {isExpanded && (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
                             {p.taskBreakdown!.map((t, ti) => {
+                              const isMilestone = t.isMilestone || t.trackingMode === 'milestone';
                               const tColor = t.progress >= 80 ? '#10b981' : t.progress >= 40 ? '#2563eb' : '#f59e0b';
                               const tBg = t.progress >= 80 ? '#f0fdf4' : t.progress >= 40 ? '#eff6ff' : '#fffbeb';
                               const tBadge = t.progress >= 80 ? '#dcfce7' : t.progress >= 40 ? '#dbeafe' : '#fef3c7';
+                              const tBadgeText = isMilestone
+                                ? (t.progress >= 100 ? '✓ Xong (Mốc)' : `${t.progress}% (Mốc)`)
+                                : `${t.completedLinks}/${t.targetLinks} (${t.progress}%)`;
                               return (
                                 <div key={ti} style={{
                                   background: tBg,
@@ -576,10 +618,10 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave, i
                                 }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
                                     <span style={{ fontWeight: 700, fontSize: '12px', color: '#1e293b', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', maxWidth: '170px' }} title={t.taskName}>
-                                      {t.taskName}
+                                      {isMilestone ? '🎯 ' : ''}{t.taskName}
                                     </span>
                                     <span style={{ fontSize: '11px', fontWeight: 800, color: tColor, background: tBadge, padding: '2px 8px', borderRadius: '6px' }}>
-                                      {t.completedLinks}/{t.targetLinks} ({t.progress}%)
+                                      {tBadgeText}
                                     </span>
                                   </div>
                                   {t.targetLinks > 0 && (

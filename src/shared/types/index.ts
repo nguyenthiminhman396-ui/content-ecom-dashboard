@@ -62,22 +62,28 @@ export interface Site {
 // Tiến độ project = sum(submissions matching) / sum(targetLinks)
 // ============================================
 
-export type TaskTrackingMode = 'link' | 'quantity';
+export type TaskTrackingMode = 'link' | 'quantity' | 'milestone';
 
 export interface ProjectTask {
   id: string;
   projectId: string;
   name: string;
-  /** Chế độ tracking: 'link' = đếm link, 'quantity' = đếm số lượng */
+  /** Chế độ tracking: 'link' = đếm link, 'quantity' = đếm số lượng, 'milestone' = mốc quản lý (không tính KPI) */
   trackingMode?: TaskTrackingMode;
   /** Đầu việc — match với KPISubmission.taskType */
   taskType?: string;
   /** Chi tiết — match với KPISubmission.taskDetail. Nếu undefined → match mọi taskDetail trong taskType */
   taskDetail?: string;
-  /** Target số link cần hoàn thành */
+  /** Target số link cần hoàn thành (dùng khi trackingMode = 'link') */
   targetLinks: number;
   /** Target số lượng — dùng khi trackingMode = 'quantity' */
   targetQuantity?: number;
+  /** Đã hoàn thành (dùng cho milestone task hoặc cập nhật 1-click) */
+  isDone?: boolean;
+  /** Tiến độ thủ công 0-100% (nếu muốn tracking chi tiết theo %) */
+  manualProgress?: number;
+  /** Trạng thái: 'todo' | 'in_progress' | 'done' */
+  status?: 'todo' | 'in_progress' | 'done';
   /** Assignees — nhiều người được phân công */
   assignees?: string[];
   deadline?: string;
@@ -701,6 +707,10 @@ export interface WeeklyReportProject {
   tasksCompleted: number;
   tasksTotal: number;
   notes: string;
+  /** Nhận xét & đánh giá tiến độ / chất lượng tuần của dự án */
+  remarks?: string;
+  /** Lưu ý / Rủi ro / Điểm nghẽn cần tháo gỡ */
+  attentionNotes?: string;
   /** Dự án trọng điểm — hiển thị nổi bật trong báo cáo */
   isPriority?: boolean;
   /** Chi tiết tiến độ task cứng — auto-fill từ ProjectTask + submissions */
@@ -709,6 +719,8 @@ export interface WeeklyReportProject {
     targetLinks: number;
     completedLinks: number;
     progress: number;
+    trackingMode?: TaskTrackingMode;
+    isMilestone?: boolean;
   }>;
 }
 

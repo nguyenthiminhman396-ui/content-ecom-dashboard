@@ -21,7 +21,7 @@ export function buildReportHtml(data: {
   period: string;
   overview: { label: string; value: string | number }[];
   taskBreakdown: { team: string; color: string; items: { label: string; links: number; points: number }[] }[];
-  projectProgress: { name: string; progress: number; done: number; total: number; notes: string }[];
+  projectProgress: { name: string; progress: number; done: number; total: number; notes: string; remarks?: string; attentionNotes?: string }[];
   insights: string;
   bottlenecks: string;
   managerNotes: string;
@@ -65,12 +65,16 @@ export function buildReportHtml(data: {
   }).join('');
 
   const projectRows = data.projectProgress.map(p =>
-    `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9">
-      <span style="font-weight:600;min-width:160px">${p.name}</span>
-      ${progressBar(p.progress)}
-      <span style="font-weight:700;color:#1e40af;min-width:40px">${p.progress}%</span>
-      <span style="color:#94a3b8;font-size:0.82rem;min-width:60px">${p.done}/${p.total}</span>
-      ${p.notes ? `<span style="color:#64748b;font-size:0.82rem">${p.notes}</span>` : ''}
+    `<div style="padding:10px 0;border-bottom:1px solid #f1f5f9">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+        <span style="font-weight:700;min-width:160px">${p.name}</span>
+        ${progressBar(p.progress)}
+        <span style="font-weight:700;color:#1e40af;min-width:40px">${p.progress}%</span>
+        <span style="color:#94a3b8;font-size:0.82rem;min-width:60px">${p.done}/${p.total} việc</span>
+      </div>
+      ${p.remarks ? `<div style="font-size:0.83rem;color:#1e293b;margin-top:4px;padding:4px 8px;background:#f8fafc;border-left:3px solid #3b82f6;border-radius:0 4px 4px 0">💬 <b>Đánh giá:</b> ${p.remarks}</div>` : ''}
+      ${p.attentionNotes ? `<div style="font-size:0.83rem;color:#92400e;margin-top:4px;padding:4px 8px;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 4px 4px 0">⚠️ <b>Lưu ý/Rủi ro:</b> ${p.attentionNotes}</div>` : ''}
+      ${!p.remarks && !p.attentionNotes && p.notes ? `<div style="font-size:0.82rem;color:#64748b;font-style:italic;margin-top:2px">↳ ${p.notes}</div>` : ''}
     </div>`
   ).join('');
 

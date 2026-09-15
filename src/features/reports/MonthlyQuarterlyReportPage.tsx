@@ -557,7 +557,12 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
         let doneAll = 0;
         let donePeriod = 0;
 
-        if (mode === 'quantity' && t.targetQuantity && t.targetQuantity > 0) {
+        if (mode === 'milestone') {
+          target = 1;
+          const pctVal = t.manualProgress !== undefined ? t.manualProgress : (t.isDone ? 100 : 0);
+          doneAll = pctVal >= 100 ? 1 : (pctVal / 100);
+          donePeriod = doneAll;
+        } else if (mode === 'quantity' && t.targetQuantity && t.targetQuantity > 0) {
           target = t.targetQuantity;
           doneAll = matchedAll.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
           donePeriod = matchedPeriod.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
@@ -567,7 +572,9 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
           donePeriod = matchedPeriod.reduce((sum, s) => sum + ((s.quantity && s.quantity > 0) ? s.quantity : s.links.length), 0);
         }
 
-        const taskPct = target > 0 ? Math.min(100, Math.round((doneAll / target) * 100)) : 100;
+        const taskPct = mode === 'milestone'
+          ? (t.manualProgress !== undefined ? t.manualProgress : (t.isDone ? 100 : 0))
+          : (target > 0 ? Math.min(100, Math.round((doneAll / target) * 100)) : 100);
         const taskTitle = t.name || [t.taskType, t.taskDetail].filter(Boolean).join(' - ') || 'Hạng mục công việc';
 
         return {
