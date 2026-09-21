@@ -73,7 +73,12 @@ export default function Login({ onLogin }: LoginProps) {
       }
     }
 
-    const memberToSet: Member = {
+    const existingMember = members.find(m =>
+      m.id === envAcc.id ||
+      (envAcc.email && m.email?.toLowerCase() === envAcc.email.toLowerCase()) ||
+      m.name === envAcc.name
+    );
+    const memberToSet: Member = existingMember || {
       id: envAcc.id,
       name: envAcc.name,
       role: envAcc.role,

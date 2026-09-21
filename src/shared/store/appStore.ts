@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AppState, FilterState, KPISubmission, MemberAccount, WeeklyReport,
+import type { AppState, FilterState, KPISubmission, Member, MemberAccount, WeeklyReport,
   MonthlyReportConfig, ProjectTask, BonusPoint, RnDLog, MonthlyKPITarget, TodoItem, AppNotification } from '@/shared/types';
 import { DEFAULT_KPI_SCALE_CONFIG } from '@/shared/types';
 import { mockProjects, mockContents, mockMembers, mockClients, mockExpenses, defaultTaskPointRules, defaultSites } from '@/shared/data/mockData';
@@ -306,6 +306,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const members = get().members.map(m => m.id === id ? { ...m, ...updates } : m);
     set({ members });
     updateItemDB(DB_MEMBERS, id, updates);
+    // Tự động cập nhật currentUser nếu người được sửa là tài khoản đang đăng nhập
+    const cur = get().currentUser;
+    if (cur && (cur.id === id || (updates.email && cur.email?.toLowerCase() === updates.email.toLowerCase()) || cur.name === updates.name)) {
+      get().setCurrentUser({ ...cur, ...updates });
+    }
   },
   deleteMember: (id) => {
     const members = get().members.filter(m => m.id !== id);
@@ -611,6 +616,28 @@ export async function initFromDB() {
     
     if (Object.keys(stateUpdate).length > 0) {
       useAppStore.setState(stateUpdate);
+
+      // Tự động đồng bộ currentUser với dữ liệu member mới nhất từ DB
+      const current = useAppStore.getState().currentUser;
+      if (current && stateUpdate['members']) {
+        const freshMembers = stateUpdate['members'] as Member[];
+        const freshUser = freshMembers.find(m =>
+          m.id === current.id ||
+          (current.email && m.email?.toLowerCase() === current.email.toLowerCase()) ||
+          m.name === current.name
+        );
+        if (freshUser) {
+          if (
+            freshUser.role !== current.role ||
+            freshUser.kpiRole !== current.kpiRole ||
+            freshUser.teamGroup !== current.teamGroup ||
+            freshUser.productivityFactor !== current.productivityFactor ||
+            freshUser.name !== current.name
+          ) {
+            useAppStore.getState().setCurrentUser({ ...current, ...freshUser });
+          }
+        }
+      }
     }
 
     // Migration: xoá key currentUser cũ khỏi DB chung (không dùng nữa, mỗi máy lưu localStorage)

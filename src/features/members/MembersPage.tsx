@@ -282,14 +282,40 @@ function MemberFormModal({ item, existingAccount, onClose, onSave }: {
               <div className="form-group">
                 <label className="form-label">Role *</label>
                 <select className="form-select" value={form.role ?? 'Member'}
-                  onChange={e => setForm({ ...form, role: e.target.value as MemberRole })}>
+                  onChange={e => {
+                    const newRole = e.target.value as MemberRole;
+                    setForm(prev => {
+                      const next = { ...prev, role: newRole };
+                      if (newRole === 'Leader') {
+                        next.kpiRole = 'leader';
+                        if (prev.productivityFactor === undefined || prev.productivityFactor === 1.0) {
+                          next.productivityFactor = 0.4;
+                        }
+                      } else if (newRole === 'Member') {
+                        next.kpiRole = 'member';
+                        if (prev.productivityFactor === 0.4) {
+                          next.productivityFactor = 1.0;
+                        }
+                      }
+                      return next;
+                    });
+                  }}>
                   {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
               <div className="form-group">
                 <label className="form-label">KPI Role</label>
                 <select className="form-select" value={form.kpiRole ?? ''}
-                  onChange={e => setForm({ ...form, kpiRole: (e.target.value || undefined) as KpiRole | undefined })}>
+                  onChange={e => {
+                    const newKpi = (e.target.value || undefined) as KpiRole | undefined;
+                    setForm(prev => {
+                      const next = { ...prev, kpiRole: newKpi };
+                      if (newKpi === 'leader' && prev.role !== 'Leader' && prev.role !== 'Manager') {
+                        next.role = 'Leader';
+                      }
+                      return next;
+                    });
+                  }}>
                   <option value="">— (không tính KPI)</option>
                   <option value="member">member</option>
                   <option value="leader">leader</option>
@@ -303,6 +329,10 @@ function MemberFormModal({ item, existingAccount, onClose, onSave }: {
                   {TEAM_GROUPS.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
+            </div>
+            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '-6px', marginBottom: '12px', lineHeight: 1.5, background: '#f8fafc', padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+              💡 <b>Role:</b> Quyền truy cập menu & chức năng hệ thống (Leader: duyệt bài, xem chi phí, điểm thưởng...).<br />
+              💡 <b>KPI Role:</b> Phân loại tính điểm & đánh giá hiệu suất (Leader: hệ số sản xuất 0.4, tính vào đánh giá Lead của team).
             </div>
 
             <div className="form-row">
