@@ -105,7 +105,7 @@ export interface Member {
   kpiRole?: KpiRole;
   /** Nhóm team */
   teamGroup?: TeamGroup;
-  /** Hệ số năng suất (1.0 = member, 0.4 = leader production) */
+  /** Hệ số năng suất (1.0 = member, 0.6 = leader production) */
   productivityFactor?: number;
 }
 
@@ -230,7 +230,7 @@ export interface PerformanceReview {
 
 /** Trọng số mặc định cho Performance */
 export const PERFORMANCE_WEIGHTS = {
-  productivity: 0.40,  // Sản lượng (auto từ KPI)
+  productivity: 0.60,  // Sản lượng (auto từ KPI)
   quality: 0.20,       // Chất lượng (manual)
   attitude: 0.15,      // Thái độ (manual)
   timeliness: 0.15,    // Đúng tiến độ (manual)
@@ -284,7 +284,7 @@ export const DEFAULT_KPI_SCALE_CONFIG: KPIScaleConfig = {
   memberTargetPoints: 294,
   leaderProductionWeight: 0.60,
   weights: {
-    productivity: 0.40,
+    productivity: 0.60,
     quality:      0.20,
     attitude:     0.15,
     timeliness:   0.15,

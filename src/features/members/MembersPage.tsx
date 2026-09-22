@@ -289,11 +289,11 @@ function MemberFormModal({ item, existingAccount, onClose, onSave }: {
                       if (newRole === 'Leader') {
                         next.kpiRole = 'leader';
                         if (prev.productivityFactor === undefined || prev.productivityFactor === 1.0) {
-                          next.productivityFactor = 0.4;
+                          next.productivityFactor = 0.6;
                         }
                       } else if (newRole === 'Member') {
                         next.kpiRole = 'member';
-                        if (prev.productivityFactor === 0.4) {
+                        if ((prev.productivityFactor ?? 1.0) <= 0.6) {
                           next.productivityFactor = 1.0;
                         }
                       }
@@ -332,7 +332,7 @@ function MemberFormModal({ item, existingAccount, onClose, onSave }: {
             </div>
             <div style={{ fontSize: '11px', color: '#64748b', marginTop: '-6px', marginBottom: '12px', lineHeight: 1.5, background: '#f8fafc', padding: '6px 10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
               💡 <b>Role:</b> Quyền truy cập menu & chức năng hệ thống (Leader: duyệt bài, xem chi phí, điểm thưởng...).<br />
-              💡 <b>KPI Role:</b> Phân loại tính điểm & đánh giá hiệu suất (Leader: hệ số sản xuất 0.4, tính vào đánh giá Lead của team).
+              💡 <b>KPI Role:</b> Phân loại tính điểm & đánh giá hiệu suất (Leader: hệ số sản xuất 0.6, tính vào đánh giá Lead của team).
             </div>
 
             <div className="form-row">

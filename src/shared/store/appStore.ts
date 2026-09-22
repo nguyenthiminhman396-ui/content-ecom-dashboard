@@ -308,8 +308,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     updateItemDB(DB_MEMBERS, id, updates);
     // Tự động cập nhật currentUser nếu người được sửa là tài khoản đang đăng nhập
     const cur = get().currentUser;
-    if (cur && (cur.id === id || (updates.email && cur.email?.toLowerCase() === updates.email.toLowerCase()) || cur.name === updates.name)) {
-      get().setCurrentUser({ ...cur, ...updates });
+    if (cur) {
+      const updatedMember = members.find(m => m.id === id);
+      if (updatedMember && (cur.id === id || cur.name === updatedMember.name ||
+          (cur.email && updatedMember.email && cur.email.toLowerCase() === updatedMember.email.toLowerCase()))) {
+        get().setCurrentUser(updatedMember);
+      }
     }
   },
   deleteMember: (id) => {
@@ -618,24 +622,20 @@ export async function initFromDB() {
       useAppStore.setState(stateUpdate);
 
       // Tự động đồng bộ currentUser với dữ liệu member mới nhất từ DB
+      // ĐÂY LÀ FIX CHÍNH: luôn lấy dữ liệu member mới nhất (bao gồm role) từ DB
+      // thay vì dùng bản cũ từ localStorage
       const current = useAppStore.getState().currentUser;
       if (current && stateUpdate['members']) {
         const freshMembers = stateUpdate['members'] as Member[];
         const freshUser = freshMembers.find(m =>
           m.id === current.id ||
-          (current.email && m.email?.toLowerCase() === current.email.toLowerCase()) ||
-          m.name === current.name
+          m.name === current.name ||
+          (current.email && m.email && m.email.toLowerCase() === current.email.toLowerCase())
         );
         if (freshUser) {
-          if (
-            freshUser.role !== current.role ||
-            freshUser.kpiRole !== current.kpiRole ||
-            freshUser.teamGroup !== current.teamGroup ||
-            freshUser.productivityFactor !== current.productivityFactor ||
-            freshUser.name !== current.name
-          ) {
-            useAppStore.getState().setCurrentUser({ ...current, ...freshUser });
-          }
+          // Luôn ghi đè currentUser bằng dữ liệu mới nhất từ DB
+          // để đảm bảo role, kpiRole, teamGroup, productivityFactor luôn đúng
+          useAppStore.getState().setCurrentUser(freshUser);
         }
       }
     }

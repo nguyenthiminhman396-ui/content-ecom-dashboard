@@ -31,9 +31,9 @@ export const mockMembers: Member[] = [
   { id: 'M_CLIENT',  name: 'khach',    role: 'Client',  expertise: 'Khách hàng',    email: 'khach@longchau.com' },
 
   // ── 3 Leaders ──────────────────────────────────────────────────────────
-  { id: 'M_ANHLHP',    name: 'AnhLHP',    role: 'Leader', expertise: 'Lead Bài viết',                kpiRole: 'leader', teamGroup: 'Bài viết',                productivityFactor: 0.4 },
-  { id: 'M_HONGDTM3',  name: 'HongDTM3',  role: 'Leader', expertise: 'Lead Sản phẩm',                kpiRole: 'leader', teamGroup: 'Sản phẩm',                productivityFactor: 0.4 },
-  { id: 'M_UYENDNP3',  name: 'UyenDNP3',  role: 'Leader', expertise: 'Lead Multimedia - Tin nhanh',  kpiRole: 'leader', teamGroup: 'Multimedia - Tin nhanh',  productivityFactor: 0.4 },
+  { id: 'M_ANHLHP',    name: 'AnhLHP',    role: 'Leader', expertise: 'Lead Bài viết',                kpiRole: 'leader', teamGroup: 'Bài viết',                productivityFactor: 0.6 },
+  { id: 'M_HONGDTM3',  name: 'HongDTM3',  role: 'Leader', expertise: 'Lead Sản phẩm',                kpiRole: 'leader', teamGroup: 'Sản phẩm',                productivityFactor: 0.6 },
+  { id: 'M_UYENDNP3',  name: 'UyenDNP3',  role: 'Leader', expertise: 'Lead Multimedia - Tin nhanh',  kpiRole: 'leader', teamGroup: 'Multimedia - Tin nhanh',  productivityFactor: 0.6 },
 
   // ── 8 Members ──────────────────────────────────────────────────────────
   { id: 'M_MYLYT',     name: 'MyLYT',     role: 'Member', expertise: 'Bài viết SEO',                  kpiRole: 'member', teamGroup: 'Bài viết',                productivityFactor: 1.0 },
