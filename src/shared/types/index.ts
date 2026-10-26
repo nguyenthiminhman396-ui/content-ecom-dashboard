@@ -579,6 +579,7 @@ export interface AppState {
   ciChecks: CiCheck[];
   ciFindings: CiFinding[];
   ciTasks: CiTask[];
+  ciOpportunities: CiOpportunity[];
   ciSettings: CiSettings;
 
   // UI State
@@ -657,6 +658,8 @@ export interface AppState {
   updateCiFinding: (id: string, updates: Partial<CiFinding>) => void;
   addCiTask: (task: CiTask) => void;
   updateCiTask: (id: string, updates: Partial<CiTask>) => void;
+  addCiOpportunities: (items: CiOpportunity[]) => void;
+  updateCiOpportunity: (id: string, updates: Partial<CiOpportunity>) => void;
   setCiSettings: (settings: CiSettings) => void;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: (recipientName: string) => void;
@@ -868,9 +871,6 @@ export interface CiFinding {
   suggestedAction: string;
   evidenceUrls: string[];
   verification?: string;
-  /** So sánh đối thủ: Vinmec / VNVC / Tâm Anh (trống = lỗi từ nội dung bài) */
-  competitor?: string;
-  competitorUrl?: string;
   decision: CiDecision;
   /** Mức độ cần tối ưu 1–5 do quản lý chấm — tách biệt điểm AI và KPI */
   managerScore?: number;
@@ -898,8 +898,10 @@ export interface CiTask {
   todoId: string;
   url: string;
   title: string;
-  kind: 'optimization' | 'medical_verification';
+  /** optimization / medical_verification: sửa bài từ QC · new_article / expand_article: phát triển nội dung từ phân tích đối thủ */
+  kind: 'optimization' | 'medical_verification' | 'new_article' | 'expand_article';
   findingIds: string[];
+  opportunityId?: string;
   ownerName: string;
   assigneeName: string;
   priority: TodoPriority;
@@ -916,6 +918,32 @@ export interface CiTask {
 }
 
 export interface CiSettings {
-  /** Link CSV "Publish to web" của Google Sheet chung (tuỳ chọn) */
+  /** Link CSV "Publish to web" của tab QC (tuỳ chọn) */
   sheetCsvUrl?: string;
+  /** Link CSV "Publish to web" của tab phân tích đối thủ (tuỳ chọn) */
+  opportunitySheetCsvUrl?: string;
+}
+
+/** Cơ hội nội dung từ phân tích đối thủ — định hướng nội dung nên phát triển tiếp (không phải lỗi bài) */
+export interface CiOpportunity {
+  id: string;
+  /** chủ đề|đối thủ|loại|bài LC — chống nhập trùng */
+  key: string;
+  checkedAt: string;
+  competitor?: string;
+  competitorUrl?: string;
+  topic: string;
+  type: 'new_article' | 'expand_article';
+  /** Bài Long Châu liên quan (khi bổ sung bài có sẵn) */
+  lcUrl?: string;
+  priority: TodoPriority;
+  reason: string;
+  suggestedOutline?: string;
+  status: 'pending' | 'approved' | 'skipped' | 'assigned' | 'done';
+  decisionBy?: string;
+  decisionAt?: string;
+  decisionNote?: string;
+  taskId?: string;
+  importedBy: string;
+  importedAt: string;
 }

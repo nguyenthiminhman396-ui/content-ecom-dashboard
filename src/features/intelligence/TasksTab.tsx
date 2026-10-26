@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { useAppStore } from '@/shared/store/appStore';
 import type { CiFinding, CiTask, CiTaskStatus } from '@/shared/types';
 import { recheckPrompt } from './prompts';
+import { TASK_KIND_LABEL } from './createTask';
 import { TASK_STATUS, copyText, fmtDate, todayVN, mutedStyle } from './labels';
 import { FindingDetail, Score, UrlLink } from './ui';
 
@@ -19,11 +20,13 @@ function DiffCol({ title, ids, color, findings }: { title: string; ids: string[]
 }
 
 function TaskPanel({ task, canManage }: { task: CiTask; canManage: boolean }) {
-  const { currentUser, ciFindings, ciChecks, updateCiTask, updateCiFinding, updateTodo } = useAppStore();
+  const { currentUser, ciFindings, ciChecks, ciOpportunities, updateCiTask, updateCiFinding, updateCiOpportunity, updateTodo } = useAppStore();
   const [resultUrl, setResultUrl] = useState(task.resultUrl || task.url);
   const [notes, setNotes] = useState('');
   const [reason, setReason] = useState('');
   const findings = ciFindings.filter(f => task.findingIds.includes(f.id));
+  const opp = task.opportunityId ? ciOpportunities.find(o => o.id === task.opportunityId) : undefined;
+  const isQcTask = task.kind === 'optimization' || task.kind === 'medical_verification';
   const isAssignee = task.assigneeName === currentUser?.name;
   const rc = task.recheck;
   const rcCheck = rc ? ciChecks.find(c => c.id === rc.checkId) : undefined;
@@ -41,7 +44,10 @@ function TaskPanel({ task, canManage }: { task: CiTask; canManage: boolean }) {
   const accept = (status: Extract<CiTaskStatus, 'accepted' | 'changes_requested' | 'needs_medical_verification'>) => {
     if (status !== 'accepted' && !reason.trim()) { toast.error('Cần nêu lý do / yêu cầu chỉnh sửa'); return; }
     updateCiTask(task.id, { status, acceptanceReason: reason || undefined, history: log(TASK_STATUS[status].label, reason || undefined) });
-    if (status === 'accepted') findings.forEach(f => updateCiFinding(f.id, { status: 'resolved' }));
+    if (status === 'accepted') {
+      findings.forEach(f => updateCiFinding(f.id, { status: 'resolved' }));
+      if (opp) updateCiOpportunity(opp.id, { status: 'done' });
+    }
     if (status === 'changes_requested') updateTodo(task.todoId, { completed: false, completedAt: undefined });
     toast.success(TASK_STATUS[status].label);
   };
@@ -49,18 +55,27 @@ function TaskPanel({ task, canManage }: { task: CiTask; canManage: boolean }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 12 }}>
       {task.instructions && <div style={{ fontSize: '0.85rem' }}><strong>Yêu cầu:</strong> {task.instructions}</div>}
+      {opp && (
+        <div style={{ padding: 10, border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)', fontSize: '0.86rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div><strong>Chủ đề:</strong> {opp.topic}</div>
+          {opp.lcUrl && <div><span style={mutedStyle}>Bài Long Châu cần bổ sung: </span><UrlLink url={opp.lcUrl} /></div>}
+          {opp.competitorUrl && <div><span style={mutedStyle}>Tham khảo {opp.competitor || 'đối thủ'}: </span><UrlLink url={opp.competitorUrl} /></div>}
+          <div><strong>Vì sao nên làm:</strong> {opp.reason}</div>
+          {opp.suggestedOutline && <div style={{ whiteSpace: 'pre-wrap' }}><strong>Gợi ý triển khai:</strong> {opp.suggestedOutline}</div>}
+        </div>
+      )}
       {findings.map(f => <div key={f.id} style={{ padding: 10, border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)' }}><FindingDetail f={f} /></div>)}
 
       {(isAssignee || canManage) && (task.status === 'assigned' || task.status === 'changes_requested') && (
         <div className="card" style={{ padding: 12 }}>
           {task.status === 'changes_requested' && task.acceptanceReason && <div style={{ color: '#B45309', fontSize: '0.84rem', marginBottom: 6 }}>Yêu cầu sửa thêm: {task.acceptanceReason}</div>}
-          <div className="form-group"><label className="form-label">URL bài đã cập nhật</label><input className="form-input" value={resultUrl} onChange={e => setResultUrl(e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">{task.kind === 'new_article' ? 'URL bài mới đã đăng' : 'URL bài đã cập nhật'}</label><input className="form-input" value={resultUrl} onChange={e => setResultUrl(e.target.value)} /></div>
           <div className="form-group"><label className="form-label">Ghi chú</label><input className="form-input" value={notes} onChange={e => setNotes(e.target.value)} /></div>
           <button className="btn btn-primary btn-sm" onClick={submit}><Send size={13} /> Nộp kết quả</button>
         </div>
       )}
 
-      {task.status !== 'assigned' && (
+      {isQcTask && task.status !== 'assigned' && (
         <div className="card" style={{ padding: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <strong>Kiểm tra lại (trước / sau)</strong>
@@ -124,8 +139,8 @@ export default function TasksTab({ canManage, canViewAll }: { canManage: boolean
           <div key={t.id} className="card" style={{ padding: 14, borderLeft: overdue ? '4px solid var(--danger)' : undefined }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, cursor: 'pointer' }} onClick={() => setOpen(open === t.id ? null : t.id)}>
               <div>
-                <div style={{ fontWeight: 700 }}>{t.kind === 'medical_verification' ? '🩺 Xác minh y khoa' : '✏️ Tối ưu'} · {t.title}</div>
-                <div style={mutedStyle}>→ {t.assigneeName} · {PRIORITY[t.priority]} · Hạn {t.dueDate ? fmtDate(t.dueDate) : '—'}{overdue ? ' (quá hạn)' : ''} · {t.findingIds.length} phát hiện · giao bởi {t.ownerName}</div>
+                <div style={{ fontWeight: 700 }}>{TASK_KIND_LABEL[t.kind]} · {t.title}</div>
+                <div style={mutedStyle}>→ {t.assigneeName} · {PRIORITY[t.priority]} · Hạn {t.dueDate ? fmtDate(t.dueDate) : '—'}{overdue ? ' (quá hạn)' : ''}{t.findingIds.length ? ` · ${t.findingIds.length} lỗi` : ''} · giao bởi {t.ownerName}</div>
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <span className={`status-badge ${TASK_STATUS[t.status].cls}`}>{TASK_STATUS[t.status].label}</span>

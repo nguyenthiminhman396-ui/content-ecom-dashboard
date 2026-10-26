@@ -21,7 +21,7 @@ const Stat = ({ label, value, sub }: { label: string; value: React.ReactNode; su
 
 /** Báo cáo ngày / tuần / tháng — tính trực tiếp từ dữ liệu đã nhập. */
 export default function ReportsTab() {
-  const { ciChecks, ciFindings, ciTasks } = useAppStore();
+  const { ciChecks, ciFindings, ciTasks, ciOpportunities } = useAppStore();
   const [mode, setMode] = useState<'day' | 'week' | 'month'>('week');
   const [day, setDay] = useState(todayVN());
   const [week, setWeek] = useState(mondayOf(todayVN()));
@@ -67,21 +67,26 @@ export default function ReportsTab() {
     if (tasks.overdue) insights.push(`${tasks.overdue}/${tasks.open} task đang mở đã quá hạn.`);
     if (reviewed.length) insights.push(`Tỷ lệ phát hiện được xác nhận: ${Math.round((confirmed / reviewed.length) * 100)}% (${confirmed}/${reviewed.length}) — dùng để đánh giá độ chính xác của ChatGPT.`);
     if (rc.resolved + rc.unresolved) insights.push(`Kiểm tra lại: ${rc.resolved}/${rc.resolved + rc.unresolved} lỗi đã xử lý.`);
-    const compFindings = findings.filter(f => f.competitor);
-    const byCompetitor = Object.entries(compFindings.reduce<Record<string, { n: number; important: number; articles: Set<string> }>>((a, f) => {
-      const k = f.competitor!;
-      a[k] ??= { n: 0, important: 0, articles: new Set() };
-      a[k].n++; if (f.severity === 'P0' || f.severity === 'P1' || f.severity === 'P2') a[k].important++; a[k].articles.add(f.url);
-      return a;
-    }, {})).map(([name, v]) => ({ name, n: v.n, important: v.important, articles: v.articles.size })).sort((a, b) => b.n - a.n);
-    const behind = [...new Set(compFindings.map(f => f.url))].map(url => {
-      const list = compFindings.filter(f => f.url === url);
-      return { url, title: list[0].title, n: list.length, who: [...new Set(list.map(f => f.competitor))].join(', ') };
-    }).sort((a, b) => b.n - a.n).slice(0, 5);
-    if (compFindings.length) insights.splice(Math.min(2, insights.length), 0, `${compFindings.length} cơ hội từ so sánh đối thủ trên ${new Set(compFindings.map(f => f.url)).size} bài${byCompetitor[0] ? ` — nhiều nhất so với ${byCompetitor[0].name} (${byCompetitor[0].n})` : ''}.`);
-    return { compFindings, byCompetitor, behind, checks, qc, scored, prev, sev, findings, reviewed, confirmed, byCat, worst, tasks, rc, insights: insights.slice(0, 5) };
+    return { checks, qc, scored, prev, sev, findings, reviewed, confirmed, byCat, worst, tasks, rc, insights: insights.slice(0, 5) };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ciChecks, ciFindings, ciTasks, from, to, prevFrom, prevTo]);
+
+  // ── Phân tích đối thủ: nên phát triển nội dung gì tiếp theo ──
+  const c = useMemo(() => {
+    const items = ciOpportunities.filter(o => inRange(o.checkedAt));
+    const count = (pred: (o: typeof items[number]) => boolean) => items.filter(pred).length;
+    const byCompetitor = Object.entries(items.reduce<Record<string, number>>((a, o) => ({ ...a, [o.competitor || 'Khác']: (a[o.competitor || 'Khác'] || 0) + 1 }), {})).sort((a, b) => b[1] - a[1]);
+    const doneInPeriod = ciTasks.filter(t => t.opportunityId && t.history.some(h => h.action === 'Đã nghiệm thu' && inRange(h.at))).length;
+    const order = { high: 0, medium: 1, low: 2 } as const;
+    const next = ciOpportunities.filter(o => o.status === 'pending' || o.status === 'approved')
+      .sort((a, b) => order[a.priority] - order[b.priority] || b.importedAt.localeCompare(a.importedAt)).slice(0, 8);
+    return {
+      total: items.length, newArticles: count(o => o.type === 'new_article'), expand: count(o => o.type === 'expand_article'), high: count(o => o.priority === 'high'),
+      approved: count(o => o.status === 'approved'), assigned: count(o => o.status === 'assigned'), done: count(o => o.status === 'done'), skipped: count(o => o.status === 'skipped'),
+      pendingAll: ciOpportunities.filter(o => o.status === 'pending').length, byCompetitor, doneInPeriod, next,
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ciOpportunities, ciTasks, from, to]);
 
   const avg = r.scored.length ? Math.round(r.scored.reduce((a, c) => a + (c.scores?.total || 0), 0) / r.scored.length) : null;
 
@@ -105,6 +110,7 @@ export default function ReportsTab() {
         {r.insights.length ? <ol style={{ margin: '6px 0 0 18px', fontSize: '0.88rem' }}>{r.insights.map((x, i) => <li key={i}>{x}</li>)}</ol> : <div style={mutedStyle}>Chưa đủ dữ liệu trong kỳ.</div>}
       </div>
 
+      <h3 style={{ fontWeight: 700, fontSize: '1rem', margin: '4px 0 -4px' }}>QC — bài Long Châu cần sửa gì</h3>
       <div className="stats-grid">
         <Stat label="Bài đã QC" value={r.qc.length} sub={`${r.checks.length - r.qc.length} lượt kiểm tra lại · kỳ trước ${r.prev.qc}`} />
         <Stat label="Điểm trung bình" value={avg ?? '—'} sub={`${r.scored.length}/${r.qc.length} bài có điểm · kỳ trước ${r.prev.avg ?? '—'}`} />
@@ -121,16 +127,34 @@ export default function ReportsTab() {
           <div style={{ marginTop: 8 }}><strong>Kiểm tra lại</strong><div style={mutedStyle}>✅ {r.rc.resolved} đã xử lý · ❌ {r.rc.unresolved} chưa xử lý · 🆕 {r.rc.fresh} lỗi mới</div></div>
         </div>
         <div className="card" style={{ padding: 14 }}>
-          <strong>So sánh đối thủ</strong>
-          {r.byCompetitor.map(c => <div key={c.name} style={mutedStyle}>{c.name}: {c.n} cơ hội ({c.important} quan trọng P0–P2) trên {c.articles} bài</div>)}
-          {!r.byCompetitor.length && <div style={mutedStyle}>Chưa có dòng so sánh đối thủ trong kỳ (cột competitor trong Sheet).</div>}
-          {r.behind.length > 0 && <div style={{ marginTop: 8, fontWeight: 600, fontSize: '0.84rem' }}>Bài thiếu nhiều nhất so với đối thủ</div>}
-          {r.behind.map(b => <div key={b.url} style={{ fontSize: '0.82rem', paddingTop: 4 }}>×{b.n} <UrlLink url={b.url} label={b.title} /> <span style={mutedStyle}>({b.who})</span></div>)}
-        </div>
-        <div className="card" style={{ padding: 14 }}>
           <strong>Bài nhiều cảnh báo P0/P1 nhất</strong>
           {r.worst.map(w => <div key={w.url} style={{ fontSize: '0.82rem', paddingTop: 4 }}><SeverityBadge severity="P1" /> ×{w.n} <UrlLink url={w.url} label={w.title} /></div>)}
           {!r.worst.length && <div style={mutedStyle}>Không có.</div>}
+        </div>
+      </div>
+
+      <h3 style={{ fontWeight: 700, fontSize: '1rem', margin: '8px 0 -4px' }}>Phân tích đối thủ — nên phát triển nội dung gì tiếp theo</h3>
+      <div className="stats-grid">
+        <Stat label="Cơ hội mới trong kỳ" value={c.total} sub={`${c.newArticles} bài mới · ${c.expand} bổ sung bài · ${c.high} ưu tiên cao`} />
+        <Stat label="Đã duyệt / đã giao" value={`${c.approved} / ${c.assigned}`} sub={`${c.skipped} bỏ qua`} />
+        <Stat label="Đã hoàn thành" value={c.doneInPeriod} sub="task viết/bổ sung bài được nghiệm thu trong kỳ" />
+        <Stat label="Chờ duyệt (toàn bộ)" value={c.pendingAll} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+        <div className="card" style={{ padding: 14 }}>
+          <strong>Theo đối thủ</strong>
+          {c.byCompetitor.map(([name, n]) => <div key={name} style={mutedStyle}>{name}: {n} cơ hội</div>)}
+          {!c.byCompetitor.length && <div style={mutedStyle}>Chưa có dữ liệu phân tích đối thủ trong kỳ.</div>}
+        </div>
+        <div className="card" style={{ padding: 14 }}>
+          <strong>Nên làm tiếp (ưu tiên cao trước)</strong>
+          {c.next.map(o => (
+            <div key={o.id} style={{ fontSize: '0.82rem', paddingTop: 4 }}>
+              {o.priority === 'high' ? '🔴' : o.priority === 'medium' ? '🟡' : '⚪'} {o.topic}
+              <span style={mutedStyle}> · {o.type === 'new_article' ? 'bài mới' : 'bổ sung bài'}{o.competitor ? ` · ${o.competitor}` : ''}</span>
+            </div>
+          ))}
+          {!c.next.length && <div style={mutedStyle}>Không có cơ hội đang chờ.</div>}
         </div>
       </div>
     </div>

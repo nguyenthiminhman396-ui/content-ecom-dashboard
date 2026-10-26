@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { AppState, FilterState, KPISubmission, Member, MemberAccount, WeeklyReport,
   MonthlyReportConfig, ProjectTask, BonusPoint, RnDLog, MonthlyKPITarget, TodoItem, AppNotification,
-  CiCheck, CiFinding, CiTask, CiSettings } from '@/shared/types';
+  CiCheck, CiFinding, CiTask, CiSettings, CiOpportunity } from '@/shared/types';
 import { DEFAULT_KPI_SCALE_CONFIG } from '@/shared/types';
 import { mockProjects, mockContents, mockMembers, mockClients, mockExpenses, defaultTaskPointRules, defaultSites } from '@/shared/data/mockData';
 
@@ -30,6 +30,7 @@ const DB_CI_CHECKS     = 'hcms_ci_checks';
 const DB_CI_FINDINGS   = 'hcms_ci_findings';
 const DB_CI_TASKS      = 'hcms_ci_tasks';
 const DB_CI_SETTINGS   = 'hcms_ci_settings';
+const DB_CI_OPPS       = 'hcms_ci_opportunities';
 
 // ── Persist to Postgres with retry ────────────────────────────────────────
 function saveDB(key: string, value: unknown) {
@@ -149,6 +150,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   ciChecks:     [] as CiCheck[],
   ciFindings:   [] as CiFinding[],
   ciTasks:      [] as CiTask[],
+  ciOpportunities: [] as CiOpportunity[],
   ciSettings:   {} as CiSettings,
 
   // ── UI state ─────────────────────────────────────────────────────────────
@@ -529,6 +531,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ ciTasks: get().ciTasks.map(t => t.id === id ? { ...t, ...updates } : t) });
     updateItemDB(DB_CI_TASKS, id, updates);
   },
+  addCiOpportunities: (items) => {
+    set({ ciOpportunities: [...get().ciOpportunities, ...items] });
+    if (items.length) appendDB(DB_CI_OPPS, items);
+  },
+  updateCiOpportunity: (id, updates) => {
+    set({ ciOpportunities: get().ciOpportunities.map(o => o.id === id ? { ...o, ...updates } : o) });
+    updateItemDB(DB_CI_OPPS, id, updates);
+  },
   setCiSettings: (ciSettings) => { set({ ciSettings }); saveDB(DB_CI_SETTINGS, ciSettings); },
 
   // ── UI actions ────────────────────────────────────────────────────────────
@@ -629,6 +639,7 @@ export async function initFromDB() {
       [DB_CI_FINDINGS]:    'ciFindings',
       [DB_CI_TASKS]:       'ciTasks',
       [DB_CI_SETTINGS]:    'ciSettings',
+      [DB_CI_OPPS]:        'ciOpportunities',
     };
 
     for (const [key, stateKey] of Object.entries(keyMap)) {

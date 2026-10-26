@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, XCircle, Stethoscope, UserPlus, X } from 'lucide-react';
+import { CheckCircle2, XCircle, Stethoscope, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAppStore } from '@/shared/store/appStore';
-import type { CiDecision, CiFinding, CiTask, TodoItem, TodoPriority } from '@/shared/types';
-import { makeId } from '@/shared/utils/helpers';
+import type { CiDecision, CiFinding } from '@/shared/types';
+import AssignDialog, { type AssignInput } from './AssignDialog';
+import { createCiTask } from './createTask';
 import { DECISION_LABEL, SEVERITY_ORDER, TASK_STATUS, fmtDate, fmtCheckedAt, mutedStyle } from './labels';
 import { FindingDetail, Score, UrlLink } from './ui';
 
@@ -38,74 +39,27 @@ function DecisionBar({ f, onAssign }: { f: CiFinding; onAssign: (f: CiFinding) =
 }
 
 function AssignModal({ findings, onClose }: { findings: CiFinding[]; onClose: () => void }) {
-  const { currentUser, members, addTodo, addCiTask, updateCiFinding } = useAppStore();
+  const { updateCiFinding } = useAppStore();
   const kind = findings[0].decision === 'needs_medical_verification' ? 'medical_verification' : 'optimization';
-  const [assignee, setAssignee] = useState('');
-  const [priority, setPriority] = useState<TodoPriority>(findings.some(f => f.severity === 'P0' || f.severity === 'P1') ? 'high' : 'medium');
-  const [dueDate, setDueDate] = useState('');
-  const [instructions, setInstructions] = useState('');
-  const options = members.filter(m => m.role !== 'Client').map(m => m.name).sort();
-
-  const submit = () => {
-    if (!assignee || !currentUser) { toast.error('Chọn thành viên nhận việc'); return; }
+  const confirm = (input: AssignInput) => {
     // Chống giao trùng: đọc trạng thái mới nhất từ store
     const fresh = useAppStore.getState().ciFindings.filter(f => findings.some(x => x.id === f.id));
     if (fresh.some(f => f.taskId)) { toast.error('Có phát hiện đã được giao trong task khác.'); onClose(); return; }
-    const taskId = makeId('citask');
-    const todoId = `todo_ci_${taskId}`;
-    const title = `${kind === 'medical_verification' ? '[CI] Xác minh y khoa' : '[CI] Tối ưu bài'}: ${findings[0].title}`.slice(0, 140);
-    const description = [
-      ...(instructions ? [`Yêu cầu: ${instructions}`] : []), `URL: ${findings[0].url}`, '',
-      ...fresh.map((f, i) => `${i + 1}. [${f.severity}] ${f.location}${f.quote ? ` — “${f.quote}”` : ''}${f.competitor ? `\n   So với ${f.competitor}${f.competitorUrl ? `: ${f.competitorUrl}` : ''}` : ''}\n   Lý do: ${f.rationale}\n   Đề xuất: ${f.suggestedAction}`),
-      '', 'Khi xong: nộp URL bài đã cập nhật ở Content Intelligence › Assignments.',
-    ].join('\n');
-    const now = new Date().toISOString();
-    const todo: TodoItem = { id: todoId, ownerName: currentUser.name, assigneeName: assignee, title, description, dueDate: dueDate || undefined, priority, completed: false, createdAt: now, source: 'content_intelligence', ciTaskId: taskId };
-    const task: CiTask = {
-      id: taskId, todoId, url: findings[0].url, title: findings[0].title, kind, findingIds: fresh.map(f => f.id),
-      ownerName: currentUser.name, assigneeName: assignee, priority, dueDate: dueDate || undefined, instructions: instructions || undefined,
-      status: 'assigned', history: [{ at: now, by: currentUser.name, action: `Giao cho ${assignee}` }], createdAt: now,
-    };
-    addTodo(todo);
-    addCiTask(task);
+    const taskId = createCiTask({
+      kind, url: findings[0].url, title: findings[0].title, findingIds: fresh.map(f => f.id), input,
+      detailLines: [`URL: ${findings[0].url}`, '', ...fresh.map((f, i) => `${i + 1}. [${f.severity}] ${f.location}${f.quote ? ` — “${f.quote}”` : ''}\n   Lý do: ${f.rationale}\n   Đề xuất: ${f.suggestedAction}`)],
+    });
     fresh.forEach(f => updateCiFinding(f.id, { taskId, status: 'assigned' }));
-    toast.success(`Đã giao vào To-do của ${assignee}`);
+    toast.success(`Đã giao vào To-do của ${input.assignee}`);
     onClose();
   };
-
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
-        <div className="modal-header">
-          <h3 className="modal-title"><UserPlus size={16} /> {kind === 'medical_verification' ? 'Giao xác minh y khoa' : 'Giao việc tối ưu'}</h3>
-          <button className="modal-close" onClick={onClose}><X size={16} /></button>
-        </div>
-        <div className="modal-body">
-          <p style={{ ...mutedStyle, marginBottom: 10 }}>Tạo 1 việc trong To-do list cho {findings.length} phát hiện của “{findings[0].title}”. Mỗi phát hiện chỉ được giao một lần.</p>
-          <div className="form-group">
-            <label className="form-label">Thành viên *</label>
-            <select className="form-select" value={assignee} onChange={e => setAssignee(e.target.value)}>
-              <option value="">— Chọn thành viên —</option>
-              {options.map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </div>
-          <div className="form-row">
-            <div className="form-group"><label className="form-label">Hạn hoàn thành</label><input className="form-input" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} /></div>
-            <div className="form-group">
-              <label className="form-label">Ưu tiên</label>
-              <select className="form-select" value={priority} onChange={e => setPriority(e.target.value as TodoPriority)}>
-                <option value="high">🔴 Cao</option><option value="medium">🟡 Trung bình</option><option value="low">⚪ Thấp</option>
-              </select>
-            </div>
-          </div>
-          <div className="form-group"><label className="form-label">Yêu cầu xử lý</label><textarea className="form-textarea" rows={3} value={instructions} onChange={e => setInstructions(e.target.value)} /></div>
-        </div>
-        <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>Hủy</button>
-          <button className="btn btn-primary" onClick={submit}>Xác nhận giao việc</button>
-        </div>
-      </div>
-    </div>
+    <AssignDialog
+      title={kind === 'medical_verification' ? 'Giao xác minh y khoa' : 'Giao việc sửa bài'}
+      note={<>Tạo 1 việc trong To-do list cho {findings.length} phát hiện của “{findings[0].title}”. Mỗi phát hiện chỉ được giao một lần.</>}
+      defaultPriority={findings.some(f => f.severity === 'P0' || f.severity === 'P1') ? 'high' : 'medium'}
+      onConfirm={confirm} onClose={onClose}
+    />
   );
 }
 
@@ -113,15 +67,12 @@ export default function ReviewTab({ canManage }: { canManage: boolean }) {
   const { ciFindings, ciChecks, ciTasks } = useAppStore();
   const [decision, setDecision] = useState<CiDecision | 'all' | 'todo'>('todo');
   const [severity, setSeverity] = useState('');
-  const [source, setSource] = useState(''); // '' | '__content' | '__competitor' | tên đối thủ
-  const competitors = useMemo(() => [...new Set(ciFindings.map(f => f.competitor).filter((x): x is string => !!x))].sort(), [ciFindings]);
   const [selected, setSelected] = useState<string[]>([]);
   const [assigning, setAssigning] = useState<CiFinding[] | null>(null);
 
   const list = useMemo(() => ciFindings
-    .filter(f => (decision === 'all' || (decision === 'todo' ? f.decision === 'pending' || (!f.taskId && f.decision !== 'rejected') : f.decision === decision)) && (!severity || f.severity === severity)
-      && (!source || (source === '__content' ? !f.competitor : source === '__competitor' ? !!f.competitor : f.competitor === source)))
-    .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || b.createdAt.localeCompare(a.createdAt)), [ciFindings, decision, severity, source]);
+    .filter(f => (decision === 'all' || (decision === 'todo' ? f.decision === 'pending' || (!f.taskId && f.decision !== 'rejected') : f.decision === decision)) && (!severity || f.severity === severity))
+    .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || b.createdAt.localeCompare(a.createdAt)), [ciFindings, decision, severity]);
   const selectedFindings = list.filter(f => selected.includes(f.id));
 
   const toggle = (f: CiFinding) => {
@@ -141,12 +92,6 @@ export default function ReviewTab({ canManage }: { canManage: boolean }) {
         </select>
         <select className="form-select" style={{ width: 'auto' }} value={severity} onChange={e => setSeverity(e.target.value)}>
           <option value="">Mọi mức độ</option>{['P0', 'P1', 'P2', 'P3'].map(s => <option key={s}>{s}</option>)}
-        </select>
-        <select className="form-select" style={{ width: 'auto' }} value={source} onChange={e => setSource(e.target.value)}>
-          <option value="">Mọi nguồn</option>
-          <option value="__content">Nội dung bài</option>
-          <option value="__competitor">So sánh đối thủ (tất cả)</option>
-          {competitors.map(c => <option key={c} value={c}>So với {c}</option>)}
         </select>
         <span style={{ ...mutedStyle, marginLeft: 'auto' }}>{list.length} phát hiện · Nguồn ChatGPT, chưa kiểm chứng tự động</span>
         {canManage && selected.length > 0 && <button className="btn btn-primary btn-sm" onClick={() => setAssigning(selectedFindings)}><UserPlus size={13} /> Giao {selected.length} phát hiện</button>}
