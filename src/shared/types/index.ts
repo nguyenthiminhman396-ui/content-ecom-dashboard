@@ -924,21 +924,30 @@ export interface CiSettings {
   opportunitySheetCsvUrl?: string;
 }
 
-/** Cơ hội nội dung từ phân tích đối thủ — định hướng nội dung nên phát triển tiếp (không phải lỗi bài) */
+/** Insight đối thủ (sheet Competitor Insights) — định hướng nội dung Long Châu nên phát triển tiếp, không phải lỗi bài */
 export interface CiOpportunity {
   id: string;
-  /** chủ đề|đối thủ|loại|bài LC — chống nhập trùng */
+  /** chủ đề|đối thủ|insight_type|bài LC — chống nhập trùng */
   key: string;
   checkedAt: string;
+  topic: string;
+  /** new_article: Long Châu chưa có bài · expand_article: bổ sung bài có sẵn */
+  type: 'new_article' | 'expand_article';
+  /** Giá trị gốc cột insight_type trong sheet */
+  insightType?: string;
+  /** Bài Long Châu liên quan (cột longchau_url) */
+  lcUrl?: string;
   competitor?: string;
   competitorUrl?: string;
-  topic: string;
-  type: 'new_article' | 'expand_article';
-  /** Bài Long Châu liên quan (khi bổ sung bài có sẵn) */
-  lcUrl?: string;
+  competitorObservation?: string;
+  lcGap?: string;
+  userValue?: string;
+  suggestedAction?: string;
   priority: TodoPriority;
-  reason: string;
-  suggestedOutline?: string;
+  evidenceUrls: string[];
+  verification?: string;
+  /** Giá trị gốc cột status trong sheet (chỉ hiển thị; trạng thái xử lý do dashboard quản lý) */
+  sheetStatus?: string;
   status: 'pending' | 'approved' | 'skipped' | 'assigned' | 'done';
   decisionBy?: string;
   decisionAt?: string;

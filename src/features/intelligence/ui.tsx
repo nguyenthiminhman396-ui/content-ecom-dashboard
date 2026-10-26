@@ -1,5 +1,5 @@
 import { ExternalLink } from 'lucide-react';
-import type { CiFinding, CiSeverity } from '@/shared/types';
+import type { CiFinding, CiOpportunity, CiSeverity } from '@/shared/types';
 import { SEVERITY_META, CATEGORY_LABEL, scoreColor, mutedStyle } from './labels';
 
 export function SeverityBadge({ severity }: { severity: CiSeverity }) {
@@ -35,6 +35,28 @@ export function FindingDetail({ f }: { f: CiFinding }) {
       <div><strong>Lý do:</strong> {f.rationale}</div>
       {f.suggestedAction && <div><strong>Đề xuất:</strong> {f.suggestedAction}</div>}
       {f.evidenceUrls.length > 0 && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><span style={mutedStyle}>Bằng chứng:</span>{f.evidenceUrls.map(u => <UrlLink key={u} url={u} />)}</div>}
+    </div>
+  );
+}
+
+/** Nội dung một insight đối thủ (dùng ở tab Cơ hội nội dung và Assignments). */
+export function OpportunityDetail({ o }: { o: CiOpportunity }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: '0.86rem' }}>
+      {(o.competitor || o.competitorUrl) && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={mutedStyle}>Đối thủ:</span><strong>{o.competitor || '—'}</strong>{o.competitorUrl && <UrlLink url={o.competitorUrl} />}
+        </div>
+      )}
+      {o.lcUrl && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}><span style={mutedStyle}>Bài Long Châu:</span><UrlLink url={o.lcUrl} /></div>}
+      {o.competitorObservation && <div><strong>Đối thủ làm gì:</strong> {o.competitorObservation}</div>}
+      {o.lcGap && <div><strong>Long Châu còn thiếu:</strong> {o.lcGap}</div>}
+      {o.userValue && <div><strong>Giá trị cho người đọc:</strong> {o.userValue}</div>}
+      {o.suggestedAction && <div style={{ whiteSpace: 'pre-wrap' }}><strong>Đề xuất:</strong> {o.suggestedAction}</div>}
+      {o.evidenceUrls.length > 0 && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><span style={mutedStyle}>Bằng chứng:</span>{o.evidenceUrls.map(u => <UrlLink key={u} url={u} />)}</div>}
+      {(o.insightType || o.verification || o.sheetStatus) && (
+        <div style={mutedStyle}>{[o.insightType && `insight_type: ${o.insightType}`, o.verification && `verification: ${o.verification}`, o.sheetStatus && `status (sheet): ${o.sheetStatus}`].filter(Boolean).join(' · ')}</div>
+      )}
     </div>
   );
 }

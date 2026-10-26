@@ -6,7 +6,8 @@ import type { CiOpportunity } from '@/shared/types';
 import AssignDialog, { type AssignInput } from './AssignDialog';
 import { createCiTask } from './createTask';
 import { TASK_STATUS, fmtCheckedAt, mutedStyle } from './labels';
-import { UrlLink } from './ui';
+import { OpportunityDetail } from './ui';
+import { opportunityLines } from './opportunityParser';
 
 const STATUS_LABEL: Record<CiOpportunity['status'], string> = {
   pending: 'Chờ duyệt', approved: 'Đã duyệt — chưa giao', assigned: 'Đã giao', done: 'Đã hoàn thành', skipped: 'Bỏ qua',
@@ -34,15 +35,8 @@ function OpportunityCard({ o, canManage, onAssign }: { o: CiOpportunity; canMana
             : <span className="status-badge status-cancelled">{STATUS_LABEL[o.status]}</span>}
         </div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6, fontSize: '0.86rem' }}>
-        {(o.competitor || o.competitorUrl) && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={mutedStyle}>Đối thủ:</span><strong>{o.competitor || '—'}</strong>{o.competitorUrl && <UrlLink url={o.competitorUrl} />}
-          </div>
-        )}
-        {o.lcUrl && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}><span style={mutedStyle}>Bài Long Châu cần bổ sung:</span><UrlLink url={o.lcUrl} /></div>}
-        <div><strong>Vì sao nên làm:</strong> {o.reason}</div>
-        {o.suggestedOutline && <div style={{ whiteSpace: 'pre-wrap' }}><strong>Gợi ý triển khai:</strong> {o.suggestedOutline}</div>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+        <OpportunityDetail o={o} />
         <div style={mutedStyle}>Phân tích {fmtCheckedAt(o.checkedAt)} · nhập bởi {o.importedBy}{o.decisionBy ? ` · ${STATUS_LABEL[o.status]} bởi ${o.decisionBy}${o.decisionNote ? ` (${o.decisionNote})` : ''}` : ''}</div>
       </div>
       {canManage && !o.taskId && o.status !== 'done' && (
@@ -76,14 +70,7 @@ export default function OpportunitiesTab({ canManage }: { canManage: boolean }) 
     if (fresh?.taskId) { toast.error('Cơ hội này đã được giao.'); setAssigning(null); return; }
     const taskId = createCiTask({
       kind: o.type, url: o.lcUrl || '', title: o.topic, opportunityId: o.id, input,
-      detailLines: [
-        `Chủ đề: ${o.topic}`,
-        o.type === 'expand_article' ? `Bài Long Châu cần bổ sung: ${o.lcUrl || '(chưa có link)'}` : 'Loại: viết bài mới',
-        ...(o.competitor || o.competitorUrl ? [`Tham khảo ${o.competitor || 'đối thủ'}: ${o.competitorUrl || ''}`] : []),
-        `Vì sao nên làm: ${o.reason}`,
-        ...(o.suggestedOutline ? [`Gợi ý triển khai: ${o.suggestedOutline}`] : []),
-        'Lưu ý: tham khảo để biết độ phủ chủ đề, không sao chép nội dung đối thủ.',
-      ],
+      detailLines: opportunityLines(o),
     });
     updateCiOpportunity(o.id, { status: 'assigned', taskId, decisionBy: currentUser?.name, decisionAt: new Date().toISOString() });
     toast.success(`Đã giao vào To-do của ${input.assignee}`);

@@ -6,7 +6,7 @@ import type { CiFinding, CiTask, CiTaskStatus } from '@/shared/types';
 import { recheckPrompt } from './prompts';
 import { TASK_KIND_LABEL } from './createTask';
 import { TASK_STATUS, copyText, fmtDate, todayVN, mutedStyle } from './labels';
-import { FindingDetail, Score, UrlLink } from './ui';
+import { FindingDetail, OpportunityDetail, Score, UrlLink } from './ui';
 
 const PRIORITY: Record<string, string> = { high: '🔴 Cao', medium: '🟡 Trung bình', low: '⚪ Thấp' };
 
@@ -56,12 +56,9 @@ function TaskPanel({ task, canManage }: { task: CiTask; canManage: boolean }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 12 }}>
       {task.instructions && <div style={{ fontSize: '0.85rem' }}><strong>Yêu cầu:</strong> {task.instructions}</div>}
       {opp && (
-        <div style={{ padding: 10, border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)', fontSize: '0.86rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div><strong>Chủ đề:</strong> {opp.topic}</div>
-          {opp.lcUrl && <div><span style={mutedStyle}>Bài Long Châu cần bổ sung: </span><UrlLink url={opp.lcUrl} /></div>}
-          {opp.competitorUrl && <div><span style={mutedStyle}>Tham khảo {opp.competitor || 'đối thủ'}: </span><UrlLink url={opp.competitorUrl} /></div>}
-          <div><strong>Vì sao nên làm:</strong> {opp.reason}</div>
-          {opp.suggestedOutline && <div style={{ whiteSpace: 'pre-wrap' }}><strong>Gợi ý triển khai:</strong> {opp.suggestedOutline}</div>}
+        <div style={{ padding: 10, border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ fontSize: '0.86rem' }}><strong>Chủ đề:</strong> {opp.topic}</div>
+          <OpportunityDetail o={opp} />
         </div>
       )}
       {findings.map(f => <div key={f.id} style={{ padding: 10, border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)' }}><FindingDetail f={f} /></div>)}
