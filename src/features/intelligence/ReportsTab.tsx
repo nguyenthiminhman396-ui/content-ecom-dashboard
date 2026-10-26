@@ -67,7 +67,19 @@ export default function ReportsTab() {
     if (tasks.overdue) insights.push(`${tasks.overdue}/${tasks.open} task đang mở đã quá hạn.`);
     if (reviewed.length) insights.push(`Tỷ lệ phát hiện được xác nhận: ${Math.round((confirmed / reviewed.length) * 100)}% (${confirmed}/${reviewed.length}) — dùng để đánh giá độ chính xác của ChatGPT.`);
     if (rc.resolved + rc.unresolved) insights.push(`Kiểm tra lại: ${rc.resolved}/${rc.resolved + rc.unresolved} lỗi đã xử lý.`);
-    return { checks, qc, scored, prev, sev, findings, reviewed, confirmed, byCat, worst, tasks, rc, insights: insights.slice(0, 5) };
+    const compFindings = findings.filter(f => f.competitor);
+    const byCompetitor = Object.entries(compFindings.reduce<Record<string, { n: number; important: number; articles: Set<string> }>>((a, f) => {
+      const k = f.competitor!;
+      a[k] ??= { n: 0, important: 0, articles: new Set() };
+      a[k].n++; if (f.severity === 'P0' || f.severity === 'P1' || f.severity === 'P2') a[k].important++; a[k].articles.add(f.url);
+      return a;
+    }, {})).map(([name, v]) => ({ name, n: v.n, important: v.important, articles: v.articles.size })).sort((a, b) => b.n - a.n);
+    const behind = [...new Set(compFindings.map(f => f.url))].map(url => {
+      const list = compFindings.filter(f => f.url === url);
+      return { url, title: list[0].title, n: list.length, who: [...new Set(list.map(f => f.competitor))].join(', ') };
+    }).sort((a, b) => b.n - a.n).slice(0, 5);
+    if (compFindings.length) insights.splice(Math.min(2, insights.length), 0, `${compFindings.length} cơ hội từ so sánh đối thủ trên ${new Set(compFindings.map(f => f.url)).size} bài${byCompetitor[0] ? ` — nhiều nhất so với ${byCompetitor[0].name} (${byCompetitor[0].n})` : ''}.`);
+    return { compFindings, byCompetitor, behind, checks, qc, scored, prev, sev, findings, reviewed, confirmed, byCat, worst, tasks, rc, insights: insights.slice(0, 5) };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ciChecks, ciFindings, ciTasks, from, to, prevFrom, prevTo]);
 
@@ -107,6 +119,13 @@ export default function ReportsTab() {
           {r.byCat.map(([k, n]) => <div key={k} style={mutedStyle}>{CATEGORY_LABEL[k as keyof typeof CATEGORY_LABEL]}: {n}</div>)}
           {!r.byCat.length && <div style={mutedStyle}>—</div>}
           <div style={{ marginTop: 8 }}><strong>Kiểm tra lại</strong><div style={mutedStyle}>✅ {r.rc.resolved} đã xử lý · ❌ {r.rc.unresolved} chưa xử lý · 🆕 {r.rc.fresh} lỗi mới</div></div>
+        </div>
+        <div className="card" style={{ padding: 14 }}>
+          <strong>So sánh đối thủ</strong>
+          {r.byCompetitor.map(c => <div key={c.name} style={mutedStyle}>{c.name}: {c.n} cơ hội ({c.important} quan trọng P0–P2) trên {c.articles} bài</div>)}
+          {!r.byCompetitor.length && <div style={mutedStyle}>Chưa có dòng so sánh đối thủ trong kỳ (cột competitor trong Sheet).</div>}
+          {r.behind.length > 0 && <div style={{ marginTop: 8, fontWeight: 600, fontSize: '0.84rem' }}>Bài thiếu nhiều nhất so với đối thủ</div>}
+          {r.behind.map(b => <div key={b.url} style={{ fontSize: '0.82rem', paddingTop: 4 }}>×{b.n} <UrlLink url={b.url} label={b.title} /> <span style={mutedStyle}>({b.who})</span></div>)}
         </div>
         <div className="card" style={{ padding: 14 }}>
           <strong>Bài nhiều cảnh báo P0/P1 nhất</strong>

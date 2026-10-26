@@ -56,7 +56,7 @@ function AssignModal({ findings, onClose }: { findings: CiFinding[]; onClose: ()
     const title = `${kind === 'medical_verification' ? '[CI] Xác minh y khoa' : '[CI] Tối ưu bài'}: ${findings[0].title}`.slice(0, 140);
     const description = [
       ...(instructions ? [`Yêu cầu: ${instructions}`] : []), `URL: ${findings[0].url}`, '',
-      ...fresh.map((f, i) => `${i + 1}. [${f.severity}] ${f.location}${f.quote ? ` — “${f.quote}”` : ''}\n   Lý do: ${f.rationale}\n   Đề xuất: ${f.suggestedAction}`),
+      ...fresh.map((f, i) => `${i + 1}. [${f.severity}] ${f.location}${f.quote ? ` — “${f.quote}”` : ''}${f.competitor ? `\n   So với ${f.competitor}${f.competitorUrl ? `: ${f.competitorUrl}` : ''}` : ''}\n   Lý do: ${f.rationale}\n   Đề xuất: ${f.suggestedAction}`),
       '', 'Khi xong: nộp URL bài đã cập nhật ở Content Intelligence › Assignments.',
     ].join('\n');
     const now = new Date().toISOString();
@@ -113,12 +113,15 @@ export default function ReviewTab({ canManage }: { canManage: boolean }) {
   const { ciFindings, ciChecks, ciTasks } = useAppStore();
   const [decision, setDecision] = useState<CiDecision | 'all' | 'todo'>('todo');
   const [severity, setSeverity] = useState('');
+  const [source, setSource] = useState(''); // '' | '__content' | '__competitor' | tên đối thủ
+  const competitors = useMemo(() => [...new Set(ciFindings.map(f => f.competitor).filter((x): x is string => !!x))].sort(), [ciFindings]);
   const [selected, setSelected] = useState<string[]>([]);
   const [assigning, setAssigning] = useState<CiFinding[] | null>(null);
 
   const list = useMemo(() => ciFindings
-    .filter(f => (decision === 'all' || (decision === 'todo' ? f.decision === 'pending' || (!f.taskId && f.decision !== 'rejected') : f.decision === decision)) && (!severity || f.severity === severity))
-    .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || b.createdAt.localeCompare(a.createdAt)), [ciFindings, decision, severity]);
+    .filter(f => (decision === 'all' || (decision === 'todo' ? f.decision === 'pending' || (!f.taskId && f.decision !== 'rejected') : f.decision === decision)) && (!severity || f.severity === severity)
+      && (!source || (source === '__content' ? !f.competitor : source === '__competitor' ? !!f.competitor : f.competitor === source)))
+    .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || b.createdAt.localeCompare(a.createdAt)), [ciFindings, decision, severity, source]);
   const selectedFindings = list.filter(f => selected.includes(f.id));
 
   const toggle = (f: CiFinding) => {
@@ -138,6 +141,12 @@ export default function ReviewTab({ canManage }: { canManage: boolean }) {
         </select>
         <select className="form-select" style={{ width: 'auto' }} value={severity} onChange={e => setSeverity(e.target.value)}>
           <option value="">Mọi mức độ</option>{['P0', 'P1', 'P2', 'P3'].map(s => <option key={s}>{s}</option>)}
+        </select>
+        <select className="form-select" style={{ width: 'auto' }} value={source} onChange={e => setSource(e.target.value)}>
+          <option value="">Mọi nguồn</option>
+          <option value="__content">Nội dung bài</option>
+          <option value="__competitor">So sánh đối thủ (tất cả)</option>
+          {competitors.map(c => <option key={c} value={c}>So với {c}</option>)}
         </select>
         <span style={{ ...mutedStyle, marginLeft: 'auto' }}>{list.length} phát hiện · Nguồn ChatGPT, chưa kiểm chứng tự động</span>
         {canManage && selected.length > 0 && <button className="btn btn-primary btn-sm" onClick={() => setAssigning(selectedFindings)}><UserPlus size={13} /> Giao {selected.length} phát hiện</button>}

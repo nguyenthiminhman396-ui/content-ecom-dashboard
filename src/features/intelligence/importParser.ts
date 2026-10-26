@@ -9,7 +9,7 @@ export const COLUMNS = [
   'url', 'title', 'checked_at', 'check_type',
   'medical_accuracy', 'reader_intent', 'completeness', 'evidence_quality', 'editorial_quality', 'actionability', 'total',
   'summary', 'severity', 'category', 'location', 'quote', 'rationale', 'suggested_action', 'evidence_urls', 'verification',
-  'previous_finding_id', 'previous_status',
+  'previous_finding_id', 'previous_status', 'competitor', 'competitor_url',
 ] as const;
 type Col = typeof COLUMNS[number];
 /** `__cells`: số ô thực có trên dòng (để phát hiện dòng bị vỡ do xuống dòng trong ô) */
@@ -75,6 +75,17 @@ export function parseTable(text: string): { rows: Row[]; error?: string } {
       __cells: String(cells.filter(c => c.trim() !== '').length),
     }) as Row),
   };
+}
+
+/** Chuẩn hoá tên đối thủ; nếu chỉ có link thì suy ra từ tên miền. */
+export function normalizeCompetitor(name?: string, url?: string): string | undefined {
+  const n = norm(name).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+  let host = '';
+  try { host = url ? new URL(url).hostname : ''; } catch { /* bỏ qua */ }
+  if (/vinmec/.test(n) || host.includes('vinmec')) return 'Vinmec';
+  if (/vnvc/.test(n) || host.includes('vnvc')) return 'VNVC';
+  if (/tam ?anh/.test(n) || host.includes('tamanh')) return 'Tâm Anh';
+  return name?.trim() || undefined;
 }
 
 const shortId = (p: string) => `${p}${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
@@ -205,14 +216,17 @@ export function normalizeRows(rows: Row[], ctx: { existingCheckKeys: Set<string>
     if (!category) { out.errors.push({ row: line, message: `category không hợp lệ: "${r.category}"` }); return; }
     if (!r.rationale) { out.errors.push({ row: line, message: 'Thiếu rationale (lý do)' }); return; }
     const location = r.location || 'Toàn bài';
-    const fKey = `${checkKey}|${norm(location)}|${norm(r.quote) || norm(r.rationale).slice(0, 80)}`;
+    const competitorUrl = /^https?:\/\//.test(r.competitor_url || '') ? r.competitor_url!.trim() : undefined;
+    const competitor = normalizeCompetitor(r.competitor, competitorUrl);
+    if (competitor && category !== 'content_opportunity') out.warnings.push({ row: line, message: `Dòng so sánh ${competitor} nhưng category là ${category} — khác biệt với đối thủ chỉ nên là content_opportunity` });
+    const fKey = `${checkKey}|${competitor || ''}|${norm(location)}|${norm(r.quote) || norm(r.rationale).slice(0, 80)}`;
     if (ctx.existingFindingKeys.has(fKey) || out.findings.some(f => f.key === fKey)) { out.duplicates++; return; }
     const evidenceUrls = (r.evidence_urls || '').split(/[\s,;]+/).filter(u => /^https?:\/\//.test(u));
-    if (!evidenceUrls.length && category !== 'content_opportunity') out.warnings.push({ row: line, message: 'Không có URL bằng chứng' });
+    if (!evidenceUrls.length && !competitorUrl && category !== 'content_opportunity') out.warnings.push({ row: line, message: 'Không có URL bằng chứng' });
     out.findings.push({
       id: shortId('F'), key: fKey, checkId: check.id, url: urlStr, title: check.title, severity, category, location,
       quote: r.quote || undefined, rationale: r.rationale, suggestedAction: r.suggested_action || '', evidenceUrls,
-      verification: r.verification || undefined, decision: 'pending', status: 'open', createdAt: now,
+      verification: r.verification || undefined, competitor, competitorUrl, decision: 'pending', status: 'open', createdAt: now,
     });
   });
   if (filled.length) out.warnings.unshift({ row: filled[0], message: `${filled.length} dòng thiếu url được lấy theo bài ở dòng phía trên (dòng ${filled.slice(0, 8).join(', ')}${filled.length > 8 ? '…' : ''})` });

@@ -868,6 +868,9 @@ export interface CiFinding {
   suggestedAction: string;
   evidenceUrls: string[];
   verification?: string;
+  /** So sánh đối thủ: Vinmec / VNVC / Tâm Anh (trống = lỗi từ nội dung bài) */
+  competitor?: string;
+  competitorUrl?: string;
   decision: CiDecision;
   /** Mức độ cần tối ưu 1–5 do quản lý chấm — tách biệt điểm AI và KPI */
   managerScore?: number;
