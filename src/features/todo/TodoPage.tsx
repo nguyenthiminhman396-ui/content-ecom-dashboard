@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAppStore } from '@/shared/store/appStore';
 import {
   CheckSquare, Plus, Trash2, X, Save, AlertTriangle,
@@ -287,6 +288,14 @@ function TodoCard({ item, currentUserName, onToggle, onEdit, onDelete }: {
             }}>
               {pm.icon} {pm.label}
             </span>
+            {item.source === 'content_intelligence' && (
+              <Link to="/intelligence" onClick={e => e.stopPropagation()} style={{
+                fontSize: '0.68rem', padding: '1px 8px', borderRadius: 'var(--radius-full)',
+                background: 'var(--accent-50)', color: '#0F766E', fontWeight: 600, textDecoration: 'none',
+              }} title="Mở Content Intelligence để nộp URL kết quả">
+                🔎 Content Intelligence
+              </Link>
+            )}
             {/* Assignee badge */}
             {item.assigneeName && (
               <span style={{

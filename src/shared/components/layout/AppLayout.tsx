@@ -14,6 +14,7 @@ const pageTitles: Record<string, string> = {
   '/reports/periodic': 'Báo cáo tháng/quý',
   '/members': 'Thành viên',
   '/settings': 'Cài đặt',
+  '/intelligence': 'Content Intelligence',
 };
 
 export default function AppLayout() {

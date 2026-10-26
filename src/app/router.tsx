@@ -20,6 +20,7 @@ import BonusPointsPage from '@/features/bonus/BonusPointsPage';
 import RnDLogsPage from '@/features/rnd/RnDLogsPage';
 import TodoPage from '@/features/todo/TodoPage';
 import ExpensesPage from '@/features/expenses/ExpensesPage';
+import IntelligencePage from '@/features/intelligence/IntelligencePage';
 
 export default function AppRouter() {
   return (
@@ -44,6 +45,7 @@ export default function AppRouter() {
         <Route path="/settings"       element={<SettingsPage />} />
         <Route path="/todo"           element={<TodoPage />} />
         <Route path="/expenses"       element={<ExpensesPage />} />
+        <Route path="/intelligence"   element={<IntelligencePage />} />
       </Route>
       {/* Public Read-Only Share Routes (No sidebar, no header, no login required) */}
       <Route path="/share/report" element={<MonthlyQuarterlyReportPage isShareMode={true} />} />

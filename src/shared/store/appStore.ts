@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { AppState, FilterState, KPISubmission, Member, MemberAccount, WeeklyReport,
-  MonthlyReportConfig, ProjectTask, BonusPoint, RnDLog, MonthlyKPITarget, TodoItem, AppNotification } from '@/shared/types';
+  MonthlyReportConfig, ProjectTask, BonusPoint, RnDLog, MonthlyKPITarget, TodoItem, AppNotification,
+  CiCheck, CiFinding, CiTask, CiSettings } from '@/shared/types';
 import { DEFAULT_KPI_SCALE_CONFIG } from '@/shared/types';
 import { mockProjects, mockContents, mockMembers, mockClients, mockExpenses, defaultTaskPointRules, defaultSites } from '@/shared/data/mockData';
 
@@ -25,6 +26,10 @@ const DB_TASK_PT_RULES = 'hcms_task_point_rules';
 const DB_PERF_REVIEWS  = 'hcms_perf_reviews';
 const DB_USER          = 'hcms_current_user';
 const DB_NOTIFICATIONS = 'hcms_notifications';
+const DB_CI_CHECKS     = 'hcms_ci_checks';
+const DB_CI_FINDINGS   = 'hcms_ci_findings';
+const DB_CI_TASKS      = 'hcms_ci_tasks';
+const DB_CI_SETTINGS   = 'hcms_ci_settings';
 
 // ── Persist to Postgres with retry ────────────────────────────────────────
 function saveDB(key: string, value: unknown) {
@@ -141,6 +146,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   weeklyReports: [] as WeeklyReport[],
   monthlyReports: [],
   notifications: [] as AppNotification[],
+  ciChecks:     [] as CiCheck[],
+  ciFindings:   [] as CiFinding[],
+  ciTasks:      [] as CiTask[],
+  ciSettings:   {} as CiSettings,
 
   // ── UI state ─────────────────────────────────────────────────────────────
   currentUser:      null,
@@ -502,6 +511,26 @@ export const useAppStore = create<AppState>((set, get) => ({
     saveDB(DB_NOTIFICATIONS, notifications);
   },
 
+  // ── Content Intelligence ──────────────────────────────────────────────────
+  addCiImport: (checks, findings) => {
+    set({ ciChecks: [...get().ciChecks, ...checks], ciFindings: [...get().ciFindings, ...findings] });
+    if (checks.length) appendDB(DB_CI_CHECKS, checks);
+    if (findings.length) appendDB(DB_CI_FINDINGS, findings);
+  },
+  updateCiFinding: (id, updates) => {
+    set({ ciFindings: get().ciFindings.map(f => f.id === id ? { ...f, ...updates } : f) });
+    updateItemDB(DB_CI_FINDINGS, id, updates);
+  },
+  addCiTask: (task) => {
+    set({ ciTasks: [...get().ciTasks, task] });
+    appendDB(DB_CI_TASKS, [task]);
+  },
+  updateCiTask: (id, updates) => {
+    set({ ciTasks: get().ciTasks.map(t => t.id === id ? { ...t, ...updates } : t) });
+    updateItemDB(DB_CI_TASKS, id, updates);
+  },
+  setCiSettings: (ciSettings) => { set({ ciSettings }); saveDB(DB_CI_SETTINGS, ciSettings); },
+
   // ── UI actions ────────────────────────────────────────────────────────────
   setCurrentUser:  (user) => {
     set({ currentUser: user });
@@ -596,6 +625,10 @@ export async function initFromDB() {
       [DB_MONTHLY]:        'monthlyReports',
       [DB_ACCOUNTS]:       'memberAccounts',
       [DB_NOTIFICATIONS]:  'notifications',
+      [DB_CI_CHECKS]:      'ciChecks',
+      [DB_CI_FINDINGS]:    'ciFindings',
+      [DB_CI_TASKS]:       'ciTasks',
+      [DB_CI_SETTINGS]:    'ciSettings',
     };
 
     for (const [key, stateKey] of Object.entries(keyMap)) {

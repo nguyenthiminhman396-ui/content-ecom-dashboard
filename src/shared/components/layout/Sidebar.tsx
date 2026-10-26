@@ -3,7 +3,7 @@ import { useAppStore } from '@/shared/store/appStore';
 import {
   LayoutDashboard, FolderKanban, BarChart3,
   Users, ChevronLeft, ChevronRight, Heart, Settings,
-  Trophy, Calculator, Award, ClipboardList, History, Package, Database, Gift, Lightbulb, Target, CheckSquare, Sun, Moon, Wallet, CalendarRange
+  Trophy, Calculator, Award, ClipboardList, History, Package, Database, Gift, Lightbulb, Target, CheckSquare, Sun, Moon, Wallet, CalendarRange, ScanSearch
 } from 'lucide-react';
 import type { MemberRole } from '@/shared/types';
 
@@ -30,6 +30,7 @@ const navItems: NavItem[] = [
   { path: '/performance',   icon: Award,           label: 'Đánh giá nhân sự',    section: 'Quản lý' },
   { path: '/bonus-points',  icon: Gift,            label: 'Điểm thưởng',         section: 'Quản lý', allowedRoles: ['Manager', 'Leader'] },
   { path: '/rnd-logs',      icon: Lightbulb,       label: 'R&D Log',             section: 'Quản lý' },
+  { path: '/intelligence',  icon: ScanSearch,      label: 'Content Intelligence', section: 'Quản lý', allowedRoles: ['Manager', 'Leader', 'Member'] },
   { path: '/reports',       icon: BarChart3,       label: 'Báo cáo tuần',        section: 'Quản lý', allowedRoles: ['Manager'] },
   { path: '/reports/periodic', icon: CalendarRange, label: 'Báo cáo tháng/quý',   section: 'Quản lý', allowedRoles: ['Manager'] },
   // ── Hệ thống ──

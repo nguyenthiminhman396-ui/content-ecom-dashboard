@@ -483,6 +483,10 @@ export interface TodoItem {
   completedAt?: string;
   /** Ngày tạo */
   createdAt: string;
+  /** 'content_intelligence' khi giao từ module Content Intelligence */
+  source?: 'content_intelligence';
+  /** CiTask.id liên kết */
+  ciTaskId?: string;
 }
 
 export type RnDStatus = 'proposed' | 'in_progress' | 'completed' | 'archived';
@@ -571,6 +575,11 @@ export interface AppState {
   todos: TodoItem[];
   /** Thông báo (task completion, assignment, etc.) */
   notifications: AppNotification[];
+  /** Content Intelligence — kết quả QC nhập từ ChatGPT */
+  ciChecks: CiCheck[];
+  ciFindings: CiFinding[];
+  ciTasks: CiTask[];
+  ciSettings: CiSettings;
 
   // UI State
   currentUser: Member | null;
@@ -642,6 +651,13 @@ export interface AppState {
 
   // Notification CRUD
   addNotification: (n: AppNotification) => void;
+
+  // Content Intelligence
+  addCiImport: (checks: CiCheck[], findings: CiFinding[]) => void;
+  updateCiFinding: (id: string, updates: Partial<CiFinding>) => void;
+  addCiTask: (task: CiTask) => void;
+  updateCiTask: (id: string, updates: Partial<CiTask>) => void;
+  setCiSettings: (settings: CiSettings) => void;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: (recipientName: string) => void;
   clearNotifications: (recipientName: string) => void;
@@ -802,4 +818,101 @@ export interface MonthlyReportConfig {
   hotspotComments?: string[];
   improvementComments?: string[];
   updatedAt?: string;
+}
+
+// ============================================
+// Content Intelligence — kết quả QC nhập từ ChatGPT (không tự crawl/chấm)
+// ============================================
+
+export type CiSeverity = 'P0' | 'P1' | 'P2' | 'P3';
+export type CiCategory = 'quality_issue' | 'content_opportunity' | 'medical_verification';
+export type CiDecision = 'pending' | 'confirmed' | 'rejected' | 'needs_medical_verification';
+
+export interface CiScores {
+  medical_accuracy: number;   // /30
+  reader_intent: number;      // /25
+  completeness: number;       // /15
+  evidence_quality: number;   // /15
+  editorial_quality: number;  // /10
+  actionability: number;      // /5
+  total: number;              // /100 — luôn tính lại từ 6 tiêu chí
+}
+
+/** Một lượt chấm (QC hoặc kiểm tra lại) của một bài */
+export interface CiCheck {
+  id: string;
+  /** url|checked_at|type — chống nhập trùng */
+  key: string;
+  url: string;
+  title: string;
+  checkedAt: string;
+  type: 'qc' | 'recheck';
+  scores: CiScores | null;
+  summary?: string;
+  source: 'chatgpt';
+  importedBy: string;
+  importedAt: string;
+}
+
+export interface CiFinding {
+  id: string;
+  key: string;
+  checkId: string;
+  url: string;
+  title: string;
+  severity: CiSeverity;
+  category: CiCategory;
+  location: string;
+  quote?: string;
+  rationale: string;
+  suggestedAction: string;
+  evidenceUrls: string[];
+  verification?: string;
+  decision: CiDecision;
+  /** Mức độ cần tối ưu 1–5 do quản lý chấm — tách biệt điểm AI và KPI */
+  managerScore?: number;
+  managerReason?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  taskId?: string;
+  status: 'open' | 'assigned' | 'resolved' | 'rejected';
+  createdAt: string;
+}
+
+export type CiTaskStatus = 'assigned' | 'submitted' | 'accepted' | 'changes_requested' | 'needs_medical_verification';
+
+export interface CiRecheckResult {
+  checkId: string;
+  resolved: string[];
+  unresolved: string[];
+  unableToVerify: string[];
+  newFindingIds: string[];
+  importedAt: string;
+}
+
+export interface CiTask {
+  id: string;
+  todoId: string;
+  url: string;
+  title: string;
+  kind: 'optimization' | 'medical_verification';
+  findingIds: string[];
+  ownerName: string;
+  assigneeName: string;
+  priority: TodoPriority;
+  dueDate?: string;
+  instructions?: string;
+  status: CiTaskStatus;
+  resultUrl?: string;
+  submitNotes?: string;
+  submittedAt?: string;
+  recheck?: CiRecheckResult;
+  acceptanceReason?: string;
+  history: { at: string; by: string; action: string; note?: string }[];
+  createdAt: string;
+}
+
+export interface CiSettings {
+  /** Link CSV "Publish to web" của Google Sheet chung (tuỳ chọn) */
+  sheetCsvUrl?: string;
 }
