@@ -12,7 +12,9 @@ export const COLUMNS = [
   'previous_finding_id', 'previous_status',
 ] as const;
 type Col = typeof COLUMNS[number];
-type Row = Partial<Record<Col, string>>;
+/** `__cells`: số ô thực có trên dòng (để phát hiện dòng bị vỡ do xuống dòng trong ô) */
+type Row = Partial<Record<Col | '__cells', string>>;
+const FILL_DOWN: Col[] = ['url', 'title', 'checked_at', 'check_type', 'medical_accuracy', 'reader_intent', 'completeness', 'evidence_quality', 'editorial_quality', 'actionability', 'total', 'summary'];
 
 export const SCORE_MAX: Record<Exclude<keyof CiScores, 'total'>, number> = {
   medical_accuracy: 30, reader_intent: 25, completeness: 15, evidence_quality: 15, editorial_quality: 10, actionability: 5,
@@ -67,7 +69,12 @@ export function parseTable(text: string): { rows: Row[]; error?: string } {
   const table = parseDelimited(t, delim);
   const header = table[0].map(h => h.trim().toLowerCase());
   if (!header.includes('url')) return { rows: [], error: 'Thiếu dòng tiêu đề cột (cần có cột "url"). Hãy copy cả dòng tiêu đề của Sheet.' };
-  return { rows: table.slice(1).map(cells => Object.fromEntries(header.map((h, i) => [h, (cells[i] ?? '').trim()])) as Row) };
+  return {
+    rows: table.slice(1).map(cells => ({
+      ...Object.fromEntries(header.map((h, i) => [h, (cells[i] ?? '').trim()])),
+      __cells: String(cells.filter(c => c.trim() !== '').length),
+    }) as Row),
+  };
 }
 
 const shortId = (p: string) => `${p}${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
@@ -80,7 +87,15 @@ const pad = (n: string) => n.padStart(2, '0');
  * (Google Sheet tiếng Việt hay hiển thị kiểu 27/10/2026 14:30:00). Trả về "YYYY-MM-DD" hoặc "YYYY-MM-DDTHH:mm+07:00".
  */
 export function normalizeCheckedAt(raw: string): string | null {
-  const v = raw.trim();
+  let v = raw.trim();
+  // Hậu tố múi giờ: "+07:00", "+0700", "Z", "GMT+7", "UTC+07:00", "(giờ VN)"…
+  let offsetMin: number | null = null;
+  const tz = /\s*(?:\(.*\))?\s*(Z|(?:GMT|UTC)?\s*([+-])(\d{1,2})(?::?(\d{2}))?|GMT|UTC)\s*$/i.exec(v);
+  if (tz && /\d{1,2}:\d{2}/.test(v.slice(0, tz.index))) {
+    offsetMin = tz[2] ? (tz[2] === '-' ? -1 : 1) * (Number(tz[3]) * 60 + Number(tz[4] || 0)) : 0;
+    v = v.slice(0, tz.index).trim();
+  }
+  v = v.replace(/\s*\(.*\)\s*$/, '');
   let m = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::\d{2})?)?$/.exec(v);
   let y: string, mo: string, d: string, h: string | undefined, mi: string | undefined;
   if (m) [, y, mo, d, h, mi] = m;
@@ -92,7 +107,13 @@ export function normalizeCheckedAt(raw: string): string | null {
   const date = `${y}-${pad(mo)}-${pad(d)}`;
   if (Number.isNaN(new Date(`${date}T00:00:00Z`).getTime())) return null;
   if (h === undefined) return date;
-  if (Number(h) > 23) return null;
+  if (Number(h) > 23 || Number(mi) > 59) return null;
+  if (offsetMin !== null && offsetMin !== 420) {
+    // Đổi giờ ở múi khác về giờ Việt Nam (UTC+7)
+    const utc = Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi)) - offsetMin * 60_000;
+    const vn = new Date(utc + 420 * 60_000).toISOString();
+    return `${vn.slice(0, 16)}+07:00`;
+  }
   return `${date}T${pad(h)}:${mi}+07:00`;
 }
 
@@ -110,11 +131,30 @@ export function normalizeRows(rows: Row[], ctx: { existingCheckKeys: Set<string>
   const out: ParsedImport = { checks: [], findings: [], recheckRows: [], errors: [], warnings: [], duplicates: 0 };
   const checksByKey = new Map<string, CiCheck>();
   const now = new Date().toISOString();
+  let prev: Row | null = null;
+  const filled: number[] = [];
 
-  rows.forEach((r, idx) => {
+  rows.forEach((raw, idx) => {
     const line = idx + 2; // +1 tiêu đề, +1 đánh số từ 1
+    let r = raw;
+    if (!(r.url || '').trim()) {
+      if (raw.__cells !== undefined && Number(raw.__cells) < 3) {
+        out.errors.push({ row: line, message: 'Dòng bị vỡ (có xuống dòng/TAB trong ô) — hãy dán vào Google Sheet trước rồi copy lại' }); return;
+      }
+      if (!prev) { out.errors.push({ row: line, message: 'Thiếu url và không có dòng bài phía trên để lấy theo' }); return; }
+      // Ô url trống: lấy thông tin bài từ dòng phía trên (như kéo xuống trong Sheet)
+      const base: Row = prev;
+      r = { ...raw, ...Object.fromEntries(FILL_DOWN.filter(c => !(raw[c] || '').trim()).map(c => [c, base[c] ?? ''])) };
+      filled.push(line);
+    }
     let url: URL;
-    try { url = new URL(r.url || ''); } catch { out.errors.push({ row: line, message: 'URL không hợp lệ' }); return; }
+    try { url = new URL((r.url || '').trim()); } catch {
+      out.errors.push({ row: line, message: raw.__cells !== undefined && Number(raw.__cells) < 3
+        ? 'Dòng bị vỡ (có xuống dòng/TAB trong ô) — hãy dán vào Google Sheet trước rồi copy lại'
+        : `URL không hợp lệ: "${(r.url || '').slice(0, 60)}"` });
+      return;
+    }
+    prev = r;
     if (!ALLOWED_HOSTS.some(h => url.hostname === h || url.hostname.endsWith(`.${h}`))) {
       out.errors.push({ row: line, message: `URL không thuộc Nhà thuốc/Tiêm chủng Long Châu: ${url.hostname}` }); return;
     }
@@ -175,6 +215,7 @@ export function normalizeRows(rows: Row[], ctx: { existingCheckKeys: Set<string>
       verification: r.verification || undefined, decision: 'pending', status: 'open', createdAt: now,
     });
   });
+  if (filled.length) out.warnings.unshift({ row: filled[0], message: `${filled.length} dòng thiếu url được lấy theo bài ở dòng phía trên (dòng ${filled.slice(0, 8).join(', ')}${filled.length > 8 ? '…' : ''})` });
   out.checks = [...checksByKey.values()];
   return out;
 }

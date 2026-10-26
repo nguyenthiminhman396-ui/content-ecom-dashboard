@@ -16,7 +16,7 @@ Quy tắc biên tập: H2 không có H3 là hợp lệ; nếu H2 có H3 thì ph�
 
 const OUTPUT_RULES = `ĐỊNH DẠNG TRẢ LỜI — chỉ trả về một khối TSV (phân tách bằng TAB), dòng đầu là tiêu đề cột y hệt:
 ${SHEET_HEADER}
-- Mỗi dòng = 1 phát hiện; lặp lại url, title, checked_at (ngày giờ chấm theo giờ Việt Nam, dạng YYYY-MM-DD HH:mm), check_type và 6 cột điểm ở mọi dòng của bài.
+- Mỗi dòng = 1 phát hiện; BẮT BUỘC lặp lại url đầy đủ (bắt đầu bằng https://), title, checked_at (giờ Việt Nam, dạng YYYY-MM-DD HH:mm, không ghi múi giờ), check_type và 6 cột điểm ở MỌI dòng của bài.
 - total = tổng 6 tiêu chí. Bài không có phát hiện: 1 dòng, để trống severity.
 - quote phải là trích dẫn NGUYÊN VĂN trong bài (hoặc để trống nếu lỗi là sự thiếu vắng).
 - evidence_urls: chỉ URL bạn thực sự đã đọc; nhiều URL cách nhau bằng dấu cách. Không tự tạo URL.
