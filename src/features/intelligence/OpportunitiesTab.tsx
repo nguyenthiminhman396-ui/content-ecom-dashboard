@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, SkipForward, UserPlus } from 'lucide-react';
+import { CheckCircle2, SkipForward, UserPlus, Trash2 } from 'lucide-react';
+import { confirmAndRun, deleteOpportunity } from './deleteActions';
 import toast from 'react-hot-toast';
 import { useAppStore } from '@/shared/store/appStore';
 import type { CiOpportunity } from '@/shared/types';
@@ -45,6 +46,8 @@ function OpportunityCard({ o, canManage, onAssign }: { o: CiOpportunity; canMana
           <button className="btn btn-primary btn-sm" onClick={() => onAssign(o)}><UserPlus size={13} /> Duyệt &amp; giao việc</button>
           {o.status === 'pending' && <button className="btn btn-secondary btn-sm" onClick={() => decide('approved')}><CheckCircle2 size={13} /> Chỉ duyệt</button>}
           {o.status !== 'skipped' && <button className="btn btn-secondary btn-sm" onClick={() => decide('skipped')}><SkipForward size={13} /> Bỏ qua</button>}
+          <button className="btn btn-ghost btn-sm" title="Xoá cơ hội này" style={{ color: 'var(--danger)' }}
+            onClick={() => confirmAndRun(`Xoá cơ hội “${o.topic}”? Không hoàn tác được.`, () => deleteOpportunity(o.id))}><Trash2 size={13} /></button>
         </div>
       )}
     </div>

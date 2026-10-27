@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp, Copy, Send, CheckCircle2, Undo2, Stethoscope } from 'lucide-react';
+import { ChevronDown, ChevronUp, Copy, Send, CheckCircle2, Undo2, Stethoscope, XCircle } from 'lucide-react';
+import { cancelTask, confirmAndRun } from './deleteActions';
 import toast from 'react-hot-toast';
 import { useAppStore } from '@/shared/store/appStore';
 import type { CiFinding, CiTask, CiTaskStatus } from '@/shared/types';
@@ -101,6 +102,15 @@ function TaskPanel({ task, canManage }: { task: CiTask; canManage: boolean }) {
           <button className="btn btn-primary btn-sm" onClick={() => accept('accepted')}><CheckCircle2 size={13} /> Nghiệm thu</button>
           <button className="btn btn-secondary btn-sm" onClick={() => accept('changes_requested')}><Undo2 size={13} /> Yêu cầu sửa thêm</button>
           <button className="btn btn-secondary btn-sm" onClick={() => accept('needs_medical_verification')}><Stethoscope size={13} /> Cần xác minh y khoa</button>
+        </div>
+      )}
+
+      {canManage && task.status !== 'accepted' && (
+        <div>
+          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }}
+            onClick={() => confirmAndRun(`Huỷ việc “${task.title}”? To-do của ${task.assigneeName} sẽ bị xoá; lỗi/cơ hội trở về trạng thái chưa giao.`, () => cancelTask(task.id), 'Đã huỷ việc')}>
+            <XCircle size={13} /> Huỷ việc
+          </button>
         </div>
       )}
 

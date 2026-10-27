@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Copy, Upload, RefreshCw, FileInput, AlertTriangle } from 'lucide-react';
+import { Copy, Upload, RefreshCw, FileInput, AlertTriangle, Trash2 } from 'lucide-react';
+import { confirmAndRun, deleteCheck } from './deleteActions';
 import toast from 'react-hot-toast';
 import { useAppStore } from '@/shared/store/appStore';
 import { loadSheetJSFromCDN } from '@/shared/utils/csvImport';
@@ -18,7 +19,7 @@ function detectKind(text: string): Kind {
   return /(^|[\t,"])topic([\t,"]|$)/.test(first) ? 'competitor' : 'qc';
 }
 
-export default function ImportTab() {
+export default function ImportTab({ canManage }: { canManage: boolean }) {
   const { currentUser, ciChecks, ciFindings, ciTasks, ciOpportunities, ciSettings, addCiImport, addCiOpportunities, updateCiTask, setCiSettings } = useAppStore();
   const [kind, setKind] = useState<Kind>('qc');
   const [text, setText] = useState('');
@@ -158,7 +159,7 @@ export default function ImportTab() {
       <div className="card data-table-wrapper">
         {kind === 'qc' ? (
           <table className="data-table">
-            <thead><tr><th>Bài</th><th>Thời điểm chấm</th><th>Loại</th><th>Điểm</th><th>Lỗi</th><th>Nhập bởi</th></tr></thead>
+            <thead><tr><th>Bài</th><th>Thời điểm chấm</th><th>Loại</th><th>Điểm</th><th>Lỗi</th><th>Nhập bởi</th>{canManage && <th></th>}</tr></thead>
             <tbody>
               {recentChecks.map(c => (
                 <tr key={c.id}>
@@ -168,9 +169,17 @@ export default function ImportTab() {
                   <td><Score value={c.scores?.total} /></td>
                   <td>{ciFindings.filter(f => f.checkId === c.id).length}</td>
                   <td style={mutedStyle}>{c.importedBy}</td>
+                  {canManage && (
+                    <td>
+                      <button className="btn btn-ghost btn-sm" title="Xoá lượt chấm này và toàn bộ lỗi của nó" style={{ color: 'var(--danger)' }}
+                        onClick={() => confirmAndRun(`Xoá lượt chấm “${c.title}” (${fmtCheckedAt(c.checkedAt)}) cùng ${ciFindings.filter(f => f.checkId === c.id).length} lỗi? Không hoàn tác được.`, () => deleteCheck(c.id))}>
+                        <Trash2 size={13} />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
-              {!recentChecks.length && <tr><td colSpan={6} style={mutedStyle}>Chưa có dữ liệu QC.</td></tr>}
+              {!recentChecks.length && <tr><td colSpan={7} style={mutedStyle}>Chưa có dữ liệu QC.</td></tr>}
             </tbody>
           </table>
         ) : (

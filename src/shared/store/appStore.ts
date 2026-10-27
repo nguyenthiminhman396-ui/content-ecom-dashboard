@@ -539,6 +539,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ ciOpportunities: get().ciOpportunities.map(o => o.id === id ? { ...o, ...updates } : o) });
     updateItemDB(DB_CI_OPPS, id, updates);
   },
+  removeCiChecks: (ids) => {
+    set({ ciChecks: get().ciChecks.filter(c => !ids.includes(c.id)) });
+    if (ids.length) removeItemDB(DB_CI_CHECKS, ids);
+  },
+  removeCiFindings: (ids) => {
+    set({ ciFindings: get().ciFindings.filter(f => !ids.includes(f.id)) });
+    if (ids.length) removeItemDB(DB_CI_FINDINGS, ids);
+  },
+  removeCiOpportunities: (ids) => {
+    set({ ciOpportunities: get().ciOpportunities.filter(o => !ids.includes(o.id)) });
+    if (ids.length) removeItemDB(DB_CI_OPPS, ids);
+  },
+  removeCiTask: (id) => {
+    set({ ciTasks: get().ciTasks.filter(t => t.id !== id) });
+    removeItemDB(DB_CI_TASKS, [id]);
+  },
   setCiSettings: (ciSettings) => { set({ ciSettings }); saveDB(DB_CI_SETTINGS, ciSettings); },
 
   // ── UI actions ────────────────────────────────────────────────────────────

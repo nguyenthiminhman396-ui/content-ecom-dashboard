@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, XCircle, Stethoscope, UserPlus } from 'lucide-react';
+import { CheckCircle2, XCircle, Stethoscope, UserPlus, Trash2 } from 'lucide-react';
+import { confirmAndRun, deleteFinding } from './deleteActions';
 import toast from 'react-hot-toast';
 import { useAppStore } from '@/shared/store/appStore';
 import type { CiDecision, CiFinding } from '@/shared/types';
@@ -114,6 +115,10 @@ export default function ReviewTab({ canManage }: { canManage: boolean }) {
                 {task && <span className={`status-badge ${TASK_STATUS[task.status].cls}`}>{TASK_STATUS[task.status].label} · {task.assigneeName}</span>}
                 {assignable && <label style={{ ...mutedStyle, display: 'flex', gap: 4, alignItems: 'center', cursor: 'pointer' }}><input type="checkbox" checked={selected.includes(f.id)} onChange={() => toggle(f)} /> chọn</label>}
                 {assignable && <button className="btn btn-secondary btn-sm" onClick={() => setAssigning([f])}><UserPlus size={13} /> Giao việc</button>}
+                {canManage && !f.taskId && (
+                  <button className="btn btn-ghost btn-sm" title="Xoá lỗi này" style={{ color: 'var(--danger)' }}
+                    onClick={() => confirmAndRun(`Xoá lỗi ${f.id} (${f.location})? Không hoàn tác được.`, () => deleteFinding(f.id))}><Trash2 size={13} /></button>
+                )}
               </div>
             </div>
             <FindingDetail f={f} />

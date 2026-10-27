@@ -660,6 +660,10 @@ export interface AppState {
   updateCiTask: (id: string, updates: Partial<CiTask>) => void;
   addCiOpportunities: (items: CiOpportunity[]) => void;
   updateCiOpportunity: (id: string, updates: Partial<CiOpportunity>) => void;
+  removeCiChecks: (ids: string[]) => void;
+  removeCiFindings: (ids: string[]) => void;
+  removeCiOpportunities: (ids: string[]) => void;
+  removeCiTask: (id: string) => void;
   setCiSettings: (settings: CiSettings) => void;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: (recipientName: string) => void;
@@ -877,7 +881,8 @@ export interface CiFinding {
   managerReason?: string;
   reviewedBy?: string;
   reviewedAt?: string;
-  taskId?: string;
+  /** null = đã huỷ việc (null để ghi đè được khi merge vào DB) */
+  taskId?: string | null;
   status: 'open' | 'assigned' | 'resolved' | 'rejected';
   createdAt: string;
 }
@@ -911,7 +916,7 @@ export interface CiTask {
   resultUrl?: string;
   submitNotes?: string;
   submittedAt?: string;
-  recheck?: CiRecheckResult;
+  recheck?: CiRecheckResult | null;
   acceptanceReason?: string;
   history: { at: string; by: string; action: string; note?: string }[];
   createdAt: string;
@@ -952,7 +957,7 @@ export interface CiOpportunity {
   decisionBy?: string;
   decisionAt?: string;
   decisionNote?: string;
-  taskId?: string;
+  taskId?: string | null;
   importedBy: string;
   importedAt: string;
 }

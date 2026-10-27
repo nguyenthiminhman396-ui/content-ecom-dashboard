@@ -44,7 +44,7 @@ export default function IntelligencePage() {
           </button>
         ))}
       </div>
-      {active === 'import' && <ImportTab />}
+      {active === 'import' && <ImportTab canManage={canManage} />}
       {active === 'review' && <ReviewTab canManage={canManage} />}
       {active === 'opportunities' && <OpportunitiesTab canManage={canManage} />}
       {active === 'tasks' && <TasksTab canManage={canManage} canViewAll={canViewAll} />}
