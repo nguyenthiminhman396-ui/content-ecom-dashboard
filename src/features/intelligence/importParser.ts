@@ -127,7 +127,7 @@ export interface ParsedImport {
   duplicates: number;
 }
 
-export function normalizeRows(rows: Row[], ctx: { existingCheckKeys: Set<string>; existingFindingKeys: Set<string>; importedBy: string }): ParsedImport {
+export function normalizeRows(rows: Row[], ctx: { existingChecks: Map<string, CiCheck>; existingFindingKeys: Set<string>; importedBy: string }): ParsedImport {
   const out: ParsedImport = { checks: [], findings: [], recheckRows: [], errors: [], warnings: [], duplicates: 0 };
   const checksByKey = new Map<string, CiCheck>();
   const now = new Date().toISOString();
@@ -170,9 +170,12 @@ export function normalizeRows(rows: Row[], ctx: { existingCheckKeys: Set<string>
     }
     const type = norm(r.check_type).startsWith('re') ? 'recheck' : 'qc';
     const checkKey = `${urlStr}|${checkedAt}|${type}`;
-    if (ctx.existingCheckKeys.has(checkKey)) { out.duplicates++; return; }
+    // Lượt chấm đã nhập trước đó: vẫn nhận các dòng lỗi mới/đã sửa (so trùng theo từng lỗi);
+    // riêng dòng kiểm tra lại của lượt cũ thì bỏ qua để không ghi đè kết quả đối chiếu.
+    const existingCheck = ctx.existingChecks.get(checkKey);
+    if (existingCheck && r.previous_finding_id) { out.duplicates++; return; }
 
-    let check = checksByKey.get(checkKey);
+    let check = existingCheck || checksByKey.get(checkKey);
     if (!check) {
       const vals = Object.keys(SCORE_MAX).map(k => r[k as Col]?.trim() ?? '');
       let scores: CiScores | null = null;

@@ -927,6 +927,16 @@ export interface CiSettings {
   sheetCsvUrl?: string;
   /** Link CSV "Publish to web" của tab phân tích đối thủ (tuỳ chọn) */
   opportunitySheetCsvUrl?: string;
+  /** Lần tự đồng bộ gần nhất (dùng chung cả team để giới hạn tần suất) */
+  lastSync?: CiSyncLog;
+}
+
+export interface CiSyncLog {
+  at: string;
+  by: string;
+  auto: boolean;
+  qc?: { checks: number; findings: number; rechecks: number; duplicates: number; errors: string[] } | { error: string };
+  competitor?: { items: number; duplicates: number; errors: string[] } | { error: string };
 }
 
 /** Insight đối thủ (sheet Competitor Insights) — định hướng nội dung Long Châu nên phát triển tiếp, không phải lỗi bài */

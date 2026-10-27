@@ -624,6 +624,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 }));
 
 // ── Helper: load data từ Postgres (Neon) ────────────────────────────────
+/** Tải lại riêng dữ liệu Content Intelligence mới nhất từ server (trước khi tự đồng bộ, tránh nhập trùng giữa nhiều người). */
+export async function refreshCiFromDB(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/store', { cache: 'no-store' });
+    if (!res.ok) return false;
+    const data = await res.json();
+    const upd: Record<string, unknown> = {};
+    const map: Record<string, string> = { [DB_CI_CHECKS]: 'ciChecks', [DB_CI_FINDINGS]: 'ciFindings', [DB_CI_TASKS]: 'ciTasks', [DB_CI_OPPS]: 'ciOpportunities', [DB_CI_SETTINGS]: 'ciSettings' };
+    for (const [k, sk] of Object.entries(map)) if (data[k] != null) upd[sk] = data[k];
+    useAppStore.setState(upd);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function initFromDB() {
   try {
     const res = await fetch('/api/store', { cache: 'no-store' });

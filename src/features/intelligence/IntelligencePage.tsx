@@ -1,4 +1,7 @@
+import { useEffect } from 'react';
 import { ScanSearch } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { syncSheets, summarizeSync } from './sheetSync';
 import { useAppStore } from '@/shared/store/appStore';
 import { usePersistedState } from '@/shared/hooks/usePersistedState';
 import ImportTab from './ImportTab';
@@ -20,6 +23,20 @@ const TABS: { id: Tab; label: string; viewAll: boolean }[] = [
 export default function IntelligencePage() {
   const { currentUser, ciFindings, ciOpportunities } = useAppStore();
   const [tab, setTab] = usePersistedState<Tab>('ci_tab', 'review');
+  const role = currentUser?.role;
+
+  // Tự đồng bộ Google Sheet: chỉ Manager/Leader, tối đa 1 lần / 30 phút cho cả team (kiểm tra trong syncSheets)
+  useEffect(() => {
+    if (role !== 'Manager' && role !== 'Leader') return;
+    syncSheets({ auto: true }).then(log => {
+      if (!log) return;
+      const { text, hasErrors } = summarizeSync(log);
+      const imported = (log.qc && !('error' in log.qc) && (log.qc.checks || log.qc.findings)) || (log.competitor && !('error' in log.competitor) && log.competitor.items);
+      if (hasErrors) toast.error(`Tự đồng bộ Sheet: ${text}`, { duration: 6000 });
+      else if (imported) toast.success(`Tự đồng bộ Sheet: ${text}`);
+    });
+  }, [role]);
+
   if (!currentUser || currentUser.role === 'Client') return <div className="card" style={{ padding: 32 }}>Không có quyền truy cập.</div>;
 
   const canManage = currentUser.role === 'Manager';

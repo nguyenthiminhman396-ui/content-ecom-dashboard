@@ -8,6 +8,7 @@ import { parseTable, normalizeRows, type ParsedImport } from './importParser';
 import { normalizeOpportunityRows, OPPORTUNITY_COLUMNS, type ParsedOpportunities } from './opportunityParser';
 import { QC_PROMPT, SHEET_HEADER } from './prompts';
 import { copyText, fmtCheckedAt, mutedStyle } from './labels';
+import { applyQcImport, syncSheets, summarizeSync } from './sheetSync';
 import { Score, UrlLink } from './ui';
 
 type Kind = 'qc' | 'competitor';
@@ -20,7 +21,7 @@ function detectKind(text: string): Kind {
 }
 
 export default function ImportTab({ canManage }: { canManage: boolean }) {
-  const { currentUser, ciChecks, ciFindings, ciTasks, ciOpportunities, ciSettings, addCiImport, addCiOpportunities, updateCiTask, setCiSettings } = useAppStore();
+  const { currentUser, ciChecks, ciFindings, ciOpportunities, ciSettings, addCiOpportunities, setCiSettings } = useAppStore();
   const [kind, setKind] = useState<Kind>('qc');
   const [text, setText] = useState('');
   const [qcUrl, setQcUrl] = useState(ciSettings.sheetCsvUrl || '');
@@ -36,7 +37,7 @@ export default function ImportTab({ canManage }: { canManage: boolean }) {
     if (detectKind(text) === 'competitor') {
       return { kind: 'competitor', data: normalizeOpportunityRows(rows, { existingKeys: new Set(ciOpportunities.map(o => o.key)), importedBy: currentUser?.name || '' }) };
     }
-    return { kind: 'qc', data: normalizeRows(rows, { existingCheckKeys: new Set(ciChecks.map(c => c.key)), existingFindingKeys: new Set(ciFindings.map(f => f.key)), importedBy: currentUser?.name || '' }) };
+    return { kind: 'qc', data: normalizeRows(rows, { existingChecks: new Map(ciChecks.map(c => [c.key, c])), existingFindingKeys: new Set(ciFindings.map(f => f.key)), importedBy: currentUser?.name || '' }) };
   }, [text, ciChecks, ciFindings, ciOpportunities, currentUser]);
 
   const copy = async (t: string, label: string) => {
@@ -70,28 +71,17 @@ export default function ImportTab({ canManage }: { canManage: boolean }) {
   };
 
   const importQc = (p: ParsedImport) => {
-    addCiImport(p.checks, p.findings);
-    // Kết quả kiểm tra lại → gắn vào task chứa các lỗi cũ
-    const byCheck = new Map<string, typeof p.recheckRows>();
-    for (const r of p.recheckRows) byCheck.set(r.checkKey, [...(byCheck.get(r.checkKey) || []), r]);
-    let linked = 0;
-    for (const [key, rows] of byCheck) {
-      const check = p.checks.find(c => c.key === key);
-      const task = ciTasks.find(t => rows.some(r => t.findingIds.includes(r.findingId)));
-      if (!check || !task) continue;
-      const ids = (s: string) => rows.filter(r => r.status === s && task.findingIds.includes(r.findingId)).map(r => r.findingId);
-      const covered = new Set(rows.map(r => r.findingId));
-      updateCiTask(task.id, {
-        recheck: {
-          checkId: check.id, resolved: ids('resolved'), unresolved: ids('unresolved'),
-          unableToVerify: [...ids('unable_to_verify'), ...task.findingIds.filter(id => !covered.has(id))],
-          newFindingIds: p.findings.filter(f => f.checkId === check.id).map(f => f.id), importedAt: new Date().toISOString(),
-        },
-        history: [...task.history, { at: new Date().toISOString(), by: currentUser?.name || '', action: 'Nhập kết quả kiểm tra lại' }],
-      });
-      linked++;
-    }
+    const linked = applyQcImport(p);
     toast.success(`Đã nhập ${p.checks.length} lượt chấm, ${p.findings.length} lỗi${linked ? `, ${linked} kết quả kiểm tra lại` : ''}`);
+  };
+
+  const syncNow = async () => {
+    setLoading(true);
+    try {
+      const log = await syncSheets({ auto: false });
+      if (!log) toast.error('Chưa lưu link Sheet nào.');
+      else { const { text, hasErrors } = summarizeSync(log); (hasErrors ? toast.error : toast.success)(text || 'Không có dữ liệu mới'); }
+    } finally { setLoading(false); }
   };
 
   const doImport = () => {
@@ -105,12 +95,37 @@ export default function ImportTab({ canManage }: { canManage: boolean }) {
   };
 
   const issues = parsed && !('error' in parsed) ? parsed.data : null;
-  const importable = !parsed || 'error' in parsed ? 0 : parsed.kind === 'qc' ? parsed.data.checks.length : parsed.data.items.length;
+  const importable = !parsed || 'error' in parsed ? 0 : parsed.kind === 'qc' ? parsed.data.checks.length + parsed.data.findings.length : parsed.data.items.length;
   const recentChecks = [...ciChecks].sort((a, b) => b.importedAt.localeCompare(a.importedAt)).slice(0, 15);
   const recentOpps = [...ciOpportunities].sort((a, b) => b.importedAt.localeCompare(a.importedAt)).slice(0, 15);
 
+  const last = ciSettings.lastSync;
+  const lastErrors = last ? [
+    ...(last.qc && 'error' in last.qc ? [last.qc.error] : last.qc?.errors.map(e => `QC ${e}`) || []),
+    ...(last.competitor && 'error' in last.competitor ? [last.competitor.error] : last.competitor?.errors.map(e => `Đối thủ ${e}`) || []),
+  ] : [];
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="card" style={{ padding: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div>
+            <strong>Đồng bộ Google Sheet</strong>
+            <div style={mutedStyle}>Tự đồng bộ khi Manager/Leader mở trang (tối đa 1 lần / 30 phút cho cả team). Cần lưu link CSV của 2 tab bên dưới.</div>
+          </div>
+          <button className="btn btn-secondary btn-sm" disabled={loading || (!ciSettings.sheetCsvUrl && !ciSettings.opportunitySheetCsvUrl)} onClick={syncNow}>
+            <RefreshCw size={13} /> {loading ? 'Đang đồng bộ…' : 'Đồng bộ ngay'}
+          </button>
+        </div>
+        {last ? (
+          <div style={{ marginTop: 8, fontSize: '0.84rem' }}>
+            Lần gần nhất: {new Date(last.at).toLocaleString('vi-VN')} · {last.auto ? 'tự động' : 'thủ công'} bởi {last.by}
+            {(last.qc || last.competitor) ? <> — {summarizeSync(last).text}</> : <span style={mutedStyle}> — đang chạy…</span>}
+            {lastErrors.length > 0 && <div style={{ color: 'var(--danger)', fontSize: '0.8rem', marginTop: 4 }}>{lastErrors.slice(0, 8).join(' · ')}{lastErrors.length > 8 ? ` · … (${lastErrors.length} lỗi)` : ''}</div>}
+          </div>
+        ) : <div style={{ ...mutedStyle, marginTop: 8 }}>Chưa đồng bộ lần nào.</div>}
+      </div>
+
       <div className="card" style={{ padding: 16 }}>
         <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
           <button className={`btn btn-sm ${kind === 'qc' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setKind('qc')}>QC bài Long Châu (cần sửa gì)</button>
