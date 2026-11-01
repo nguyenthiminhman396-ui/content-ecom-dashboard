@@ -454,6 +454,12 @@ export interface MonthlyKPITarget {
   employeeName?: string;
   /** Target số link */
   targetLinks: number;
+  /** 'total' = KPI tổng theo đầu việc (cấp trên team, teamGroup = 'Tất cả team') — dùng cho tab Phân bổ */
+  level?: 'total';
+  /** Ưu tiên do Manager gắn cho KPI tổng — team/cá nhân cùng đầu việc kế thừa */
+  priority?: TodoPriority;
+  /** Hạn chót 'YYYY-MM-DD' của KPI tổng (undefined = cuối tháng) */
+  deadline?: string;
   /** Người tạo target */
   createdBy?: string;
   /** Ghi chú */

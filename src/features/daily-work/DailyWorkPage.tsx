@@ -8,7 +8,10 @@ import { useAppStore } from '@/shared/store/appStore';
 import { TEAM_GROUPS } from '@/shared/data/mockData';
 import type { TeamGroup, KPISubmission } from '@/shared/types';
 
-function fmtDate(d: Date): string { return d.toISOString().slice(0, 10); }
+// Theo giờ máy (không dùng toISOString — UTC làm ngày 1/11 ở VN thành 31/10)
+function fmtDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 function startOfMonth(d: Date): Date { return new Date(d.getFullYear(), d.getMonth(), 1); }
 function endOfMonth(d: Date): Date { return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59); }
 function periodOf(d: Date): string { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
@@ -57,7 +60,7 @@ export default function DailyWorkPage() {
   const [expanded, setExpanded] = useState<Set<TeamGroup>>(new Set());
   const [showMemberBreakdown, setShowMemberBreakdown] = useState(true);
 
-  const period = periodOf(new Date(dateFrom || fmtDate(today)));
+  const period = periodOf(new Date((dateFrom || fmtDate(today)) + 'T00:00:00'));
 
   // Filter submissions by date range + site + role
   const filtered = useMemo<KPISubmission[]>(() => {
@@ -98,24 +101,22 @@ export default function DailyWorkPage() {
         }
       } else {
         // Manager / Leader: Tính KPI tổng của nhóm (lọc các target không gắn với nhân viên cụ thể)
-        const teamTargets = periodTargets.filter(t => !t.employeeName);
+        // Bỏ KPI tổng (tab Phân bổ) — chỉ tính target cấp team
+        const teamTargets = periodTargets.filter(t => !t.employeeName && t.level !== 'total');
+        // Ưu tiên target chung (không gắn đầu việc); không có thì cộng target theo đầu việc (VD: phân bổ từ KPI tổng)
+        const sumOf = (ts: typeof teamTargets) => {
+          const general = ts.filter(t => !t.taskType).reduce((s, t) => s + t.targetLinks, 0);
+          return general > 0 ? general : ts.reduce((s, t) => s + t.targetLinks, 0);
+        };
         if (siteFilter) {
-          const sumWithSite = teamTargets
-            .filter(t => t.siteId === siteFilter)
-            .reduce((s, t) => s + t.targetLinks, 0);
+          const sumWithSite = sumOf(teamTargets.filter(t => t.siteId === siteFilter));
           if (sumWithSite > 0) {
             m[team] = sumWithSite;
           } else {
-            const totalNoSite = teamTargets
-              .filter(t => !t.siteId && !t.taskType)
-              .reduce((s, t) => s + t.targetLinks, 0);
-            m[team] = Math.round(totalNoSite / 2);
+            m[team] = Math.round(sumOf(teamTargets.filter(t => !t.siteId)) / 2);
           }
         } else {
-          const sum = teamTargets
-            .filter(t => !t.taskType)
-            .reduce((s, t) => s + t.targetLinks, 0);
-          m[team] = sum;
+          m[team] = sumOf(teamTargets);
         }
       }
     }

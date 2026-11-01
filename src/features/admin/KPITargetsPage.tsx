@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import type { MonthlyKPITarget, TeamGroup } from '@/shared/types';
 import toast from 'react-hot-toast';
+import { usePersistedState } from '@/shared/hooks/usePersistedState';
+import KPIAllocationTab from './KPIAllocationTab';
 
 function generateId(): string {
   return `kt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`;
@@ -41,6 +43,7 @@ export default function KPITargetsPage() {
   const [editItem, setEditItem] = useState<MonthlyKPITarget | null>(null);
   const [memberFormMode, setMemberFormMode] = useState(false); // true = form phân KPI cá nhân
   const [expandedTaskType, setExpandedTaskType] = useState<string | null>(null);
+  const [tab, setTab] = usePersistedState<'list' | 'allocate'>('kpi_target_tab', 'list');
 
   const isManager = currentUser?.role === 'Manager';
   const isLeader  = currentUser?.role === 'Leader';
@@ -84,7 +87,10 @@ export default function KPITargetsPage() {
       const actualSubs = submissions.filter(s => {
         if (!s.submittedAt.startsWith(period)) return false;
         // Target cá nhân → match theo người, bỏ qua teamGroup (vì member có thể nộp cross-team)
-        if (t.employeeName) {
+        // KPI tổng (tab Phân bổ) → mọi team
+        if (t.level === 'total') {
+          // không lọc team
+        } else if (t.employeeName) {
           if (s.employeeName !== t.employeeName) return false;
         } else {
           // Target tổng nhóm → filter theo teamGroup
@@ -117,12 +123,18 @@ export default function KPITargetsPage() {
         individualActual: number; // Cộng actual cá nhân
       }>;
       matchedSubs: Map<string, any>; // Lưu submission ID -> submission để đếm unique tổng
+      totalTarget: number; // KPI tổng (tab Phân bổ) — nếu có thì là target chính thức của đầu việc
     }> = {};
 
     targetsWithActual.forEach(({ target, actualLinks, matchedSubmissions }) => {
       const taskKey = target.taskType || '(Tất cả đầu việc)';
       const team = target.teamGroup;
-      if (!grouped[taskKey]) grouped[taskKey] = { teams: {}, matchedSubs: new Map() };
+      if (!grouped[taskKey]) grouped[taskKey] = { teams: {}, matchedSubs: new Map(), totalTarget: 0 };
+      if (target.level === 'total') {
+        grouped[taskKey].totalTarget += target.targetLinks;
+        matchedSubmissions.forEach(s => grouped[taskKey].matchedSubs.set(s.id, s));
+        return;
+      }
       if (!grouped[taskKey].teams[team]) grouped[taskKey].teams[team] = {
         teamTarget: 0, individualTarget: 0, teamActual: 0, individualActual: 0
       };
@@ -166,6 +178,7 @@ export default function KPITargetsPage() {
           });
         }
         perTeam.sort((a, b) => b.target - a.target);
+        if (data.totalTarget > 0) totalTarget = data.totalTarget;
 
         return {
           taskType,
@@ -207,6 +220,7 @@ export default function KPITargetsPage() {
         ...t,
         id: generateId(),
         period,
+        deadline: undefined, // hạn chót tháng trước không còn đúng → mặc định cuối tháng mới
       });
     });
     toast.success(`Đã copy ${prevTargets.length} target`);
@@ -268,6 +282,16 @@ export default function KPITargetsPage() {
         </span>
       </div>
 
+      {canEdit && (
+        <div className="tabs" style={{ marginBottom: 16 }}>
+          <button className={`tab-item ${tab === 'list' ? 'active' : ''}`} onClick={() => setTab('list')}>Danh sách & tiến độ</button>
+          <button className={`tab-item ${tab === 'allocate' ? 'active' : ''}`} onClick={() => setTab('allocate')}>Phân bổ KPI</button>
+        </div>
+      )}
+
+      {canEdit && tab === 'allocate' ? (
+        <KPIAllocationTab period={period} isManager={isManager} myTeamGroup={myTeamGroup} />
+      ) : (<>
       {/* Summary theo đầu việc (cross-team) */}
       {taskTypeSummary.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(taskTypeSummary.length, 3)}, 1fr)`, gap: '12px', marginBottom: '20px' }}>
@@ -383,7 +407,7 @@ export default function KPITargetsPage() {
                       <td className="cell-secondary">
                         {target.employeeName
                           ? <span style={{ fontWeight: 600, color: 'var(--primary-600)' }}>{target.employeeName}</span>
-                          : <em style={{ color: 'var(--text-tertiary)' }}>Tổng nhóm</em>}
+                          : <em style={{ color: 'var(--text-tertiary)' }}>{target.level === 'total' ? 'KPI tổng' : 'Tổng nhóm'}</em>}
                       </td>
                       <td className="cell-secondary">
                         {site ? site.name : <em style={{ color: 'var(--text-tertiary)' }}>Cả 2 site</em>}
@@ -452,6 +476,7 @@ export default function KPITargetsPage() {
           </div>
         )}
       </div>
+      </>)}
 
       {showForm && canEdit && (
         <TargetFormModal
