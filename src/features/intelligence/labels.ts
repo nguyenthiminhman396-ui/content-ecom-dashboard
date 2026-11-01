@@ -34,6 +34,58 @@ export const scoreColor = (n?: number | null) =>
 
 export const todayVN = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
 
+export function vnDay(iso?: string): string {
+  if (!iso) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  if (/^\d{4}-\d{2}-\d{2}[T ]/.test(iso) && iso.endsWith('+07:00')) return iso.slice(0, 10);
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+  return new Date(d.getTime() + 7 * 3600_000).toISOString().slice(0, 10);
+}
+
+export type DatePreset = 'all' | 'today' | '7d' | '30d' | 'month' | 'custom';
+
+export interface DateFilterValue {
+  preset: DatePreset;
+  from: string;
+  to: string;
+}
+
+export const DEFAULT_DATE_FILTER: DateFilterValue = {
+  preset: 'all',
+  from: '',
+  to: '',
+};
+
+const shiftDays = (ymd: string, days: number) => {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
+export function matchDateFilter(isoDate: string | undefined, filter: DateFilterValue): boolean {
+  if (filter.preset === 'all') return true;
+  const day = vnDay(isoDate);
+  if (!day) return false;
+  const today = todayVN();
+  if (filter.preset === 'today') return day === today;
+  if (filter.preset === '7d') return day >= shiftDays(today, -6) && day <= today;
+  if (filter.preset === '30d') return day >= shiftDays(today, -29) && day <= today;
+  if (filter.preset === 'month') return day.slice(0, 7) === today.slice(0, 7);
+  if (filter.preset === 'custom') {
+    if (filter.from && day < filter.from) return false;
+    if (filter.to && day > filter.to) return false;
+    return true;
+  }
+  return true;
+}
+
+export function matchSearch(query: string, ...fields: (string | undefined | null)[]): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return fields.some(f => (f || '').toLowerCase().includes(q));
+}
+
 export function fmtDate(s?: string) {
   if (!s) return '—';
   const d = new Date(s.length === 10 ? `${s}T00:00:00+07:00` : s);

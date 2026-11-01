@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Copy, Send, CheckCircle2, Undo2, Stethoscope, XCircle } from 'lucide-react';
 import { cancelTask, confirmAndRun } from './deleteActions';
 import toast from 'react-hot-toast';
@@ -6,8 +6,12 @@ import { useAppStore } from '@/shared/store/appStore';
 import type { CiFinding, CiTask, CiTaskStatus } from '@/shared/types';
 import { recheckPrompt } from './prompts';
 import { TASK_KIND_LABEL } from './createTask';
-import { TASK_STATUS, copyText, fmtDate, todayVN, mutedStyle } from './labels';
-import { FindingDetail, OpportunityDetail, Score, UrlLink } from './ui';
+import {
+  TASK_STATUS, copyText, fmtDate, todayVN, mutedStyle,
+  DEFAULT_DATE_FILTER, matchDateFilter, matchSearch,
+  type DateFilterValue,
+} from './labels';
+import { FindingDetail, OpportunityDetail, Score, UrlLink, SearchInput, DateFilterControl, PaginationBar } from './ui';
 
 const PRIORITY: Record<string, string> = { high: '🔴 Cao', medium: '🟡 Trung bình', low: '⚪ Thấp' };
 
@@ -126,28 +130,62 @@ export default function TasksTab({ canManage, canViewAll }: { canManage: boolean
   const { currentUser, ciTasks } = useAppStore();
   const [open, setOpen] = useState<string | null>(null);
   const [status, setStatus] = useState('');
+  const [kind, setKind] = useState<CiTask['kind'] | ''>('');
+  const [assignee, setAssignee] = useState('');
+  const [search, setSearch] = useState('');
+  const [dateFilter, setDateFilter] = useState<DateFilterValue>(DEFAULT_DATE_FILTER);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
   const today = todayVN();
-  const list = ciTasks
-    .filter(t => (canViewAll || t.assigneeName === currentUser?.name) && (!status || t.status === status))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const assignees = useMemo(() => [...new Set(ciTasks.map(t => t.assigneeName).filter(Boolean))].sort(), [ciTasks]);
+
+  const list = useMemo(() => ciTasks
+    .filter(t => {
+      if (!canViewAll && t.assigneeName !== currentUser?.name) return false;
+      if (status && t.status !== status) return false;
+      if (kind && t.kind !== kind) return false;
+      if (assignee && t.assigneeName !== assignee) return false;
+      if (!matchDateFilter(t.createdAt, dateFilter)) return false;
+      if (!matchSearch(search, t.title, t.url, t.resultUrl, t.assigneeName, t.ownerName, t.instructions)) return false;
+      return true;
+    })
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+  [ciTasks, canViewAll, currentUser?.name, status, kind, assignee, dateFilter, search]);
+
+  const totalPages = Math.max(1, Math.ceil(list.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedList = useMemo(() => list.slice((safePage - 1) * pageSize, safePage * pageSize), [list, safePage, pageSize]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div className="card" style={{ padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'center' }}>
-        <select className="form-select" style={{ width: 'auto' }} value={status} onChange={e => setStatus(e.target.value)}>
+      <div className="card" style={{ padding: '12px 14px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <SearchInput value={search} onChange={v => { setSearch(v); setPage(1); }} placeholder="Tìm tiêu đề, URL, người nhận…" />
+        <DateFilterControl label="Ngày giao" value={dateFilter} onChange={v => { setDateFilter(v); setPage(1); }} />
+        <select className="form-select" style={{ width: 'auto' }} value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}>
           <option value="">Mọi trạng thái</option>{Object.entries(TASK_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
-        <span style={{ ...mutedStyle, marginLeft: 'auto' }}>{list.length} task · nằm trong To-do list hiện có</span>
+        <select className="form-select" style={{ width: 'auto' }} value={kind} onChange={e => { setKind(e.target.value as CiTask['kind'] | ''); setPage(1); }}>
+          <option value="">Mọi loại việc</option>
+          {Object.entries(TASK_KIND_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+        {canViewAll && (
+          <select className="form-select" style={{ width: 'auto' }} value={assignee} onChange={e => { setAssignee(e.target.value); setPage(1); }}>
+            <option value="">Mọi người nhận</option>
+            {assignees.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+        )}
+        <span style={{ ...mutedStyle, marginLeft: 'auto' }}><strong>{list.length}</strong> task · đồng bộ với To-do</span>
       </div>
-      {!list.length && <div className="card" style={{ padding: 30, textAlign: 'center', ...mutedStyle }}>Chưa có task.</div>}
-      {list.map(t => {
+      {!list.length && <div className="card" style={{ padding: 30, textAlign: 'center', ...mutedStyle }}>Không có task nào khớp bộ lọc.</div>}
+      {pagedList.map(t => {
         const overdue = (t.status === 'assigned' || t.status === 'changes_requested') && !!t.dueDate && t.dueDate < today;
         return (
           <div key={t.id} className="card" style={{ padding: 14, borderLeft: overdue ? '4px solid var(--danger)' : undefined }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, cursor: 'pointer' }} onClick={() => setOpen(open === t.id ? null : t.id)}>
               <div>
                 <div style={{ fontWeight: 700 }}>{TASK_KIND_LABEL[t.kind]} · {t.title}</div>
-                <div style={mutedStyle}>→ {t.assigneeName} · {PRIORITY[t.priority]} · Hạn {t.dueDate ? fmtDate(t.dueDate) : '—'}{overdue ? ' (quá hạn)' : ''}{t.findingIds.length ? ` · ${t.findingIds.length} lỗi` : ''} · giao bởi {t.ownerName}</div>
+                <div style={mutedStyle}>→ {t.assigneeName} · {PRIORITY[t.priority]} · Giao {fmtDate(t.createdAt)} · Hạn {t.dueDate ? fmtDate(t.dueDate) : '—'}{overdue ? ' (quá hạn)' : ''}{t.findingIds.length ? ` · ${t.findingIds.length} lỗi` : ''} · bởi {t.ownerName}</div>
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <span className={`status-badge ${TASK_STATUS[t.status].cls}`}>{TASK_STATUS[t.status].label}</span>
@@ -158,6 +196,15 @@ export default function TasksTab({ canManage, canViewAll }: { canManage: boolean
           </div>
         );
       })}
+      <PaginationBar
+        total={list.length}
+        page={safePage}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+        unit="task"
+        pageSizeOptions={[10, 20, 50]}
+      />
     </div>
   );
 }

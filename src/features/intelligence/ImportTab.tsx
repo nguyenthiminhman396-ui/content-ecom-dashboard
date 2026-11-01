@@ -7,9 +7,9 @@ import { loadSheetJSFromCDN } from '@/shared/utils/csvImport';
 import { parseTable, normalizeRows, type ParsedImport } from './importParser';
 import { normalizeOpportunityRows, OPPORTUNITY_COLUMNS, type ParsedOpportunities } from './opportunityParser';
 import { QC_PROMPT, SHEET_HEADER } from './prompts';
-import { copyText, fmtCheckedAt, mutedStyle } from './labels';
+import { copyText, fmtCheckedAt, mutedStyle, DEFAULT_DATE_FILTER, matchDateFilter, matchSearch, type DateFilterValue } from './labels';
 import { applyQcImport, syncSheets, summarizeSync } from './sheetSync';
-import { Score, UrlLink } from './ui';
+import { Score, UrlLink, SearchInput, DateFilterControl, PaginationBar } from './ui';
 
 type Kind = 'qc' | 'competitor';
 type Parsed = { kind: 'qc'; data: ParsedImport } | { kind: 'competitor'; data: ParsedOpportunities } | { error: string } | null;
@@ -27,6 +27,10 @@ export default function ImportTab({ canManage }: { canManage: boolean }) {
   const [qcUrl, setQcUrl] = useState(ciSettings.sheetCsvUrl || '');
   const [oppUrl, setOppUrl] = useState(ciSettings.opportunitySheetCsvUrl || '');
   const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
+  const [dateFilter, setDateFilter] = useState<DateFilterValue>(DEFAULT_DATE_FILTER);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const sheetUrl = kind === 'qc' ? qcUrl : oppUrl;
   const setSheetUrl = kind === 'qc' ? setQcUrl : setOppUrl;
 
@@ -96,8 +100,22 @@ export default function ImportTab({ canManage }: { canManage: boolean }) {
 
   const issues = parsed && !('error' in parsed) ? parsed.data : null;
   const importable = !parsed || 'error' in parsed ? 0 : parsed.kind === 'qc' ? parsed.data.checks.length + parsed.data.findings.length : parsed.data.items.length;
-  const recentChecks = [...ciChecks].sort((a, b) => b.importedAt.localeCompare(a.importedAt)).slice(0, 15);
-  const recentOpps = [...ciOpportunities].sort((a, b) => b.importedAt.localeCompare(a.importedAt)).slice(0, 15);
+
+  const filteredChecks = useMemo(() => [...ciChecks]
+    .filter(c => matchDateFilter(c.checkedAt || c.importedAt, dateFilter) && matchSearch(search, c.title, c.url, c.summary, c.importedBy))
+    .sort((a, b) => b.checkedAt.localeCompare(a.checkedAt) || b.importedAt.localeCompare(a.importedAt)),
+  [ciChecks, dateFilter, search]);
+
+  const filteredOpps = useMemo(() => [...ciOpportunities]
+    .filter(o => matchDateFilter(o.checkedAt || o.importedAt, dateFilter) && matchSearch(search, o.topic, o.competitor, o.lcUrl, o.competitorUrl))
+    .sort((a, b) => b.checkedAt.localeCompare(a.checkedAt) || b.importedAt.localeCompare(a.importedAt)),
+  [ciOpportunities, dateFilter, search]);
+
+  const totalHistory = kind === 'qc' ? filteredChecks.length : filteredOpps.length;
+  const totalPages = Math.max(1, Math.ceil(totalHistory / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const recentChecks = filteredChecks.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const recentOpps = filteredOpps.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const last = ciSettings.lastSync;
   const lastErrors = last ? [
@@ -171,6 +189,13 @@ export default function ImportTab({ canManage }: { canManage: boolean }) {
         )}
       </div>
 
+      <div className="card" style={{ padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <strong style={{ fontSize: '0.88rem' }}>{kind === 'qc' ? 'Lịch sử lượt chấm QC' : 'Lịch sử cơ hội đã nhập'}</strong>
+        <SearchInput value={search} onChange={v => { setSearch(v); setPage(1); }} placeholder={kind === 'qc' ? 'Tìm tên bài, URL…' : 'Tìm chủ đề, đối thủ…'} />
+        <DateFilterControl label="Ngày chấm" value={dateFilter} onChange={v => { setDateFilter(v); setPage(1); }} />
+        <span style={{ ...mutedStyle, marginLeft: 'auto' }}>{totalHistory} mục</span>
+      </div>
+
       <div className="card data-table-wrapper">
         {kind === 'qc' ? (
           <table className="data-table">
@@ -194,7 +219,7 @@ export default function ImportTab({ canManage }: { canManage: boolean }) {
                   )}
                 </tr>
               ))}
-              {!recentChecks.length && <tr><td colSpan={7} style={mutedStyle}>Chưa có dữ liệu QC.</td></tr>}
+              {!recentChecks.length && <tr><td colSpan={7} style={mutedStyle}>Chưa có dữ liệu QC khớp bộ lọc.</td></tr>}
             </tbody>
           </table>
         ) : (
@@ -210,11 +235,21 @@ export default function ImportTab({ canManage }: { canManage: boolean }) {
                   <td>{fmtCheckedAt(o.checkedAt)}</td>
                 </tr>
               ))}
-              {!recentOpps.length && <tr><td colSpan={5} style={mutedStyle}>Chưa có dữ liệu phân tích đối thủ.</td></tr>}
+              {!recentOpps.length && <tr><td colSpan={5} style={mutedStyle}>Chưa có dữ liệu phân tích đối thủ khớp bộ lọc.</td></tr>}
             </tbody>
           </table>
         )}
       </div>
+
+      <PaginationBar
+        total={totalHistory}
+        page={safePage}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+        unit={kind === 'qc' ? 'lượt chấm' : 'cơ hội'}
+        pageSizeOptions={[10, 20, 50]}
+      />
     </div>
   );
 }
