@@ -123,7 +123,7 @@ export default function KPIAllocationTab({ period, isManager, myTeamGroup }: {
   const [showAdd, setShowAdd] = useState(false);
   const [draft, setDraft] = useState({
     taskType: defaultTaskCategories[0]?.taskTypeName ?? '', siteId: '', targetLinks: 0,
-    priority: 'medium' as TodoPriority, deadline: '',
+    priority: 'medium' as TodoPriority, deadline: '', ownerTeam: '' as TeamGroup,
   });
   const actualOf = useActual(period);
 
@@ -135,7 +135,7 @@ export default function KPIAllocationTab({ period, isManager, myTeamGroup }: {
   // Leader chỉ thấy KPI tổng có liên quan tới team mình
   // Sắp KPI gấp lên đầu (độ gấp → ưu tiên → thứ tự đầu việc)
   const visibleTotals = (isManager ? totals : totals.filter(t =>
-    ownerTeamOf(t.taskType) === myTeamGroup
+    ownerTeamOf(t) === myTeamGroup
     || (myTeamGroup && teamTargetsOf(kpiTargets, t, myTeamGroup).length > 0)))
     .map(t => ({ t, score: urgencyScore(computeUrgency({
       target: t.targetLinks, actual: actualOf(t, {}), period, deadline: t.deadline, priority: t.priority,
@@ -154,6 +154,7 @@ export default function KPIAllocationTab({ period, isManager, myTeamGroup }: {
       taskType: draft.taskType, siteId: draft.siteId || undefined,
       targetLinks: draft.targetLinks, createdBy: currentUser?.name,
       priority: draft.priority, deadline: draft.deadline || undefined,
+      ownerTeam: draft.ownerTeam || undefined,
     });
     toast.success('Đã thêm KPI tổng');
     setShowAdd(false);
@@ -178,7 +179,15 @@ export default function KPIAllocationTab({ period, isManager, myTeamGroup }: {
               <div className="form-group" style={{ margin: 0, minWidth: 240 }}>
                 <label className="form-label">Đầu việc</label>
                 <select className="form-select" value={draft.taskType} onChange={e => setDraft({ ...draft, taskType: e.target.value })}>
-                  {defaultTaskCategories.map(c => <option key={c.id} value={c.taskTypeName}>{c.taskTypeName} → {c.teamName}</option>)}
+                  {defaultTaskCategories.map(c => <option key={c.id} value={c.taskTypeName}>{c.taskTypeName}</option>)}
+                </select>
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">Team phụ trách</label>
+                <select className="form-select" value={draft.ownerTeam}
+                  onChange={e => setDraft({ ...draft, ownerTeam: e.target.value as TeamGroup })}>
+                  <option value="">Nhiều team (tự chia)</option>
+                  {REAL_TEAMS.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               <div className="form-group" style={{ margin: 0 }}>
@@ -224,7 +233,7 @@ export default function KPIAllocationTab({ period, isManager, myTeamGroup }: {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {visibleTotals.map(total => {
             // Remount khi dữ liệu đã lưu thay đổi → bản nháp lấy lại từ store
-            const sig = REAL_TEAMS.map(team => sumLinks(teamTargetsOf(kpiTargets, total, team))).join('|') + `|${total.targetLinks}`;
+            const sig = REAL_TEAMS.map(team => sumLinks(teamTargetsOf(kpiTargets, total, team))).join('|') + `|${total.targetLinks}|${total.ownerTeam ?? ''}`;
             return <TotalCard key={`${total.id}:${sig}`} total={total} isManager={isManager} myTeamGroup={myTeamGroup} />;
           })}
         </div>
@@ -241,7 +250,7 @@ function TotalCard({ total, isManager, myTeamGroup }: {
   const { kpiTargets, sites, members, currentUser, updateKpiTarget, deleteKpiTarget } = useAppStore();
   const upsert = useUpsert();
   const actualOf = useActual(total.period);
-  const owner = ownerTeamOf(total.taskType);
+  const owner = ownerTeamOf(total);
   const site = total.siteId ? sites.find(s => s.id === total.siteId) : null;
   // Team/cá nhân kế thừa ưu tiên + hạn chót của KPI tổng
   const urgencyOf = (target: number, actual: number) => computeUrgency({
@@ -257,7 +266,7 @@ function TotalCard({ total, isManager, myTeamGroup }: {
   ) as Record<string, number>, [kpiTargets, total]);
   const hasSaved = Object.values(saved).some(v => v > 0);
 
-  // Chưa phân lần nào → đề xuất dồn hết cho team phụ trách đầu việc
+  // Chưa phân lần nào → dồn hết cho team phụ trách Manager đã chọn (chưa chọn → để 0, tự nhập)
   const [values, setValues] = useState<Record<string, number>>(() =>
     hasSaved ? saved : Object.fromEntries(REAL_TEAMS.map(t => [t, t === owner ? total.targetLinks : 0])));
   const [totalInput, setTotalInput] = useState(total.targetLinks);
@@ -313,7 +322,13 @@ function TotalCard({ total, isManager, myTeamGroup }: {
           </div>
         </div>
         {isManager ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <select className="form-select" style={{ width: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}
+              value={owner ?? ''} title="Team phụ trách"
+              onChange={e => updateKpiTarget(total.id, { ownerTeam: (e.target.value || undefined) as TeamGroup | undefined })}>
+              <option value="">Nhiều team (tự chia)</option>
+              {REAL_TEAMS.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
             <select className="form-select" style={{ width: 'auto', padding: '4px 8px', fontSize: '0.8rem' }}
               value={total.priority ?? 'medium'} title="Ưu tiên"
               onChange={e => updateKpiTarget(total.id, { priority: e.target.value as TodoPriority })}>

@@ -1,4 +1,4 @@
-import { defaultTaskCategories, TEAM_GROUPS } from '@/shared/data/mockData';
+import { TEAM_GROUPS } from '@/shared/data/mockData';
 import type { Member, MonthlyKPITarget, TeamGroup } from '@/shared/types';
 
 // Phân bổ KPI: KPI tổng (theo đầu việc × site) → team → từng người.
@@ -18,10 +18,9 @@ export function sameScope(t: MonthlyKPITarget, total: MonthlyKPITarget): boolean
     && normSite(t.siteId) === normSite(total.siteId);
 }
 
-/** Team mặc định phụ trách đầu việc (theo TaskCategory) */
-export function ownerTeamOf(taskType?: string): TeamGroup | null {
-  const cat = defaultTaskCategories.find(c => c.taskTypeName === taskType);
-  return (cat?.teamName as TeamGroup) ?? null;
+/** Team phụ trách KPI tổng — Manager tự chọn khi tạo, không suy ra từ đầu việc */
+export function ownerTeamOf(total: MonthlyKPITarget): TeamGroup | null {
+  return total.ownerTeam ?? null;
 }
 
 /** Hệ số chia cho người: productivityFactor, mặc định Leader 0.6 / Member 1.0 */
