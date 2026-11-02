@@ -607,16 +607,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get();
     const cleaned = state.projects.filter(p => p.id !== 'p_nhathuoc' && p.id !== 'p_tiemchung');
     if (cleaned.length !== state.projects.length) set({ projects: cleaned });
-    // Đảm bảo 2 site mặc định
-    const sites = [...state.sites];
-    let changed = false;
-    if (!sites.find(s => s.id === 's_nhathuoc')) {
-      sites.push(defaultSites[0]); changed = true;
-    }
-    if (!sites.find(s => s.id === 's_tiemchung')) {
-      sites.push(defaultSites[1]); changed = true;
-    }
-    if (changed) {
+    // Đảm bảo đủ site mặc định (site mới thêm vào defaultSites tự có trên mọi máy)
+    const missing = defaultSites.filter(d => !state.sites.some(s => s.id === d.id));
+    if (missing.length > 0) {
+      const sites = [...state.sites, ...missing];
       set({ sites });
       saveDB(DB_SITES, sites);
     }

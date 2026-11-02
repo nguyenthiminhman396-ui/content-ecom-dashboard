@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Settings, Database, RefreshCw, User, Moon, Sun, Lock, Eye, EyeOff, Check } from 'lucide-react';
 import { useAppStore, initFromDB } from '@/shared/store/appStore';
 import toast from 'react-hot-toast';
+import SitesSettings from './SitesSettings';
 
 export default function SettingsPage() {
   const { isSyncing, lastSyncTime, currentUser, memberAccounts, setMemberAccount } = useAppStore();
@@ -237,6 +238,9 @@ export default function SettingsPage() {
             )}
           </div>
         )}
+
+        {/* Sites đăng bài — Manager only */}
+        {currentUser?.role === 'Manager' && <SitesSettings />}
 
         {/* Database status — Manager only */}
         {currentUser?.role === 'Manager' && (

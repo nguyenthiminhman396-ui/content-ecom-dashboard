@@ -184,7 +184,7 @@ export default function KPIAllocationTab({ period, isManager, myTeamGroup }: {
               <div className="form-group" style={{ margin: 0 }}>
                 <label className="form-label">Site</label>
                 <select className="form-select" value={draft.siteId} onChange={e => setDraft({ ...draft, siteId: e.target.value })}>
-                  <option value="">Cả 2 site</option>
+                  <option value="">Tất cả site</option>
                   {sites.filter(s => s.active).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
@@ -301,7 +301,7 @@ function TotalCard({ total, isManager, myTeamGroup }: {
         <div style={{ flex: 1, minWidth: 220 }}>
           <div style={{ fontWeight: 700 }}>{total.taskType}</div>
           <div style={{ fontSize: '0.76rem', color: 'var(--text-tertiary)' }}>
-            {site ? site.name : 'Cả 2 site'}{owner ? ` · Team phụ trách: ${owner}` : ''}
+            {site ? site.name : 'Tất cả site'}{owner ? ` · Team phụ trách: ${owner}` : ''}
             {' · '}Đã đạt {actualOf(total, {}).toLocaleString()} link
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>

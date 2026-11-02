@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useAppStore } from '@/shared/store/appStore';
+import type { Site } from '@/shared/types';
 import {
   CalendarRange, Calendar, TrendingUp, TrendingDown, Minus,
   FileText, BarChart3, Target,
@@ -48,6 +49,14 @@ const CHART_PALETTE = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#
 type ViewMode = 'month' | 'quarter';
 
 /* ─────────────────────────────────── helpers ── */
+
+// Giữ màu cũ của 2 site đầu trên biểu đồ; site khác dùng màu cấu hình
+const SITE_CHART_COLORS: Record<string, string> = { s_nhathuoc: '#2a78d6', s_tiemchung: '#1baf7a' };
+const siteChartColor = (s: Site) => SITE_CHART_COLORS[s.id] ?? s.color ?? '#94a3b8';
+/** "Nhà thuốc Long Châu" → "Nhà thuốc" */
+const siteLabel = (s: Site) => s.name.replace(/\s*Long Châu\s*$/i, '');
+/** "Nhà thuốc Long Châu" → "NT" */
+const siteAbbr = (s: Site) => siteLabel(s).split(/\s+/).map(w => w[0]?.toUpperCase() ?? '').join('');
 
 function getMonthLabel(period: string): string {
   const [y, m] = period.split('-');
@@ -103,7 +112,8 @@ function DeltaBadge({ value }: { value: number }) {
 /* ═════════════════════════════════════════════════════ MAIN ═════ */
 
 export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { isShareMode?: boolean }) {
-  const { currentUser, submissions, projects, projectTasks, monthlyReports, updateMonthlyReport } = useAppStore();
+  const { currentUser, submissions, projects, projectTasks, monthlyReports, updateMonthlyReport, sites } = useAppStore();
+  const reportSites = useMemo(() => sites.filter(s => s.active), [sites]);
   const reportRef = useRef<HTMLDivElement>(null);
 
   const [searchParams] = useSearchParams();
@@ -137,7 +147,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
     }
   }, [searchParams]);
 
-  const [siteFilter, setSiteFilter] = useState<'all' | 's_nhathuoc' | 's_tiemchung'>('all');
+  const [siteFilter, setSiteFilter] = useState<string>('all');
   
   // Executive summary states
   const [summaryText, setSummaryText] = useState('Tháng này đội hoàn thành xuất sắc mục tiêu, đặc biệt ở nhóm Tiêm chủng nhờ campaign mùa hè. Đã ứng dụng AI vào 133 bài viết giúp giảm 40% thời gian. Cần lãnh đạo quyết định sớm ngân sách mở rộng pilot hệ thống quản trị.');
@@ -408,16 +418,19 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
     return {
       totalLinks, totalPoints, totalSubmits,
       baiMoi, sku, multimedia, toiUu, toiUu_SP, toiUu_BV,
-      baiMoi_NT: getSiteLinks('baiMoi', 's_nhathuoc'), baiMoi_TC: getSiteLinks('baiMoi', 's_tiemchung'),
-      sku_NT: getSiteLinks('sku', 's_nhathuoc'), sku_TC: getSiteLinks('sku', 's_tiemchung'),
-      mm_NT: getSiteLinks('multimedia', 's_nhathuoc'), mm_TC: getSiteLinks('multimedia', 's_tiemchung'),
-      toiUu_NT: getSiteLinks('toiUu', 's_nhathuoc'), toiUu_TC: getSiteLinks('toiUu', 's_tiemchung'),
+      // Số link theo site cho từng nhóm nội dung: bySite[kind][siteId]
+      bySite: Object.fromEntries(['baiMoi', 'sku', 'multimedia', 'toiUu'].map(kind => [
+        kind, Object.fromEntries(reportSites.map(site => [site.id, getSiteLinks(kind, site.id)])),
+      ])) as Record<string, Record<string, number>>,
       employeeCount: employees.size, avgPointsPerEmp,
       deltaLinks: pct(totalLinks, prevLinks),
       deltaPoints: pct(totalPoints, prevPoints),
       deltaSubmits: pct(totalSubmits, prevSubmits),
     };
-  }, [prodSubs, prevProdSubs]);
+  }, [prodSubs, prevProdSubs, reportSites]);
+  // "NT: 12 · TC: 5 · XN: 3" — mọi site đang hoạt động
+  const siteSubtitle = (kind: string) =>
+    reportSites.map(site => `${siteAbbr(site)}: ${stats.bySite[kind]?.[site.id] ?? 0}`).join(' · ');
 
   /* ── quality & compliance ── */
   const qualityStats = useMemo(() => {
@@ -476,7 +489,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
   /* ── weekly trend data (using prodSubs for filtering) ── */
   const weeklyTrend = useMemo(() => {
     // Group submissions by ISO week
-    const weekMap = new Map<string, { nt: number; tc: number; label: string }>();
+    const weekMap = new Map<string, { bySite: Record<string, number>; label: string }>();
     prodSubs.forEach(s => {
       const d = new Date(s.submittedAt);
       const day = d.getDay();
@@ -485,14 +498,15 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
       const key = monday.toISOString().slice(0, 10);
       const end = new Date(monday); end.setDate(monday.getDate() + 6);
       const label = `${monday.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} — ${end.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}`;
-      const prev = weekMap.get(key) || { nt: 0, tc: 0, label };
+      const prev = weekMap.get(key) || { bySite: {}, label };
       const qty = (s.quantity && s.quantity > 0) ? s.quantity : (s.links?.length || 0);
-      if (s.siteId === 's_tiemchung') prev.tc += qty;
-      else prev.nt += qty; // defaults to nt or others
+      // Không có site / site lạ → tính vào Nhà thuốc (như trước)
+      const siteKey = s.siteId && reportSites.some(x => x.id === s.siteId) ? s.siteId : 's_nhathuoc';
+      prev.bySite[siteKey] = (prev.bySite[siteKey] || 0) + qty;
       weekMap.set(key, prev);
     });
     return Array.from(weekMap.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [prodSubs]);
+  }, [prodSubs, reportSites]);
 
   /* ── team breakdown ── */
   const teamBreakdown = useMemo(() => {
@@ -1226,7 +1240,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
             <h3 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0, flex: 1 }}>Năng suất & Tăng trưởng</h3>
             {/* Local Filter */}
             <div style={{ display: 'flex', background: 'var(--bg-secondary)', borderRadius: '999px', padding: '4px' }}>
-              {(['all', 's_nhathuoc', 's_tiemchung'] as const).map(f => (
+              {['all', ...reportSites.map(x => x.id)].map(f => (
                 <button key={f} onClick={() => setSiteFilter(f)}
                   style={{
                     padding: '6px 16px', borderRadius: '999px', border: 'none', cursor: 'pointer',
@@ -1235,22 +1249,22 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
                     color: siteFilter === f ? '#7c3aed' : 'var(--text-secondary)',
                     boxShadow: siteFilter === f ? 'inset 0 0 0 1px #d8b4fe' : 'none',
                   }}>
-                  {f === 'all' ? 'Tất cả' : f === 's_nhathuoc' ? 'Nhà thuốc' : 'Tiêm chủng'}
+                  {f === 'all' ? 'Tất cả' : siteLabel(reportSites.find(x => x.id === f)!)}
                 </button>
               ))}
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '16px' }}>
-            <StatCard icon="📝" label="Bài mới" value={displayVal('baiMoi', stats.baiMoi)} subtitle={`NT: ${stats.baiMoi_NT} · TC: ${stats.baiMoi_TC}`}
+            <StatCard icon="📝" label="Bài mới" value={displayVal('baiMoi', stats.baiMoi)} subtitle={siteSubtitle('baiMoi')}
               gradient="var(--bg-primary)" accent="#3b82f6" border="var(--border-light)"
               isEditing={isEditingMetrics} onValueChange={(v) => setOverride('baiMoi', v)}
               onClickDetails={() => setDrillDownData({ title: 'Chi tiết Bài mới', subs: prodSubs.filter(s => categorizeSubmission(s) === 'baiMoi') })} />
-            <StatCard icon="📦" label="Sản phẩm (SKU)" value={displayVal('sku', stats.sku)} subtitle={`NT: ${stats.sku_NT} · TC: ${stats.sku_TC}`}
+            <StatCard icon="📦" label="Sản phẩm (SKU)" value={displayVal('sku', stats.sku)} subtitle={siteSubtitle('sku')}
               gradient="var(--bg-primary)" accent="#8b5cf6" border="var(--border-light)"
               isEditing={isEditingMetrics} onValueChange={(v) => setOverride('sku', v)}
               onClickDetails={() => setDrillDownData({ title: 'Chi tiết Sản phẩm (SKU)', subs: prodSubs.filter(s => categorizeSubmission(s) === 'sku') })} />
-            <StatCard icon="🎨" label="Multimedia" value={displayVal('multimedia', stats.multimedia)} subtitle={`NT: ${stats.mm_NT} · TC: ${stats.mm_TC}`}
+            <StatCard icon="🎨" label="Multimedia" value={displayVal('multimedia', stats.multimedia)} subtitle={siteSubtitle('multimedia')}
               gradient="var(--bg-primary)" accent="#f59e0b" border="var(--border-light)"
               isEditing={isEditingMetrics} onValueChange={(v) => setOverride('multimedia', v)}
               onClickDetails={() => setDrillDownData({ title: 'Chi tiết Multimedia', subs: prodSubs.filter(s => categorizeSubmission(s) === 'multimedia') })} />
@@ -1323,22 +1337,13 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
                 <Bar
                   data={{
                     labels: ['Bài mới', 'SKU', 'Multimedia', 'Tối ưu nội dung'],
-                    datasets: [
-                      {
-                        label: 'Nhà thuốc',
-                        data: [stats.baiMoi_NT, stats.sku_NT, stats.mm_NT, stats.toiUu_NT],
-                        backgroundColor: '#2a78d6',
-                        borderRadius: 4,
-                        barPercentage: 0.8, categoryPercentage: 0.7,
-                      },
-                      {
-                        label: 'Tiêm chủng',
-                        data: [stats.baiMoi_TC, stats.sku_TC, stats.mm_TC, stats.toiUu_TC],
-                        backgroundColor: '#1baf7a',
-                        borderRadius: 4,
-                        barPercentage: 0.8, categoryPercentage: 0.7,
-                      }
-                    ],
+                    datasets: reportSites.map(site => ({
+                      label: siteLabel(site),
+                      data: ['baiMoi', 'sku', 'multimedia', 'toiUu'].map(k => stats.bySite[k]?.[site.id] ?? 0),
+                      backgroundColor: siteChartColor(site),
+                      borderRadius: 4,
+                      barPercentage: 0.8, categoryPercentage: 0.7,
+                    })),
                   }}
                   options={{
                     responsive: true, maintainAspectRatio: false,
@@ -1363,25 +1368,15 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
                   <Line
                     data={{
                       labels: weeklyTrend.map(([, d]) => d.label),
-                      datasets: [
-                        {
-                          label: 'Nhà thuốc',
-                          data: weeklyTrend.map(([, d]) => d.nt),
-                          borderColor: '#2a78d6',
-                          backgroundColor: 'rgba(42,120,214,.08)',
-                          fill: true, tension: 0.4,
-                          pointRadius: 4, pointHoverRadius: 6,
-                        },
-                        {
-                          label: 'Tiêm chủng',
-                          data: weeklyTrend.map(([, d]) => d.tc),
-                          borderColor: '#1baf7a',
-                          borderDash: [5, 4],
-                          backgroundColor: 'rgba(27,175,122,.08)',
-                          fill: true, tension: 0.4,
-                          pointRadius: 4, pointHoverRadius: 6,
-                        },
-                      ],
+                      datasets: reportSites.map((site, i) => ({
+                        label: siteLabel(site),
+                        data: weeklyTrend.map(([, d]) => d.bySite[site.id] || 0),
+                        borderColor: siteChartColor(site),
+                        borderDash: i % 2 === 1 ? [5, 4] : undefined,
+                        backgroundColor: `${siteChartColor(site)}14`,
+                        fill: true, tension: 0.4,
+                        pointRadius: 4, pointHoverRadius: 6,
+                      })),
                     }}
                     options={{
                       responsive: true, maintainAspectRatio: false,

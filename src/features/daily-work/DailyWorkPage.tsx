@@ -25,6 +25,7 @@ const TEAM_META: Record<string, { color: string; bg: string; icon: typeof FileTe
 export default function DailyWorkPage() {
   const navigate = useNavigate();
   const { submissions, sites, kpiTargets, currentUser, members } = useAppStore();
+  const activeSiteCount = Math.max(1, sites.filter(s => s.active).length);
 
   const isManager = currentUser?.role === 'Manager';
   const isLeader  = currentUser?.role === 'Leader';
@@ -113,7 +114,8 @@ export default function DailyWorkPage() {
           if (sumWithSite > 0) {
             m[team] = sumWithSite;
           } else {
-            m[team] = Math.round(sumOf(teamTargets.filter(t => !t.siteId)) / 2);
+            // Target chung mọi site → chia đều cho số site đang hoạt động
+            m[team] = Math.round(sumOf(teamTargets.filter(t => !t.siteId)) / activeSiteCount);
           }
         } else {
           m[team] = sumOf(teamTargets);
@@ -121,7 +123,7 @@ export default function DailyWorkPage() {
       }
     }
     return m;
-  }, [kpiTargets, period, siteFilter, isManager, isLeader, currentUser]);
+  }, [kpiTargets, period, siteFilter, isManager, isLeader, currentUser, activeSiteCount]);
 
   // Aggregate by team — only visible teams
   const teamStats = useMemo(() => {
@@ -172,7 +174,7 @@ export default function DailyWorkPage() {
     });
   }, [filtered, targetsByTeam, dateFrom, dateTo]);
 
-  // Tổng theo site (cho phần tỉ trọng 2 site)
+  // Tổng theo site (cho phần tỉ trọng theo site)
   const siteTotals = useMemo(() => {
     const m: Record<string, { name: string; links: number; points: number; color: string }> = {};
     for (const s of filtered) {

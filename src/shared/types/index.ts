@@ -446,7 +446,7 @@ export interface MonthlyKPITarget {
   period: string;
   /** Nhóm team: 'Bài viết' | 'Sản phẩm' | 'Multimedia - Tin nhanh' */
   teamGroup: TeamGroup;
-  /** Site (tùy chọn — undefined = chung cho cả 2 site) */
+  /** Site (tùy chọn — undefined = chung cho mọi site) */
   siteId?: string;
   /** Đầu việc cụ thể (tùy chọn — undefined = cả nhóm) */
   taskType?: string;

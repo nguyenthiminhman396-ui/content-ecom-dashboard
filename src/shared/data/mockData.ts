@@ -1,6 +1,7 @@
 import type { Project, Content, Member, Client, Expense, TaskPointRule, TaskCategory, Site } from '@/shared/types';
 
-// ── Sites mặc định: Nhà thuốc + Tiêm chủng ───────────────────────────────
+// ── Sites mặc định: Nhà thuốc + Tiêm chủng + Xét nghiệm ──────────────────
+// Site thêm sau này: Manager thêm ở Cài đặt → Sites (không cần sửa code)
 export const defaultSites: Site[] = [
   {
     id: 's_nhathuoc',
@@ -17,6 +18,14 @@ export const defaultSites: Site[] = [
     description: 'Site bài viết kiến thức tiêm chủng',
     active: true,
     color: '#2dc4ab',
+  },
+  {
+    id: 's_xetnghiem',
+    name: 'Xét nghiệm Long Châu',
+    urlPattern: 'xetnghiemlongchau',
+    description: 'Site xetnghiemlongchau.com.vn',
+    active: true,
+    color: '#e8590c',
   },
 ];
 

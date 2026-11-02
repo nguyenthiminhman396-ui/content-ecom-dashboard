@@ -410,7 +410,7 @@ export default function KPITargetsPage() {
                           : <em style={{ color: 'var(--text-tertiary)' }}>{target.level === 'total' ? 'KPI tổng' : 'Tổng nhóm'}</em>}
                       </td>
                       <td className="cell-secondary">
-                        {site ? site.name : <em style={{ color: 'var(--text-tertiary)' }}>Cả 2 site</em>}
+                        {site ? site.name : <em style={{ color: 'var(--text-tertiary)' }}>Tất cả site</em>}
                       </td>
                       <td className="cell-secondary">
                         {target.taskType ?? <em style={{ color: 'var(--text-tertiary)' }}>Tất cả</em>}
@@ -577,7 +577,7 @@ function TargetFormModal({ item, period, sites, memberMode, teamMembers, isLeade
                 <label className="form-label">Site (tùy chọn)</label>
                 <select className="form-select" value={form.siteId ?? ''}
                   onChange={e => setForm({ ...form, siteId: e.target.value || undefined })}>
-                  <option value="">— Cả 2 site (tổng) —</option>
+                  <option value="">— Tất cả site (tổng) —</option>
                   {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
@@ -609,7 +609,7 @@ function TargetFormModal({ item, period, sites, memberMode, teamMembers, isLeade
             <div style={{ padding: '10px 12px', background: 'var(--accent-50)',
                           borderRadius: 'var(--radius-sm)', fontSize: '0.78rem', color: 'var(--primary-700)' }}>
               💡 Có thể tạo target ở nhiều cấp:
-              <br />• <strong>Tổng nhóm</strong>: Bài viết = 2500 link (cả 2 site, mọi đầu việc)
+              <br />• <strong>Tổng nhóm</strong>: Bài viết = 2500 link (mọi site, mọi đầu việc)
               <br />• <strong>Theo site</strong>: Bài viết × Nhà thuốc = 1500 link
               <br />• <strong>Cụ thể</strong>: Bài viết × Nhà thuốc × Bài SEO = 800 link
               <br />Hệ thống tự cộng dồn theo cấp khi tính tiến độ.
