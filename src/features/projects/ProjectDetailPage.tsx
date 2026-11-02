@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/shared/store/appStore';
 import { formatFullCurrency, getProjectStatusClass, makeId } from '@/shared/utils/helpers';
@@ -10,6 +10,8 @@ import {
 import type { ProjectTask, Expense } from '@/shared/types';
 import { defaultTaskCategories } from '@/shared/data/mockData';
 import toast from 'react-hot-toast';
+import { computeTaskProgress, overallProgress as calcOverallProgress, computeSchedule, resolveStartDate } from '@/shared/selectors/projectProgress';
+import ScheduleBadge from '@/shared/components/ScheduleBadge';
 
 // Sử dụng makeId() từ shared/utils/helpers — UUID v4 để tránh collision khi
 // nhiều người add task cùng lúc (idempotent SQL sẽ skip ID trùng → mất data).
@@ -78,45 +80,14 @@ export default function ProjectDetailPage() {
   });
 
   // ── Tính số link + quantity đã hoàn thành cho mỗi task ────────────────
-  const taskProgress = useMemo(() => {
-    return tasks.map(t => {
-      const matched = projectSubs.filter(s => {
-        if (s.projectTaskId === t.id) return true;
-        if (s.projectTaskId) return false; // đã gắn task khác
-        // Match theo taskType + taskDetail
-        if (t.taskType && s.taskType !== t.taskType) return false;
-        if (t.taskDetail && s.taskDetail !== t.taskDetail) return false;
-        if (t.assignees && t.assignees.length > 0 && !t.assignees.includes(s.employeeName)) return false;
-        return !!t.taskType || !!t.taskDetail;
-      });
-      const links = matched.reduce((sum, s) => sum + s.links.length, 0);
-      const qty = matched.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
-      const points = matched.reduce((sum, s) => sum + s.totalPoints, 0);
-      // Progress: dựa theo trackingMode của task
-      let progress = 0;
-      const mode = t.trackingMode || 'link';
-      if (mode === 'milestone') {
-        progress = t.manualProgress !== undefined ? t.manualProgress : (t.isDone ? 100 : 0);
-      } else if (mode === 'quantity' && t.targetQuantity && t.targetQuantity > 0) {
-        progress = Math.min(100, Math.round((qty / t.targetQuantity) * 100));
-      } else if (t.targetLinks > 0) {
-        progress = Math.min(100, Math.round((links / t.targetLinks) * 100));
-      }
-      return { task: t, matched, links, qty, points, progress };
-    });
-  }, [tasks, projectSubs]);
+  // Không dùng useMemo: đoạn này nằm sau early return (!project) → hook sẽ bị gọi có điều kiện
+  const taskProgress = tasks.map(t => computeTaskProgress(t, projectSubs));
 
   // ── Tổng tiến độ project ────────────────────────────────────────────────
   const hasTasks = taskProgress.length > 0;
-  const overallProgress = useMemo(() => {
-    if (taskProgress.length === 0) {
-      // Không có task nhỏ → dùng manualProgress nếu được set
-      return project?.manualProgress ?? 0;
-    }
-    // Có task nhỏ → auto-calc (bỏ qua manualProgress)
-    const total = taskProgress.reduce((s, x) => s + x.progress, 0);
-    return Math.round(total / taskProgress.length);
-  }, [taskProgress, project?.manualProgress]);
+  // Có task nhỏ → auto-calc (bỏ qua manualProgress); không có → manualProgress
+  const overallProgress = calcOverallProgress(project, taskProgress);
+  const schedule = computeSchedule(overallProgress, project.deadline, resolveStartDate(project, projectSubs), new Date());
 
   // ── Chi phí ─────────────────────────────────────────────────────────────
   const totalExpense = projectExpenses.reduce((s, e) => s + e.amount, 0);
@@ -187,6 +158,9 @@ export default function ProjectDetailPage() {
           <div className="progress-bar-bg" style={{ height: 10 }}>
             <div className={`progress-bar-fill ${overallProgress >= 100 ? 'complete' : hasTasks ? 'high' : 'medium'}`}
               style={{ width: `${overallProgress}%` }}></div>
+          </div>
+          <div style={{ marginTop: '6px' }}>
+            <ScheduleBadge schedule={schedule} />
           </div>
 
           {/* Khi chưa có task: hiện slider chỉnh tay + note */}
@@ -284,7 +258,7 @@ export default function ProjectDetailPage() {
             </div>
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {taskProgress.map(({ task, matched, links, qty, points, progress }) => (
+            {taskProgress.map(({ task, matched, links, qty, hours, points, progress }) => (
               <div key={task.id} style={{
                 border: '1px solid var(--border-light)',
                 borderRadius: 'var(--radius-md)', overflow: 'hidden',
@@ -327,6 +301,8 @@ export default function ProjectDetailPage() {
                         <span>
                           {task.trackingMode === 'milestone'
                             ? (progress >= 100 ? '✓ Đã hoàn thành mốc · Không tính KPI' : '🎯 Đang thực hiện mốc · Không tính KPI')
+                            : task.trackingMode === 'hours'
+                            ? `⏱ ${hours} / ${task.targetHours ?? 0} giờ · ${points.toFixed(0)}đ${links > 0 ? ` · ${links} link` : ''}`
                             : (task.trackingMode || 'link') === 'quantity'
                             ? `📊 ${qty} / ${task.targetQuantity ?? 0} SL · ${points.toFixed(0)}đ${links > 0 ? ` · ${links} link` : ''}`
                             : `🔗 ${links} / ${task.targetLinks} link · ${points.toFixed(0)}đ`}
@@ -641,6 +617,16 @@ function TaskFormModal({ item, projectId, members, onClose, onSave }: {
                   }}>
                   📊 Theo số lượng
                 </button>
+                <button type="button" onClick={() => setForm({ ...form, trackingMode: 'hours', targetHours: form.targetHours || 8 })}
+                  style={{
+                    flex: 1, padding: '10px 12px', border: 'none', cursor: 'pointer',
+                    borderLeft: '1px solid var(--border-medium)',
+                    fontWeight: 600, fontSize: '0.82rem', transition: 'all 0.2s ease',
+                    background: mode === 'hours' ? 'var(--primary-500)' : 'var(--bg-secondary)',
+                    color: mode === 'hours' ? '#fff' : 'var(--text-secondary)',
+                  }}>
+                  ⏱ Theo giờ
+                </button>
                 <button type="button" onClick={() => setForm({
                     ...form,
                     trackingMode: 'milestone',
@@ -719,6 +705,15 @@ function TaskFormModal({ item, projectId, members, onClose, onSave }: {
                   Tiến độ = số link đã submit / target link
                 </p>
               </div>
+            ) : mode === 'hours' ? (
+              <div className="form-group">
+                <label className="form-label">Target số giờ thực hiện *</label>
+                <input className="form-input" type="number" min="0.5" step="0.5" value={form.targetHours ?? 8}
+                  onChange={e => setForm({ ...form, targetHours: parseFloat(e.target.value) || 1 })} />
+                <p style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: 4 }}>
+                  Tiến độ = tổng giờ đã submit (chế độ "Theo giờ" ở trang Submit KPI) / target giờ
+                </p>
+              </div>
             ) : (
               <div className="form-group">
                 <label className="form-label">Target số lượng *</label>
@@ -775,6 +770,8 @@ function TaskFormModal({ item, projectId, members, onClose, onSave }: {
                 ? '🎯 Task quản lý: Cập nhật trực tiếp trạng thái Hoàn thành / % tiến độ ngay trên thẻ task. Hoàn toàn không sinh ra KPI hay làm lệch điểm/link của team.'
                 : mode === 'link'
                 ? 'Member submit link sẽ tự động cập nhật tiến độ task này.'
+                : mode === 'hours'
+                ? 'Member submit KPI theo giờ cho dự án này sẽ tự động cộng giờ vào task.'
                 : 'Member submit KPI và nhập "Số lượng hoàn thành" sẽ tự động cập nhật tiến độ.'}
             </div>
           </div>

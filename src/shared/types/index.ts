@@ -39,6 +39,8 @@ export interface Project {
    * bỏ qua trường này. Có thể dùng song song để ghi nhận ước tính nếu muốn.
    */
   manualProgress?: number;
+  /** Ngày bắt đầu (YYYY-MM-DD) — dùng so % việc với % thời gian đã trôi tới deadline */
+  startDate?: string;
 }
 
 // ============================================
@@ -62,13 +64,13 @@ export interface Site {
 // Tiến độ project = sum(submissions matching) / sum(targetLinks)
 // ============================================
 
-export type TaskTrackingMode = 'link' | 'quantity' | 'milestone';
+export type TaskTrackingMode = 'link' | 'quantity' | 'hours' | 'milestone';
 
 export interface ProjectTask {
   id: string;
   projectId: string;
   name: string;
-  /** Chế độ tracking: 'link' = đếm link, 'quantity' = đếm số lượng, 'milestone' = mốc quản lý (không tính KPI) */
+  /** Chế độ tracking: 'link' = đếm link, 'quantity' = đếm số lượng, 'hours' = đếm giờ làm, 'milestone' = mốc quản lý (không tính KPI) */
   trackingMode?: TaskTrackingMode;
   /** Đầu việc — match với KPISubmission.taskType */
   taskType?: string;
@@ -78,6 +80,8 @@ export interface ProjectTask {
   targetLinks: number;
   /** Target số lượng — dùng khi trackingMode = 'quantity' */
   targetQuantity?: number;
+  /** Target số giờ làm — dùng khi trackingMode = 'hours' (dự án tính theo thời gian thực hiện) */
+  targetHours?: number;
   /** Đã hoàn thành (dùng cho milestone task hoặc cập nhật 1-click) */
   isDone?: boolean;
   /** Tiến độ thủ công 0-100% (nếu muốn tracking chi tiết theo %) */

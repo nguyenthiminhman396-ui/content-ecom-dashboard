@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/shared/store/appStore';
 import {
   TrendingUp, TrendingDown, Minus, Trophy, Link2, Users,
@@ -11,6 +12,8 @@ import {
 import { Doughnut, Line } from 'react-chartjs-2';
 import type { KPISubmission, Member } from '@/shared/types';
 import { computeLeadershipMetrics } from '@/shared/selectors/leadershipMetrics';
+import { summarizeProject, sortByRisk } from '@/shared/selectors/projectProgress';
+import ScheduleBadge from '@/shared/components/ScheduleBadge';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend, Filler);
 
@@ -50,6 +53,7 @@ function endOfMonth(d: Date): Date { return new Date(d.getFullYear(), d.getMonth
 
 export default function DashboardPage() {
   const { submissions, projects, scaleConfig, members, currentUser, projectTasks, bonusPoints, rndLogs } = useAppStore();
+  const navigate = useNavigate();
 
   const now = new Date();
   const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -364,48 +368,15 @@ export default function DashboardPage() {
   }, [scopedSubs, thisMonth]);
 
   // ── Project progress (auto từ tasks cứng) ──
+  // Link/giờ/điểm là LUỸ KẾ dự án (khớp với % tiến độ), kèm phần phát sinh trong kỳ đang lọc.
+  // Sắp xếp theo rủi ro: quá hạn → chậm tiến độ → … để Manager thấy dự án cần xử lý trước.
   const projectProgress = useMemo(() => {
-    return projects.filter(p => p.status === 'Đang chạy').map(p => {
-      const subs = thisMonthSubs.filter(s => s.projectId === p.id);
-      const links = subs.reduce((sum, x) => sum + x.links.length, 0);
-      const points = subs.reduce((sum, x) => sum + x.totalPoints, 0);
-
-      // Tiến độ task cứng: avg(taskProgress) — đồng bộ với ProjectDetailPage
-      const tasks = projectTasks.filter(t => t.projectId === p.id);
-      let taskProgress = 0;
-      if (tasks.length > 0) {
-        const allSubs = submissions.filter(s => s.projectId === p.id);
-        const total = tasks.reduce((acc, t) => {
-          const matched = allSubs.filter(s => {
-            if (s.projectTaskId === t.id) return true;
-            if (s.projectTaskId) return false;
-            if (t.taskType && s.taskType !== t.taskType) return false;
-            if (t.taskDetail && s.taskDetail !== t.taskDetail) return false;
-            if (t.assignees && t.assignees.length > 0 && !t.assignees.includes(s.employeeName)) return false;
-            return !!t.taskType || !!t.taskDetail;
-          });
-          // Tính tiến độ đúng theo trackingMode — giống ProjectDetailPage
-          const mode = t.trackingMode || 'link';
-          let tPct = 0;
-          if (mode === 'milestone') {
-            tPct = t.manualProgress !== undefined ? t.manualProgress : (t.isDone ? 100 : 0);
-          } else if (mode === 'quantity' && t.targetQuantity && t.targetQuantity > 0) {
-            const qty = matched.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
-            tPct = Math.min(100, Math.round((qty / t.targetQuantity) * 100));
-          } else if (t.targetLinks > 0) {
-            const linkCount = matched.reduce((sum, s) => sum + s.links.length, 0);
-            tPct = Math.min(100, Math.round((linkCount / t.targetLinks) * 100));
-          }
-          return acc + tPct;
-        }, 0);
-        taskProgress = Math.round(total / tasks.length);
-      } else {
-        // Không có task nhỏ → dùng manualProgress nếu được set (giống ProjectDetailPage)
-        taskProgress = p.manualProgress ?? 0;
-      }
-      return { project: p, links, points, taskProgress, taskCount: tasks.length };
-    }).sort((a, b) => b.taskProgress - a.taskProgress);
-  }, [projects, thisMonthSubs, projectTasks, submissions]);
+    const today = new Date();
+    return projects
+      .filter(p => p.status === 'Đang chạy')
+      .map(p => summarizeProject(p, projectTasks, submissions, { today, periodFrom: fromMs, periodTo: toMs }))
+      .sort(sortByRisk);
+  }, [projects, projectTasks, submissions, fromMs, toMs]);
 
   // ── Chi tiết đầu việc — kỳ này vs cùng kỳ tháng trước ──
   // Leader: xem TOÀN BỘ submissions (cross-team) để quản lý đầu việc mình phụ trách
@@ -993,9 +964,23 @@ export default function DashboardPage() {
             </div>
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {projectProgress.slice(0, 6).map(({ project, links, points, taskProgress, taskCount }) => (
-              <div key={project.id} style={{
-                padding: '12px', border: '1px solid var(--border-light)',
+            {projectProgress.slice(0, 6).map(({ project, progress, taskCount, milestoneCount, milestoneDone,
+                                                  links, hours, points, periodLinks, periodHours, periodPoints, kind, tracksHours, schedule }) => {
+              const metrics: React.ReactNode[] = [];
+              if (links > 0) metrics.push(<><strong style={{ color: 'var(--primary-600)' }}>{links}</strong> link</>);
+              if (hours > 0 && (kind === 'time' || tracksHours || links === 0)) metrics.push(<><strong style={{ color: 'var(--primary-600)' }}>{hours}</strong>h</>);
+              if (points > 0) metrics.push(<><strong style={{ color: 'var(--success)' }}>{points.toFixed(0)}</strong> điểm</>);
+              if (milestoneCount > 0 && (kind === 'time' || metrics.length === 0)) {
+                metrics.push(<><strong style={{ color: '#b45309' }}>{milestoneDone}/{milestoneCount}</strong> mốc</>);
+              }
+              const periodParts = [
+                periodLinks > 0 && `+${periodLinks} link`,
+                periodHours > 0 && (kind === 'time' || tracksHours || periodLinks === 0) && `+${periodHours}h`,
+                periodPoints > 0 && `+${periodPoints.toFixed(0)}đ`,
+              ].filter(Boolean);
+              return (
+              <div key={project.id} onClick={() => navigate(`/projects/${project.id}`)} style={{
+                padding: '12px', border: '1px solid var(--border-light)', cursor: 'pointer',
                 borderRadius: 'var(--radius-md)', background: 'var(--bg-secondary)',
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
@@ -1006,28 +991,42 @@ export default function DashboardPage() {
                       · {project.type}
                     </span>
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                    <strong style={{ color: 'var(--primary-600)' }}>{links}</strong> link ·{' '}
-                    <strong style={{ color: 'var(--success)' }}>{points.toFixed(0)}</strong> điểm
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', textAlign: 'right' }}>
+                    {metrics.length > 0
+                      ? metrics.map((m, i) => <span key={i}>{i > 0 && ' · '}{m}</span>)
+                      : <span style={{ color: 'var(--text-tertiary)' }}>Chưa có submission</span>}
+                    {periodParts.length > 0 && (
+                      <span style={{ color: 'var(--text-tertiary)', marginLeft: 6, fontSize: '0.72rem' }}>
+                        ({periodParts.join(' · ')} trong kỳ)
+                      </span>
+                    )}
                   </div>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem',
-                              color: 'var(--text-tertiary)', marginBottom: '4px' }}>
-                  <span>
-                    {project.deadline && <><Calendar size={11} style={{ verticalAlign: 'middle' }} /> {project.deadline} · </>}
-                    {taskCount} task cứng
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.74rem',
+                              color: 'var(--text-tertiary)', marginBottom: '4px', gap: '6px', flexWrap: 'wrap' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {project.deadline && <span><Calendar size={11} style={{ verticalAlign: 'middle' }} /> {project.deadline}</span>}
+                    <span>· {taskCount} task cứng</span>
+                    <ScheduleBadge schedule={schedule} />
                   </span>
                   <span style={{ fontWeight: 700,
-                                 color: taskProgress >= 100 ? 'var(--success)' : taskProgress >= 50 ? 'var(--primary-600)' : 'var(--warning)' }}>
-                    Tiến độ: {taskProgress}%
+                                 color: progress >= 100 ? 'var(--success)' : progress >= 50 ? 'var(--primary-600)' : 'var(--warning)' }}>
+                    Tiến độ: {progress}%
                   </span>
                 </div>
-                <div className="progress-bar-bg" style={{ height: 6 }}>
-                  <div className={`progress-bar-fill ${taskProgress >= 100 ? 'complete' : taskProgress >= 70 ? 'high' : taskProgress >= 30 ? 'medium' : 'low'}`}
-                    style={{ width: `${taskProgress}%` }} />
+                <div className="progress-bar-bg" style={{ height: 6, position: 'relative' }}>
+                  <div className={`progress-bar-fill ${progress >= 100 ? 'complete' : progress >= 70 ? 'high' : progress >= 30 ? 'medium' : 'low'}`}
+                    style={{ width: `${progress}%` }} />
+                  {schedule.elapsedPct !== undefined && schedule.status !== 'overdue' && progress < 100 && (
+                    <div title={`Mốc thời gian: đã qua ${schedule.elapsedPct}%`} style={{
+                      position: 'absolute', top: -3, bottom: -3, left: `calc(${schedule.elapsedPct}% - 1px)`,
+                      width: 2, background: 'var(--text-secondary)', borderRadius: 1,
+                    }} />
+                  )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

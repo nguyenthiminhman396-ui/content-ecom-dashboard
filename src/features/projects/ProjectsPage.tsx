@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import type { ProjectType, ProjectStatus, Project } from '@/shared/types';
 import toast from 'react-hot-toast';
+import { computeTaskProgress, overallProgress } from '@/shared/selectors/projectProgress';
 
 const projectTypes: ProjectType[] = ['Campaign', 'Series', 'Client'];
 const projectStatuses: ProjectStatus[] = ['Đang chạy', 'Hoàn thành', 'Tạm dừng', 'Hủy'];
@@ -45,28 +46,7 @@ export default function Projects() {
     }
     // Có task nhỏ → auto-calc từ submissions (bỏ qua manualProgress)
     const projectSubs = submissions.filter(s => s.projectId === projectId);
-    const progresses = tasks.map(t => {
-      const matched = projectSubs.filter(s => {
-        if (s.projectTaskId === t.id) return true;
-        if (s.projectTaskId) return false;
-        if (t.taskType && s.taskType !== t.taskType) return false;
-        if (t.taskDetail && s.taskDetail !== t.taskDetail) return false;
-        if (t.assignees && t.assignees.length > 0 && !t.assignees.includes(s.employeeName)) return false;
-        return !!t.taskType || !!t.taskDetail;
-      });
-      const mode = t.trackingMode || 'link';
-      if (mode === 'milestone') {
-        return t.manualProgress !== undefined ? t.manualProgress : (t.isDone ? 100 : 0);
-      } else if (mode === 'quantity' && t.targetQuantity && t.targetQuantity > 0) {
-        const qty = matched.reduce((sum, s) => sum + (s.quantity ?? 0), 0);
-        return Math.min(100, Math.round((qty / t.targetQuantity) * 100));
-      } else if (t.targetLinks > 0) {
-        const links = matched.reduce((sum, s) => sum + s.links.length, 0);
-        return Math.min(100, Math.round((links / t.targetLinks) * 100));
-      }
-      return 0;
-    });
-    return Math.round(progresses.reduce((s, p) => s + p, 0) / progresses.length);
+    return overallProgress(undefined, tasks.map(t => computeTaskProgress(t, projectSubs)));
   };
 
   const getProjectSpent = (projectId: string) => {
@@ -451,6 +431,18 @@ function ProjectFormModal({ item, hasTasks = false, onClose, onSave }: {
                 <label className="form-label">Deadline *</label>
                 <input className="form-input" type="date" value={form.deadline || ''} onChange={e => handleChange('deadline', e.target.value)} />
               </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Ngày bắt đầu</label>
+                <input className="form-input" type="date" value={form.startDate || ''} max={form.deadline || undefined}
+                  onChange={e => handleChange('startDate', e.target.value)} />
+                <p style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: 4 }}>
+                  Dùng để so % việc với % thời gian đã trôi tới deadline (Đúng / Chậm tiến độ).
+                </p>
+              </div>
+              <div className="form-group" />
             </div>
 
             <div className="form-row">
