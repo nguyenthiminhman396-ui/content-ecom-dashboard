@@ -227,6 +227,7 @@ export default function SubmitKPIPage() {
         setProjectDescription('');
         setNotes('');
         setProjectId('');
+        setProjectTaskId('');
       } else {
         toast.error('❌ Lưu thất bại! Dữ liệu chưa được lưu. Hãy thử lại.', { duration: 6000 });
       }
@@ -395,7 +396,10 @@ export default function SubmitKPIPage() {
                     <option value="">— (Tùy chọn) Gắn vào task cụ thể —</option>
                     {tasks.map(t => (
                       <option key={t.id} value={t.id}>
-                        {(t.trackingMode || 'link') === 'quantity' ? '📊' : '🔗'} {t.name} (target {(t.trackingMode || 'link') === 'quantity' ? `${t.targetQuantity ?? 0} SL` : `${t.targetLinks} link`})
+                        {t.trackingMode === 'hours' ? `⏱ ${t.name} (target ${t.targetHours ?? 0} giờ)`
+                          : t.trackingMode === 'milestone' ? `🎯 ${t.name} (mốc quản lý)`
+                          : t.trackingMode === 'quantity' ? `📊 ${t.name} (target ${t.targetQuantity ?? 0} SL)`
+                          : `🔗 ${t.name} (target ${t.targetLinks} link)`}
                       </option>
                     ))}
                   </select>

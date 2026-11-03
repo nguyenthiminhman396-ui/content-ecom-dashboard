@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react';
 import { useAppStore } from '@/shared/store/appStore';
 import {
   Users, Mail, Briefcase, Edit3, Trash2, Save, X,
-  ShieldCheck, Key, UserPlus, Search
+  ShieldCheck, Key, UserPlus, Search, LogOut, RotateCcw, CalendarDays
 } from 'lucide-react';
 import type { Member, MemberRole, KpiRole, TeamGroup, MemberAccount } from '@/shared/types';
 import toast from 'react-hot-toast';
+import { nextRoleHistory, toDayKey } from '@/shared/selectors/teamKpi';
 
 const ROLES: MemberRole[] = ['Manager', 'Leader', 'Member', 'Client'];
 const TEAM_GROUPS: TeamGroup[] = ['Bài viết', 'Sản phẩm', 'Multimedia - Tin nhanh'];
@@ -21,6 +22,9 @@ export default function MembersPage() {
   const [editItem, setEditItem] = useState<Member | null>(null);
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState<MemberRole | ''>('');
+  const [filterStatus, setFilterStatus] = useState<'active' | 'left' | ''>('active');
+  const today = toDayKey(new Date());
+  const hasLeft = (m: Member) => !!m.leftAt && m.leftAt < today;
 
   const isManager = currentUser?.role === 'Manager';
 
@@ -38,6 +42,8 @@ export default function MembersPage() {
   const filtered = useMemo(() => {
     return memberStats.filter(m => {
       if (filterRole && m.role !== filterRole) return false;
+      if (filterStatus === 'active' && hasLeft(m)) return false;
+      if (filterStatus === 'left' && !hasLeft(m)) return false;
       if (search) {
         const q = search.toLowerCase();
         return m.name.toLowerCase().includes(q) ||
@@ -46,7 +52,8 @@ export default function MembersPage() {
       }
       return true;
     });
-  }, [memberStats, search, filterRole]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- hasLeft chỉ phụ thuộc today
+  }, [memberStats, search, filterRole, filterStatus, today]);
 
   const getInitials = (name: string) => {
     const parts = name.split(' ');
@@ -65,12 +72,42 @@ export default function MembersPage() {
     return map[role];
   };
 
+  // Bớt member: người đã có submission → "cho nghỉ" (giữ lịch sử để target các tháng cũ vẫn đúng,
+  // tháng hiện tại chỉ tính target tới ngày làm việc cuối). Chưa có submission nào → xoá hẳn như cũ.
   const handleDelete = (m: Member) => {
     if (m.id === currentUser?.id) { toast.error('Không thể xóa chính bạn'); return; }
-    if (window.confirm(`Xóa nhân viên "${m.name}"? (Submissions cũ vẫn giữ)`)) {
-      deleteMember(m.id);
-      toast.success('Đã xóa');
+    const hasHistory = submissions.some(s => s.employeeName === m.name);
+    if (!hasHistory || m.leftAt) {
+      const msg = m.leftAt
+        ? `Xoá hẳn "${m.name}"? Target KPI các tháng cũ của team sẽ không còn tính người này.`
+        : `Xóa nhân viên "${m.name}"? (Chưa có submission nào)`;
+      if (window.confirm(msg)) {
+        deleteMember(m.id);
+        toast.success('Đã xóa');
+      }
+      return;
     }
+    const input = window.prompt(
+      `Cho "${m.name}" nghỉ — nhập NGÀY LÀM VIỆC CUỐI (YYYY-MM-DD).\n` +
+      'Target KPI chỉ tính tới ngày này; điểm và lịch sử vẫn giữ. Account đăng nhập sẽ bị vô hiệu hoá.',
+      today,
+    );
+    if (input === null) return;
+    const leftAt = input.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(leftAt) || isNaN(new Date(leftAt).getTime())) {
+      toast.error('Ngày không hợp lệ (định dạng YYYY-MM-DD)'); return;
+    }
+    if (m.joinedAt && leftAt < m.joinedAt) { toast.error('Ngày nghỉ trước ngày vào team'); return; }
+    updateMember(m.id, { leftAt });
+    const acc = memberAccounts.find(a => a.memberId === m.id);
+    if (acc?.active) setMemberAccount({ ...acc, active: false });
+    toast.success(`Đã cho ${m.name} nghỉ từ sau ${leftAt}`);
+  };
+
+  const handleRestore = (m: Member) => {
+    // Dùng '' thay vì undefined: API update merge JSON, key undefined bị bỏ → DB vẫn giữ leftAt cũ
+    updateMember(m.id, { leftAt: '' });
+    toast.success(`Đã khôi phục ${m.name} — nhớ bật lại account nếu cần`);
   };
 
   return (
@@ -106,6 +143,12 @@ export default function MembersPage() {
           <option value="">Tất cả role</option>
           {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
         </select>
+        <select className="form-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value as 'active' | 'left' | '')}
+          style={{ width: 'auto', fontSize: '0.85rem' }}>
+          <option value="active">Đang làm</option>
+          <option value="left">Đã nghỉ</option>
+          <option value="">Tất cả</option>
+        </select>
       </div>
 
       {/* Members Grid */}
@@ -113,7 +156,7 @@ export default function MembersPage() {
         {filtered.map(m => {
           const badge = getRoleBadge(m.role);
           return (
-            <div key={m.id} className="member-card animate-in" style={{ position: 'relative' }}>
+            <div key={m.id} className="member-card animate-in" style={{ position: 'relative', opacity: hasLeft(m) ? 0.6 : 1 }}>
               <div className="member-avatar-lg">
                 {getInitials(m.name)}
               </div>
@@ -145,6 +188,15 @@ export default function MembersPage() {
                 )}
               </div>
 
+              {(m.joinedAt || m.leftAt) && (
+                <div style={{ fontSize: '0.72rem', color: m.leftAt ? 'var(--danger)' : 'var(--text-tertiary)', marginTop: '6px',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                  <CalendarDays size={11} />
+                  {m.joinedAt && <>Vào {m.joinedAt}</>}
+                  {m.joinedAt && m.leftAt && ' · '}
+                  {m.leftAt && <>Ngày làm cuối {m.leftAt}</>}
+                </div>
+              )}
               <span className="member-expertise" style={{ marginTop: '8px' }}>
                 <Briefcase size={11} style={{ marginRight: 4 }} /> {m.expertise || '—'}
               </span>
@@ -174,9 +226,17 @@ export default function MembersPage() {
                     onClick={() => { setEditItem(m); setShowForm(true); }}>
                     <Edit3 size={11} /> Sửa
                   </button>
+                  {m.leftAt && (
+                    <button className="btn btn-ghost" style={{ fontSize: '0.78rem', padding: '4px 10px' }}
+                      onClick={() => handleRestore(m)}>
+                      <RotateCcw size={11} /> Khôi phục
+                    </button>
+                  )}
                   <button className="btn btn-ghost" style={{ fontSize: '0.78rem', padding: '4px 10px', color: 'var(--danger)' }}
                     onClick={() => handleDelete(m)}>
-                    <Trash2 size={11} /> Xóa
+                    {m.leftAt || !submissions.some(s => s.employeeName === m.name)
+                      ? <><Trash2 size={11} /> Xóa</>
+                      : <><LogOut size={11} /> Cho nghỉ</>}
                   </button>
                 </div>
               )}
@@ -237,8 +297,11 @@ function MemberFormModal({ item, existingAccount, onClose, onSave }: {
   const [form, setForm] = useState<Partial<Member>>(item || {
     name: '', role: 'Member' as MemberRole, expertise: '', email: '',
     kpiRole: 'member' as KpiRole, teamGroup: 'Bài viết' as TeamGroup,
-    productivityFactor: 1.0,
+    productivityFactor: 1.0, joinedAt: toDayKey(new Date()),
   });
+  // Ngày áp dụng khi đổi vai trò KPI / hệ số (VD Member → Leader giữa tháng)
+  const [effectiveFrom, setEffectiveFrom] = useState(toDayKey(new Date()));
+  const roleChanged = !!item && nextRoleHistory(item, form, effectiveFrom) !== undefined;
   const [createAccount, setCreateAccount] = useState(!!existingAccount);
   const [accEmail, setAccEmail] = useState(existingAccount?.email ?? '');
   const [accPass, setAccPass] = useState(existingAccount?.password ?? '');
@@ -251,7 +314,15 @@ function MemberFormModal({ item, existingAccount, onClose, onSave }: {
       if (!accEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accEmail)) { toast.error('Email không hợp lệ'); return; }
       if (!accPass || accPass.length < 4) { toast.error('Mật khẩu tối thiểu 4 ký tự'); return; }
     }
-    onSave(form, createAccount ? { email: accEmail, password: accPass, active: accActive } : undefined);
+    let toSave = form;
+    if (item) {
+      const roleHistory = nextRoleHistory(item, form, effectiveFrom);
+      if (roleHistory) {
+        if (item.joinedAt && effectiveFrom < item.joinedAt) { toast.error('Ngày áp dụng trước ngày vào team'); return; }
+        toSave = { ...form, roleHistory };
+      }
+    }
+    onSave(toSave, createAccount ? { email: accEmail, password: accPass, active: accActive } : undefined);
   };
 
   return (
@@ -348,6 +419,27 @@ function MemberFormModal({ item, existingAccount, onClose, onSave }: {
                   value={form.productivityFactor ?? 1.0}
                   onChange={e => setForm({ ...form, productivityFactor: parseFloat(e.target.value) || 1.0 })} />
               </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Ngày vào team</label>
+                <input className="form-input" type="date" value={form.joinedAt ?? ''}
+                  onChange={e => setForm({ ...form, joinedAt: e.target.value })} />
+                <p style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: 4 }}>
+                  Target KPI tháng vào team chỉ tính từ ngày này.
+                </p>
+              </div>
+              {roleChanged ? (
+                <div className="form-group">
+                  <label className="form-label" style={{ color: 'var(--primary-600)' }}>Áp dụng vai trò / hệ số mới từ *</label>
+                  <input className="form-input" type="date" value={effectiveFrom}
+                    onChange={e => setEffectiveFrom(e.target.value || toDayKey(new Date()))} />
+                  <p style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: 4 }}>
+                    Target tháng này chia theo ngày: trước ngày này tính vai trò cũ, từ ngày này tính vai trò mới.
+                  </p>
+                </div>
+              ) : <div className="form-group" />}
             </div>
 
             {/* Account login */}

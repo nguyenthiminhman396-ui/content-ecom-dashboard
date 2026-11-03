@@ -1,5 +1,6 @@
 import { TEAM_GROUPS } from '@/shared/data/mockData';
 import type { Member, MonthlyKPITarget, TeamGroup } from '@/shared/types';
+import { monthBounds, toDayKey } from '@/shared/selectors/teamKpi';
 
 // Phân bổ KPI: KPI tổng (theo đầu việc × site) → team → từng người.
 // Các cấp liên kết với nhau bằng khoá period + taskType + siteId (không cần id cha),
@@ -29,9 +30,22 @@ export function memberWeight(m: Member): number {
   return m.kpiRole === 'leader' || m.role === 'Leader' ? 0.6 : 1;
 }
 
-/** Nhân sự nhận KPI của team (Leader + Member) */
-export function teamMembersOf(members: Member[], team: TeamGroup): Member[] {
-  return members.filter(m => m.teamGroup === team && (m.role === 'Leader' || m.role === 'Member'));
+/**
+ * Nhân sự nhận KPI của team (Leader + Member) trong kỳ `period` (YYYY-MM):
+ * bỏ người nghỉ trước kỳ / vào sau kỳ. Người đã có KPI cá nhân lưu trong kỳ (`keepNames`)
+ * luôn được giữ để không bị ẩn số đã giao.
+ */
+export function teamMembersOf(members: Member[], team: TeamGroup, period?: string, keepNames: string[] = []): Member[] {
+  const range = period ? monthBounds(`${period}-01`) : { from: toDayKey(new Date()), to: toDayKey(new Date()) };
+  return members.filter(m => m.teamGroup === team && (m.role === 'Leader' || m.role === 'Member')
+    && (keepNames.includes(m.name) || (!(m.leftAt && m.leftAt < range.from) && !(m.joinedAt && m.joinedAt > range.to))));
+}
+
+/** Tên những người đã có KPI cá nhân trong phạm vi KPI tổng của team */
+export function namesWithTargets(targets: MonthlyKPITarget[], total: MonthlyKPITarget, team: TeamGroup): string[] {
+  return [...new Set(targets
+    .filter(t => !isTotal(t) && !!t.employeeName && t.teamGroup === team && sameScope(t, total))
+    .map(t => t.employeeName as string))];
 }
 
 /**

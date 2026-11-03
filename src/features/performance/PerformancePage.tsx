@@ -10,6 +10,7 @@ import { Radar } from 'react-chartjs-2';
 import type { PerformanceReview } from '@/shared/types';
 import { makeId } from '@/shared/utils/helpers';
 import toast from 'react-hot-toast';
+import { dayKeyOf, isKpiEligible, memberTarget, monthBounds, submittedAsRole } from '@/shared/selectors/teamKpi';
 
 ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
 
@@ -102,15 +103,15 @@ export default function PerformancePage() {
         .filter(b => b.employeeName === name && b.period === selectedPeriod && b.status === 'approved')
         .reduce((s, b) => s + b.amount, 0);
       const totalPoints = basePoints + empBonus;
-      const memberTarget = scaleConfig.memberTargetPoints;
-      // Ưu tiên hệ số sản xuất riêng của từng người (productivityFactor)
-      // Nếu không có → fallback theo kpiRole: leader dùng scaleConfig, member = 1.0
-      const pFactor = memConfig?.productivityFactor
-        ?? (kpiRole === 'leader' ? scaleConfig.leaderProductionWeight : 1.0);
-      const targetPoints = Math.round(memberTarget * pFactor * 100) / 100;
+      // Target theo ngày công của tháng: vào/nghỉ giữa tháng, đổi vai trò giữa tháng đều chia theo ngày (teamKpi)
+      const month = monthBounds(`${selectedPeriod}-01`);
+      const targetPoints = memConfig
+        ? memberTarget(memConfig, month.from, month.to, scaleConfig)
+        : scaleConfig.memberTargetPoints;
       const kpiAchievement = targetPoints > 0 ? (totalPoints / targetPoints) * 100 : 0;
       const review = performanceReviews.find(r => r.employeeName === name && r.period === selectedPeriod);
-      const productivityScore = Math.min((totalPoints / targetPoints) * 5, 5);
+      // Không có ngày công trong tháng (đã nghỉ / chưa vào) → target 0, không chấm năng suất
+      const productivityScore = targetPoints > 0 ? Math.min((totalPoints / targetPoints) * 5, 5) : 0;
       const daysOff = review?.daysOff ?? 0;
       const allowedDaysOff = review?.allowedDaysOff ?? scaleConfig.allowedDaysOff;
       const attendanceScore = Math.max(5 - Math.max(daysOff - allowedDaysOff, 0) * 1.5, 0);
@@ -480,14 +481,22 @@ export default function PerformancePage() {
                           });
 
                           // Member yếu (đạt < 80% target)
-                          const weakMembers = teamMemberNames.map(name => {
-                            const subs = submissions.filter(s =>
-                              s.employeeName === name && s.submittedAt.startsWith(selectedPeriod)
-                            );
-                            const points = subs.reduce((sum, s) => sum + s.totalPoints, 0);
-                            const pct = (points / scaleConfig.memberTargetPoints) * 100;
-                            return { name, points, pct };
-                          }).filter(x => x.pct < 80).sort((a, b) => a.pct - b.pct);
+                          // Target theo ngày công còn là Member trong tháng (khớp KPI team của Lead — teamKpi)
+                          const month = monthBounds(`${selectedPeriod}-01`);
+                          const weakMembers = members
+                            .filter(mb => mb.teamGroup === m.teamGroup && isKpiEligible(mb))
+                            .map(mb => {
+                              const target = memberTarget(mb, month.from, month.to, scaleConfig, 'member');
+                              const points = submissions
+                                .filter(s => {
+                                  const day = dayKeyOf(s.submittedAt);
+                                  return s.employeeName === mb.name && !!day && day >= month.from && day <= month.to
+                                    && submittedAsRole(s, members, 'member');
+                                })
+                                .reduce((sum, s) => sum + s.totalPoints, 0);
+                              return { name: mb.name, points, target, pct: target > 0 ? (points / target) * 100 : 0 };
+                            })
+                            .filter(x => x.target > 0 && x.pct < 80).sort((a, b) => a.pct - b.pct);
 
                           return (
                             <div style={{ marginTop: '12px', padding: '14px',
@@ -551,7 +560,7 @@ export default function PerformancePage() {
                                         <strong>{mb.name}</strong>
                                         <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                           <span style={{ color: 'var(--text-tertiary)' }}>
-                                            {mb.points.toFixed(0)}đ / {scaleConfig.memberTargetPoints}đ
+                                            {mb.points.toFixed(0)}đ / {mb.target.toFixed(0)}đ
                                           </span>
                                           <span style={{
                                             color: mb.pct >= 60 ? 'var(--warning)' : 'var(--danger)',

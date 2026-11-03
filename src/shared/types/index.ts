@@ -111,6 +111,19 @@ export interface Member {
   teamGroup?: TeamGroup;
   /** Hệ số năng suất (1.0 = member, 0.6 = leader production) */
   productivityFactor?: number;
+  /** Ngày vào team (YYYY-MM-DD) — target KPI tính từ ngày này */
+  joinedAt?: string;
+  /** Ngày làm việc cuối (YYYY-MM-DD) — member đã nghỉ: giữ lịch sử KPI, target dừng sau ngày này */
+  leftAt?: string;
+  /** Lịch sử vai trò KPI (VD Member → Leader giữa tháng) — target chia theo ngày giữ từng vai trò */
+  roleHistory?: RoleChange[];
+}
+
+export interface RoleChange {
+  /** Áp dụng từ ngày (YYYY-MM-DD) */
+  from: string;
+  kpiRole: KpiRole;
+  productivityFactor?: number;
 }
 
 /** Account đăng nhập do Manager cấp — lưu local + Sheet Members */

@@ -14,6 +14,7 @@ import type { KPISubmission, Member } from '@/shared/types';
 import { computeLeadershipMetrics } from '@/shared/selectors/leadershipMetrics';
 import { summarizeProject, sortByRisk } from '@/shared/selectors/projectProgress';
 import ScheduleBadge from '@/shared/components/ScheduleBadge';
+import { kpiRoster, memberTarget, monthBounds, teamTarget } from '@/shared/selectors/teamKpi';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend, Filler);
 
@@ -297,24 +298,34 @@ export default function DashboardPage() {
     return { now: tNow, prev: tPrev, bonusNow: totalBonusNow, bonusPrev: totalBonusPrev };
   }, [thisMonthSubs, prevMonthSubs, totalBonusNow, totalBonusPrev, scaleConfig.pointPerHour]);
 
-  // Lấy danh sách các members thực sự có làm việc (có data trong submissions)
-  const activeMembers = useMemo(() => {
-    const activeNames = new Set(submissions.map(s => s.employeeName));
-    return members.filter(m => activeNames.has(m.name) && m.name !== 'manntm3');
-  }, [members, submissions]);
+  // ── Target KPI theo ngày công (teamKpi) ──
+  // Target là target THÁNG (tháng chứa ngày bắt đầu lọc), nhưng chỉ cộng những ngày người đó còn trong team
+  // và theo đúng vai trò từng ngày → thêm member / cho nghỉ / Member → Leader giữa tháng đều tính đúng.
+  const targetMonth = monthBounds(dateFrom || fmtDate(now));
+  const prevTargetMonth = monthBounds(prevDateFrom || fmtDate(new Date(now.getFullYear(), now.getMonth() - 1, 1)));
+  const submitterNames = useMemo(() => new Set(submissions.map(s => s.employeeName)), [submissions]);
 
-  // ── Headcount cố định theo scope (không phụ thuộc ai submit tháng đó) ──
-  const scopedHeadcount = useMemo(() => {
-    if (!currentUser) return 1;
-    if (filterEmployee) return 1; // đang xem 1 người cụ thể
-    if (currentUser.role === 'Manager') return Math.max(activeMembers.length, 1);
+  /** Target 1 người; không có trong danh sách member → target Member chuẩn */
+  const personTarget = (name: string, range: { from: string; to: string }) => {
+    const m = members.find(x => x.name === name);
+    return m ? memberTarget(m, range.from, range.to, scaleConfig) : scaleConfig.memberTargetPoints;
+  };
+
+  const scopeTarget = (range: { from: string; to: string }) => {
+    if (!currentUser) return scaleConfig.memberTargetPoints;
+    if (filterEmployee) return personTarget(filterEmployee, range);
+    if (currentUser.role === 'Member' || currentUser.role === 'Client') return personTarget(currentUser.name, range);
+    let team: string | undefined;
     if (currentUser.role === 'Leader') {
       const me = members.find(m => m.name === currentUser.name || m.id === currentUser.id);
-      if (!me?.teamGroup) return 1;
-      return Math.max(activeMembers.filter(m => m.teamGroup === me.teamGroup).length, 1);
+      if (!me?.teamGroup) return personTarget(currentUser.name, range);
+      team = me.teamGroup;
     }
-    return 1; // Member: chỉ tính bản thân
-  }, [currentUser, members, filterEmployee, activeMembers]);
+    const roster = kpiRoster(members, range.from, range.to, { team, submitterNames, excludeNames: ['manntm3'] });
+    return teamTarget(roster, range.from, range.to, scaleConfig).total;
+  };
+  const targetNow = scopeTarget(targetMonth);
+  const targetPrev = scopeTarget(prevTargetMonth);
 
   // ── Doughnut: tỉ trọng 3 nhóm ──
   const teamData = useMemo(() => {
@@ -530,16 +541,11 @@ export default function DashboardPage() {
       map.set(s.employeeName, cur);
     });
     const list = Array.from(map.values()).map(p => {
-      const memConfig = members.find(m => m.name === p.name);
-      const kpiRole = memConfig?.kpiRole || 'member';
       const empBonus = bonusInRange
         .filter(b => b.employeeName === p.name)
         .reduce((sum, b) => sum + b.amount, 0);
       const totalPoints = p.points + empBonus;
-      const memberTarget = scaleConfig.memberTargetPoints;
-      const pFactor = memConfig?.productivityFactor
-        ?? (kpiRole === 'leader' ? scaleConfig.leaderProductionWeight : 1.0);
-      const targetPoints = Math.round(memberTarget * pFactor * 100) / 100;
+      const targetPoints = personTarget(p.name, targetMonth);
       const kpiAchievement = targetPoints > 0 ? (totalPoints / targetPoints) * 100 : 0;
       return {
         ...p,
@@ -548,7 +554,8 @@ export default function DashboardPage() {
       };
     });
     return list.sort((a, b) => b.kpiAchievement - a.kpiAchievement).slice(0, 5);
-  }, [thisMonthSubs, members, bonusInRange, scaleConfig]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- personTarget suy từ members/scaleConfig/targetMonth
+  }, [thisMonthSubs, members, bonusInRange, scaleConfig, targetMonth.from]);
 
   const myRank = useMemo(() => {
     if (!currentUser) return null;
@@ -580,17 +587,8 @@ export default function DashboardPage() {
           text: `Số nhân viên hoạt động ${empPct >= 0 ? 'tăng' : 'giảm'} ${Math.abs(empPct)}% (${stats.now.employees} vs ${stats.prev.employees}).`,
         });
       }
-      // Target — dùng headcount cố định (không phụ thuộc ai submit tháng đó)
-      let target = scaleConfig.memberTargetPoints * scopedHeadcount;
-      if (currentUser?.role === 'Leader' && !filterEmployee) {
-        const me = members.find(m => m.name === currentUser.name);
-        const myTeam = me?.teamGroup;
-        const teamMembers = myTeam ? members.filter(m => m.teamGroup === myTeam) : [];
-        const leaderCount = teamMembers.filter(m => m.kpiRole === 'leader').length;
-        const memberCount = scopedHeadcount - leaderCount;
-        target = (memberCount * scaleConfig.memberTargetPoints) +
-                 (leaderCount * scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight);
-      }
+      // Target theo ngày công của những người trong phạm vi (xem teamKpi)
+      const target = Math.max(targetNow, 1);
       const leaderTarget = Math.round(scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight);
       const achievement = (stats.now.points / target) * 100;
       lines.push({
@@ -615,7 +613,7 @@ export default function DashboardPage() {
       }
     }
     return lines;
-  }, [stats, prevMonth, scaleConfig, topPerformers]);
+  }, [stats, prevMonth, scaleConfig, topPerformers, targetNow, currentUser?.role]);
 
   return (
     <div>
@@ -690,43 +688,6 @@ export default function DashboardPage() {
 
       {/* Stats cards — hiển thị cho tất cả roles */}
       {(() => {
-        const calcTarget = (empCount: number) => {
-          if (!currentUser) return scaleConfig.memberTargetPoints;
-          
-          if (filterEmployee) {
-            const isFilteredLeader = members.find(m => m.name === filterEmployee)?.kpiRole === 'leader';
-            return isFilteredLeader 
-              ? scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight 
-              : scaleConfig.memberTargetPoints;
-          }
-
-          // Member/Client: chỉ tính target của chính mình (1 người)
-          if (currentUser.role === 'Member' || currentUser.role === 'Client') {
-            const me = members.find(m => m.name === currentUser.name);
-            return me?.kpiRole === 'leader'
-              ? scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight
-              : scaleConfig.memberTargetPoints;
-          }
-
-          let relevantMembers = activeMembers;
-          if (currentUser.role === 'Leader') {
-            const me = members.find(m => m.name === currentUser.name);
-            if (me?.teamGroup) {
-              relevantMembers = activeMembers.filter(m => m.teamGroup === me.teamGroup);
-            } else {
-              relevantMembers = activeMembers.filter(m => m.name === currentUser.name);
-            }
-          }
-
-          const leaderCount = relevantMembers.filter(m => m.kpiRole === 'leader').length;
-          const memberCount = Math.max(0, empCount - leaderCount);
-
-          return (memberCount * scaleConfig.memberTargetPoints) + 
-                 (leaderCount * scaleConfig.memberTargetPoints * scaleConfig.leaderProductionWeight);
-        };
-
-        const targetNow  = calcTarget(scopedHeadcount);
-        const targetPrev = calcTarget(scopedHeadcount);
 
         // Leader management time info
         const mgmtWeight = 1 - scaleConfig.leaderProductionWeight;

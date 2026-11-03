@@ -1,4 +1,5 @@
 import type { Member, KPISubmission, ProjectTask, RnDLog, KPIScaleConfig, BonusPoint } from '@/shared/types';
+import { kpiRoster, monthBounds, submittedAsRole, teamTarget } from '@/shared/selectors/teamKpi';
 
 /**
  * Leadership Score 2 chiều cốt lõi (50/50):
@@ -55,15 +56,22 @@ export function computeLeadershipMetrics(
 ): LeadershipMetrics {
   const teamGroup = leader.teamGroup ?? '';
 
-  // ── Member của team Lead phụ trách ──
-  const teamMembersList = members.filter(m =>
-    m.teamGroup === teamGroup && m.kpiRole === 'member'
+  // ── Member của team Lead phụ trách (theo ngày công trong tháng — xem teamKpi) ──
+  // Chỉ tính những ngày người đó còn trong team VÀ đang là Member:
+  // vào/nghỉ giữa tháng → tính phần ngày tương ứng; Member lên Leader giữa tháng → chỉ tính phần ngày còn là Member.
+  const month = monthBounds(`${period}-01`);
+  const submitterNames = new Set(submissions.map(s => s.employeeName));
+  const memberTargets = teamTarget(
+    kpiRoster(members, month.from, month.to, { team: teamGroup, submitterNames }),
+    month.from, month.to, scaleConfig, 'member',
   );
-  const teamMemberNames = teamMembersList.map(m => m.name);
+  const teamMemberNames = memberTargets.perMember.filter(x => x.target > 0).map(x => x.name);
+  const teamMembersList = members.filter(m => teamMemberNames.includes(m.name));
 
-  // ── Submissions của team trong tháng ──
+  // ── Submissions của team trong tháng (chỉ những bài nộp khi còn là Member) ──
   const teamSubs = submissions.filter(s =>
     teamMemberNames.includes(s.employeeName) && getMonthKey(s.submittedAt) === period
+    && submittedAsRole(s, members, 'member')
   );
 
   // ── 1. KPI Team — % team đạt target ──
@@ -72,7 +80,7 @@ export function computeLeadershipMetrics(
     .filter(b => teamMemberNames.includes(b.employeeName) && b.period === period && b.status === 'approved')
     .reduce((sum, b) => sum + b.amount, 0);
   const teamPointsActual = teamPointsBase + teamBonus;
-  const teamPointsTarget = teamMembersList.length * scaleConfig.memberTargetPoints;
+  const teamPointsTarget = memberTargets.total;
   const kpiTeamScore = teamPointsTarget > 0
     ? Math.min(150, Math.round((teamPointsActual / teamPointsTarget) * 100))  // có thể vượt 100 (cap 150)
     : 0;

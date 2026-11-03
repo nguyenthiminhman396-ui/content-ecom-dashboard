@@ -5,7 +5,7 @@ import { Plus, Save, Trash2, ChevronDown, ChevronRight, Scale, Users, Wand2 } fr
 import type { MonthlyKPITarget, TeamGroup, TodoPriority } from '@/shared/types';
 import toast from 'react-hot-toast';
 import {
-  REAL_TEAMS, isTotal, ownerTeamOf, memberWeight, teamMembersOf, allocateByWeights,
+  REAL_TEAMS, isTotal, ownerTeamOf, memberWeight, teamMembersOf, namesWithTargets, allocateByWeights,
   teamTargetsOf, memberTargetsOf, sameScope, sumLinks, normSite,
   computeUrgency, urgencyScore, periodRange, type UrgencyInfo, type Urgency,
 } from './kpiAllocation';
@@ -371,7 +371,7 @@ function TotalCard({ total, isManager, myTeamGroup }: {
               const color = TEAM_COLORS[team] ?? '#94A3B8';
               // Leader chỉ xem số đã lưu, không xem bản đề xuất của Manager
               const v = isManager ? (values[team] ?? 0) : (saved[team] ?? 0);
-              const people = teamMembersOf(members, team);
+              const people = teamMembersOf(members, team, total.period, namesWithTargets(kpiTargets, total, team));
               const personSum = people.reduce((s, m) => s + sumLinks(memberTargetsOf(kpiTargets, total, team, m.name)), 0);
               const isOpen = expanded === team;
               const canSplit = (saved[team] ?? 0) > 0;
@@ -462,7 +462,10 @@ function MemberAllocation({ total, team, teamTarget, editable }: {
   const { kpiTargets, members, currentUser } = useAppStore();
   const upsert = useUpsert();
   const actualOf = useActual(total.period);
-  const people = useMemo(() => teamMembersOf(members, team), [members, team]);
+  const people = useMemo(
+    () => teamMembersOf(members, team, total.period, namesWithTargets(kpiTargets, total, team)),
+    [members, team, total, kpiTargets],
+  );
 
   const saved = useMemo(() => Object.fromEntries(
     people.map(m => [m.name, sumLinks(memberTargetsOf(kpiTargets, total, team, m.name))])

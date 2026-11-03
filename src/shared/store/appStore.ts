@@ -113,6 +113,23 @@ async function updateItemDB(key: string, id: string, data: unknown): Promise<boo
   return false;
 }
 
+// ── Accounts: mảng không có `id` nên không dùng được update/remove atomic ──
+// Trước khi ghi đè, lấy bản mới nhất trên server rồi mới áp thay đổi, để không xoá mất
+// account mà Manager khác vừa cấp nhưng máy này chưa tải lại.
+async function mutateAccountsDB(mutate: (accs: MemberAccount[]) => MemberAccount[], local: MemberAccount[]): Promise<MemberAccount[]> {
+  let base = local;
+  try {
+    const res = await fetch('/api/store', { cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data[DB_ACCOUNTS])) base = data[DB_ACCOUNTS];
+    }
+  } catch { /* offline / dev không có API → dùng bản local */ }
+  const next = mutate(base);
+  saveDB(DB_ACCOUNTS, next);
+  return next;
+}
+
 const defaultFilters: FilterState = {
   projectId:     '',
   clientId:      '',
@@ -307,11 +324,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const members = [...get().members, m];
     set({ members });
     appendDB(DB_MEMBERS, [m]);
-    if (account) {
-      const accs = [...get().memberAccounts.filter(a => a.memberId !== account.memberId), account];
-      set({ memberAccounts: accs });
-      saveDB(DB_ACCOUNTS, accs);
-    }
+    if (account) get().setMemberAccount(account);
   },
   updateMember: (id, updates) => {
     const members = get().members.map(m => m.id === id ? { ...m, ...updates } : m);
@@ -329,20 +342,22 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   deleteMember: (id) => {
     const members = get().members.filter(m => m.id !== id);
-    const memberAccounts = get().memberAccounts.filter(a => a.memberId !== id);
-    set({ members, memberAccounts });
+    set({ members });
     removeItemDB(DB_MEMBERS, [id]);
-    saveDB(DB_ACCOUNTS, memberAccounts);
+    get().removeMemberAccount(id);
   },
   setMemberAccount: (account) => {
-    const accs = [...get().memberAccounts.filter(a => a.memberId !== account.memberId), account];
-    set({ memberAccounts: accs });
-    saveDB(DB_ACCOUNTS, accs);
+    const apply = (accs: MemberAccount[]) => [...accs.filter(a => a.memberId !== account.memberId), account];
+    set({ memberAccounts: apply(get().memberAccounts) });
+    mutateAccountsDB(apply, get().memberAccounts).then(accs => set({ memberAccounts: accs }));
   },
   removeMemberAccount: (memberId) => {
-    const accs = get().memberAccounts.filter(a => a.memberId !== memberId);
-    set({ memberAccounts: accs });
-    saveDB(DB_ACCOUNTS, accs);
+    const apply = (accs: MemberAccount[]) => accs.filter(a => a.memberId !== memberId);
+    const local = get().memberAccounts;
+    // Không có account nào để xoá → không ghi gì (tránh ghi đè cả danh sách bằng bản cũ)
+    if (!local.some(a => a.memberId === memberId)) return;
+    set({ memberAccounts: apply(local) });
+    mutateAccountsDB(apply, get().memberAccounts).then(accs => set({ memberAccounts: accs }));
   },
 
   // ── Site CRUD ────────────────────────────────────────────────────────────
