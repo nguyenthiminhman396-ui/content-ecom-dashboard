@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "assessment_status",
+    "article_url",
+    "scores",
+    "findings",
+    "summary"
+  ],
+  "properties": {
+    "assessment_status": {
+      "enum": [
+        "completed",
+        "insufficient_evidence"
+      ]
+    },
+    "article_url": {
+      "type": "string"
+    },
+    "scores": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "medical_accuracy": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30
+        },
+        "reader_intent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 25
+        },
+        "completeness": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15
+        },
+        "evidence_quality": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15
+        },
+        "editorial_quality": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "actionability": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "category",
+          "severity",
+          "location",
+          "article_quote",
+          "rationale",
+          "suggested_action",
+          "evidence_urls",
+          "verification_status"
+        ],
+        "properties": {
+          "category": {
+            "enum": [
+              "quality_issue",
+              "content_opportunity",
+              "medical_verification"
+            ]
+          },
+          "severity": {
+            "enum": [
+              "P0",
+              "P1",
+              "P2",
+              "P3"
+            ]
+          },
+          "location": {
+            "type": "string"
+          },
+          "article_quote": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "suggested_action": {
+            "type": "string"
+          },
+          "evidence_urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "verification_status": {
+            "enum": [
+              "verified",
+              "unverified",
+              "needs_verification"
+            ]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "string"
+    }
+  }
+}

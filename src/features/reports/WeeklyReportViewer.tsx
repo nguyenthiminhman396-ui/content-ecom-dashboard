@@ -4,6 +4,7 @@ import type { WeeklyReport } from '@/shared/types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import toast from 'react-hot-toast';
+import { copyShareUrl } from '@/shared/services/authApi';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -288,9 +289,9 @@ export default function WeeklyReportViewer({ report, canEdit, onClose, onSave, i
   const pctTarget = (act: number, tgt: number | undefined) => tgt ? Math.round((act / tgt) * 100) : 0;
 
   const handleShareLink = () => {
-    const url = `${window.location.origin}/share/weekly-report?id=${report.id}`;
-    navigator.clipboard.writeText(url);
-    toast.success('Đã sao chép link báo cáo công khai!');
+    copyShareUrl('weekly', report.id)
+      .then(copied => { if (copied) toast.success('Đã sao chép link báo cáo công khai!'); })
+      .catch(e => toast.error((e as Error).message));
   };
 
   const handleDownloadHtml = () => {

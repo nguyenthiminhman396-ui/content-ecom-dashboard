@@ -1,92 +1,35 @@
 import { useState } from 'react';
 import { useAppStore } from '@/shared/store/appStore';
 import { Heart, LogIn } from 'lucide-react';
-import type { MemberRole, Member } from '@/shared/types';
+import { login } from '@/shared/services/authApi';
 
 interface LoginProps {
-  onLogin: () => void;
+  /** Tải dữ liệu sau khi server đã cấp cookie phiên */
+  onLogin: () => Promise<void>;
 }
 
-const env = import.meta.env;
-
-// VITE_ACCOUNT_ADMIN_* được giữ tên env để tương thích .env cũ — role đã đổi sang 'Manager'
-const ENV_ACCOUNTS = [
-  { email: env.VITE_ACCOUNT_ADMIN_EMAIL,  pass: env.VITE_ACCOUNT_ADMIN_PASS,  role: 'Manager' as MemberRole, name: env.VITE_ACCOUNT_ADMIN_NAME  || 'manager', id: 'M_MANAGER' },
-  { email: env.VITE_ACCOUNT_LEADER_EMAIL, pass: env.VITE_ACCOUNT_LEADER_PASS, role: 'Leader'  as MemberRole, name: env.VITE_ACCOUNT_LEADER_NAME || 'leader',  id: 'M_LEAD' },
-  { email: env.VITE_ACCOUNT_MEMBER_EMAIL, pass: env.VITE_ACCOUNT_MEMBER_PASS, role: 'Member'  as MemberRole, name: env.VITE_ACCOUNT_MEMBER_NAME || 'member',  id: 'M_MEM' },
-  { email: env.VITE_ACCOUNT_CLIENT_EMAIL, pass: '',                            role: 'Client'  as MemberRole, name: env.VITE_ACCOUNT_CLIENT_NAME || 'khach',   id: 'M_CLIENT' },
-].filter((a) => a.email);
-
 export default function Login({ onLogin }: LoginProps) {
-  const { setCurrentUser, members, memberAccounts, setMemberAccount } = useAppStore();
+  const { setCurrentUser } = useAppStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  // Mật khẩu chỉ được kiểm tra ở server (/api/auth); trình duyệt không còn giữ danh sách tài khoản
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setError('');
-
-    // 1. Try Manager-created account first
-    const acc = memberAccounts.find(a => a.email.toLowerCase() === email.toLowerCase() && a.active);
-    if (acc) {
-      if (acc.password !== password) {
-        setError('Mật khẩu không chính xác.');
-        return;
-      }
-      const member = members.find(m => m.id === acc.memberId);
-      if (!member) { setError('Account không liên kết được member.'); return; }
-      setCurrentUser(member);
-      onLogin();
-      return;
+    setLoading(true);
+    try {
+      const user = await login(email.trim(), password);
+      await onLogin(); // tải dữ liệu thật trước khi vào app (tránh nháy dữ liệu mẫu)
+      setCurrentUser(user);
+    } catch (err) {
+      setError((err as Error).message || 'Đăng nhập thất bại.');
+    } finally {
+      setLoading(false);
     }
-
-    // 2. Fallback to .env account
-    const envAcc = ENV_ACCOUNTS.find((a) => a.email === email);
-    if (!envAcc) {
-      setError('Tài khoản không tồn tại.');
-      return;
-    }
-
-    // Check if a MemberAccount already exists for this .env user (from a previous password change)
-    const existingDbAcc = memberAccounts.find(a => a.memberId === envAcc.id && a.active);
-    if (existingDbAcc) {
-      // Use DB password (user đã đổi password)
-      if (existingDbAcc.password !== password) {
-        setError('Mật khẩu không chính xác.');
-        return;
-      }
-    } else {
-      // First time — use .env password
-      if (envAcc.role !== 'Client' && envAcc.pass !== password) {
-        setError('Mật khẩu không chính xác.');
-        return;
-      }
-      // Auto-create MemberAccount in DB so they can change password later
-      if (envAcc.role !== 'Client' && envAcc.pass) {
-        setMemberAccount({
-          memberId: envAcc.id,
-          email: envAcc.email,
-          password: envAcc.pass,
-          active: true,
-        });
-      }
-    }
-
-    const existingMember = members.find(m =>
-      m.id === envAcc.id ||
-      (envAcc.email && m.email?.toLowerCase() === envAcc.email.toLowerCase()) ||
-      m.name === envAcc.name
-    );
-    const memberToSet: Member = existingMember || {
-      id: envAcc.id,
-      name: envAcc.name,
-      role: envAcc.role,
-      expertise: '',
-      email: envAcc.email,
-    };
-    setCurrentUser(memberToSet);
-    onLogin();
   };
 
   return (
@@ -123,7 +66,7 @@ export default function Login({ onLogin }: LoginProps) {
             />
           </div>
 
-          <button type="submit" style={{
+          <button type="submit" disabled={loading} style={{
             width: '100%', background: 'linear-gradient(135deg, #2453d6, #1a3fa0)',
             color: 'white', padding: '14px 16px', borderRadius: '8px',
             fontWeight: 700, fontSize: '0.95rem', marginTop: '12px',
@@ -131,7 +74,7 @@ export default function Login({ onLogin }: LoginProps) {
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
             boxShadow: '0 4px 14px rgba(36, 83, 214, 0.35)',
           }}>
-            <LogIn size={18} /> Đăng nhập
+            <LogIn size={18} /> {loading ? 'Đang đăng nhập…' : 'Đăng nhập'}
           </button>
         </form>
       </div>

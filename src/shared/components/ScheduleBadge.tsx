@@ -7,14 +7,19 @@ const META: Record<ScheduleStatus, { label: string; color: string; bg: string }>
   behind:      { label: '▼ Chậm tiến độ',    color: '#b45309', bg: '#fef3c7' },
   overdue:     { label: '⚠ Quá hạn',         color: '#b91c1c', bg: '#fee2e2' },
   no_deadline: { label: 'Chưa có deadline',  color: '#6b7280', bg: '#f3f4f6' },
+  not_started: { label: '○ Chưa bắt đầu',    color: '#4338ca', bg: '#e0e7ff' },
 };
 
 /** Badge so % việc với % thời gian đã trôi tới deadline */
 export default function ScheduleBadge({ schedule }: { schedule: ProjectSchedule }) {
   const m = META[schedule.status];
-  const { daysLeft, elapsedPct } = schedule;
+  const { daysLeft, elapsedPct, startsIn } = schedule;
   const parts: string[] = [];
-  if (schedule.status === 'overdue' && daysLeft !== undefined) parts.push(`trễ ${-daysLeft} ngày`);
+  if (schedule.status === 'not_started') {
+    if (startsIn !== undefined) {
+      parts.push(startsIn > 0 ? `bắt đầu sau ${startsIn} ngày` : startsIn === 0 ? 'bắt đầu hôm nay' : `trễ khởi động ${-startsIn} ngày`);
+    } else parts.push('chưa đặt ngày bắt đầu');
+  } else if (schedule.status === 'overdue' && daysLeft !== undefined) parts.push(`trễ ${-daysLeft} ngày`);
   else if (schedule.status !== 'done' && daysLeft !== undefined) parts.push(daysLeft === 0 ? 'hạn hôm nay' : `còn ${daysLeft} ngày`);
   if (schedule.status !== 'done' && schedule.status !== 'overdue' && elapsedPct !== undefined) {
     parts.push(`đã qua ${elapsedPct}% thời gian`);

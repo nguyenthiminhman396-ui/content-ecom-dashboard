@@ -3,7 +3,8 @@ import { BrowserRouter } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import LoginPage from '@/features/auth/LoginPage';
 import AppRouter from './router';
-import { useAppStore, initFromDB } from '@/shared/store/appStore';
+import { useAppStore, initFromDB, applyStoreData } from '@/shared/store/appStore';
+import { fetchMe, fetchShareData } from '@/shared/services/authApi';
 import '@/index.css';
 
 import ErrorBoundary from '@/shared/components/ErrorBoundary';
@@ -12,31 +13,38 @@ export default function App() {
   const { currentUser } = useAppStore();
   const [bootstrapped, setBootstrapped] = useState(false);
 
-  // Bootstrap: restore per-device user + load shared data from Postgres
-  useEffect(() => {
-    // Restore currentUser from localStorage (per-device, KHÔNG từ DB chung)
-    try {
-      const raw = localStorage.getItem('hcms_current_user');
-      if (raw) {
-        const u = JSON.parse(raw);
-        if (u && u.name) useAppStore.getState().setCurrentUser(u);
-      }
-    } catch { /* ignore */ }
+  const isShareRoute = window.location.pathname.startsWith('/share');
 
+  // Bootstrap:
+  //  - Trang chia sẻ: chỉ tải dữ liệu của đúng link (có chữ ký), không cần đăng nhập
+  //  - App chính: hỏi server phiên hiện tại (cookie HttpOnly) rồi mới tải dữ liệu
+  useEffect(() => {
     document.documentElement.setAttribute('data-theme', useAppStore.getState().theme);
-    initFromDB().finally(() => setBootstrapped(true));
+    try { localStorage.removeItem('hcms_current_user'); } catch { /* bản cũ lưu user ở đây — không dùng nữa */ }
+
+    const boot = async () => {
+      if (isShareRoute) {
+        const data = await fetchShareData();
+        if (data) applyStoreData(data);
+        return;
+      }
+      const me = await fetchMe();
+      if (me) {
+        useAppStore.getState().setCurrentUser(me);
+        await initFromDB();
+      }
+    };
+    boot().finally(() => setBootstrapped(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!bootstrapped) return null;
 
-  const isShareRoute = window.location.pathname.startsWith('/share');
-
   if (!currentUser && !isShareRoute) {
     return (
       <>
         <Toaster position="top-right" />
-        <LoginPage onLogin={() => { /* setCurrentUser handled inside LoginPage */ }} />
+        <LoginPage onLogin={initFromDB} />
       </>
     );
   }

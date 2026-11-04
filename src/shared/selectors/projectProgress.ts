@@ -73,7 +73,7 @@ export function overallProgress(project: Pick<Project, 'manualProgress'> | undef
 
 // ── Tiến độ theo thời gian (so % việc với % thời gian đã trôi) ────────────────
 
-export type ScheduleStatus = 'done' | 'ahead' | 'on_track' | 'behind' | 'overdue' | 'no_deadline';
+export type ScheduleStatus = 'done' | 'ahead' | 'on_track' | 'behind' | 'overdue' | 'no_deadline' | 'not_started';
 
 export interface ProjectSchedule {
   status: ScheduleStatus;
@@ -83,6 +83,8 @@ export interface ProjectSchedule {
   daysLeft?: number;
   /** progress − elapsedPct (điểm %) */
   gap?: number;
+  /** Dự án chưa bắt đầu: số ngày tới ngày bắt đầu dự kiến (âm = lẽ ra đã phải bắt đầu) */
+  startsIn?: number;
   startDate?: string;
 }
 
@@ -148,6 +150,33 @@ export function computeSchedule(
   return { status, elapsedPct, daysLeft, gap, startDate };
 }
 
+/**
+ * Lịch theo TRẠNG THÁI dự án do Manager đặt:
+ *   - Hoàn thành   → luôn 'done' (không báo quá hạn dù % task chưa đủ 100)
+ *   - Chưa bắt đầu → 'not_started' + số ngày tới ngày bắt đầu dự kiến
+ *   - còn lại      → so % việc với % thời gian (computeSchedule)
+ */
+export function projectSchedule(
+  project: Pick<Project, 'status' | 'deadline' | 'startDate' | 'activeMonths'>,
+  progress: number,
+  projectSubs: KPISubmission[],
+  today: Date,
+): ProjectSchedule {
+  const startDate = resolveStartDate(project, projectSubs);
+  const todayMs = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const end = project.deadline ? dayStart(project.deadline) : NaN;
+  const daysLeft = isNaN(end) ? undefined : Math.round((end - todayMs) / DAY_MS);
+  if (project.status === 'Hoàn thành') return { status: 'done', daysLeft, startDate };
+  if (project.status === 'Chưa bắt đầu') {
+    const start = project.startDate ? dayStart(project.startDate) : NaN;
+    return {
+      status: 'not_started', daysLeft, startDate: project.startDate || undefined,
+      startsIn: isNaN(start) ? undefined : Math.round((start - todayMs) / DAY_MS),
+    };
+  }
+  return computeSchedule(progress, project.deadline, startDate, today);
+}
+
 // ── Tóm tắt dự án cho Dashboard ──────────────────────────────────────────────
 
 export interface ProjectSummary {
@@ -172,7 +201,7 @@ export interface ProjectSummary {
 }
 
 const SCHEDULE_RANK: Record<ScheduleStatus, number> = {
-  overdue: 0, behind: 1, on_track: 2, no_deadline: 3, ahead: 4, done: 5,
+  overdue: 0, behind: 1, on_track: 2, no_deadline: 3, ahead: 4, not_started: 5, done: 6,
 };
 
 export function summarizeProject(
@@ -216,7 +245,7 @@ export function summarizeProject(
     periodPoints: sumPoints(periodSubs),
     kind: timeBased && links === 0 ? 'time' : 'output',
     tracksHours: tasks.some(t => t.trackingMode === 'hours'),
-    schedule: computeSchedule(progress, project.deadline, resolveStartDate(project, subs), opts.today),
+    schedule: projectSchedule(project, progress, subs, opts.today),
   };
 }
 

@@ -1,32 +1,35 @@
-import { neon } from '@neondatabase/serverless';
+import { getSql, getSession, baseHeaders } from './_lib/db.js';
+import { checkStoreWrite, sanitizeAccounts, HIDDEN_KEYS, KEY_ACCOUNTS } from './_lib/auth.js';
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  baseHeaders(res);
 
-  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-
-  const dbUrl = process.env.POSTGRES_URL || process.env.contentecom_POSTGRES_URL;
-  if (!dbUrl) return res.status(500).json({ error: 'Database URL not configured' });
-
-  const sql = neon(dbUrl);
+  const sql = getSql();
+  if (!sql) return res.status(500).json({ error: 'Database URL not configured' });
 
   try {
-    // ── GET: return all keys ───────────────────────────────────
+    // Mọi thao tác đều cần đăng nhập (cookie phiên do /api/auth cấp)
+    const session = await getSession(req, sql);
+    if (!session) return res.status(401).json({ error: 'Chưa đăng nhập' });
+
+    // ── GET: return all keys (trừ mật khẩu tài khoản) ──────────
     if (req.method === 'GET') {
       const data = await sql`SELECT key, value FROM global_store`;
       const result = {};
-      data.forEach(row => { result[row.key] = row.value; });
+      data.forEach(row => {
+        if (row.key === KEY_ACCOUNTS) result[row.key] = sanitizeAccounts(row.value);
+        else if (!HIDDEN_KEYS.has(row.key)) result[row.key] = row.value;
+      });
       return res.status(200).json(result);
     }
 
     // ── POST: write data ───────────────────────────────────────
     if (req.method === 'POST') {
-      const { key, value, op, items, ids, id, data } = req.body;
+      const { key, value, op, items, ids, id, data } = req.body || {};
       if (!key) return res.status(400).json({ error: 'Key is required' });
+      const writeOp = op === 'append' || op === 'remove' || op === 'update' ? op : 'overwrite';
+      const denied = checkStoreWrite(session.role, key, writeOp);
+      if (denied) return res.status(403).json({ error: denied });
 
       // ── Atomic APPEND: add items to array without overwriting ──
       // Idempotent theo id: nếu item.id đã tồn tại trong array → bỏ qua (tránh duplicate khi retry network).
@@ -106,6 +109,8 @@ export default async function handler(req, res) {
     if (req.method === 'DELETE') {
       const { key } = req.body || {};
       if (!key) return res.status(400).json({ error: 'Key is required' });
+      const denied = checkStoreWrite(session.role, key, 'delete');
+      if (denied) return res.status(403).json({ error: denied });
       await sql`DELETE FROM global_store WHERE key = ${key}`;
       return res.status(200).json({ success: true, deleted: key });
     }
@@ -113,6 +118,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (error) {
     console.error('API Error:', error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: 'Lỗi máy chủ' });
   }
 }

@@ -171,12 +171,24 @@ export default function KPITargetsPage() {
             totalTarget += d.individualTarget;
           }
 
-          // Dropdown details (always use individual target/actual set by Leads/Members)
+          // Chi tiết nhóm: có KPI team → dùng target/actual cấp team; chưa có → cộng cá nhân
+          const target = d.teamTarget > 0 ? d.teamTarget : d.individualTarget;
+          const actual = d.teamTarget > 0 ? d.teamActual : d.individualActual;
           perTeam.push({
-            team, displayName: team, target: d.individualTarget, actual: d.individualActual,
-            progress: d.individualTarget > 0 ? Math.round((d.individualActual / d.individualTarget) * 100) : 0,
+            team, displayName: team, target, actual,
+            progress: target > 0 ? Math.round((actual / target) * 100) : 0,
           });
         }
+        // Team có nộp link nhưng chưa được phân target → vẫn hiện để biết số đã đạt đến từ đâu
+        const extra: Record<string, number> = {};
+        data.matchedSubs.forEach(s => {
+          const team = s.teamGroup || '(Chưa gán team)';
+          if (!teams[team]) extra[team] = (extra[team] ?? 0) + s.links.length;
+        });
+        Object.entries(extra).forEach(([team, actual]) => {
+          teamList.push(team);
+          perTeam.push({ team, displayName: `${team} (chưa có target)`, target: 0, actual, progress: 0 });
+        });
         perTeam.sort((a, b) => b.target - a.target);
         if (data.totalTarget > 0) totalTarget = data.totalTarget;
 

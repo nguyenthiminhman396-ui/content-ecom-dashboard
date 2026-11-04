@@ -100,7 +100,10 @@ export default function MembersPage() {
     if (m.joinedAt && leftAt < m.joinedAt) { toast.error('Ngày nghỉ trước ngày vào team'); return; }
     updateMember(m.id, { leftAt });
     const acc = memberAccounts.find(a => a.memberId === m.id);
-    if (acc?.active) setMemberAccount({ ...acc, active: false });
+    if (acc?.active) {
+      setMemberAccount({ ...acc, active: false })
+        .catch(e => toast.error(`Chưa khoá được account: ${(e as Error).message}`));
+    }
     toast.success(`Đã cho ${m.name} nghỉ từ sau ${leftAt}`);
   };
 
@@ -258,25 +261,28 @@ export default function MembersPage() {
           onSave={(member, account) => {
             if (editItem) {
               updateMember(editItem.id, member);
-              if (account && account.email) {
-                setMemberAccount({
-                  memberId: editItem.id,
-                  email: account.email,
-                  password: account.password ?? '',
-                  active: account.active ?? true,
-                });
-              } else if (!account?.email) {
-                removeMemberAccount(editItem.id);
-              }
+              const accountOp = account && account.email
+                ? setMemberAccount({
+                    memberId: editItem.id,
+                    email: account.email,
+                    password: account.password || undefined, // rỗng = giữ mật khẩu cũ
+                    active: account.active ?? true,
+                  })
+                : removeMemberAccount(editItem.id);
+              accountOp.catch(e => toast.error(`Lỗi account: ${(e as Error).message}`));
               toast.success('Đã cập nhật');
             } else {
               const id = generateId();
               const fullMember: Member = { id, name: '', role: 'Member', expertise: '', ...member } as Member;
               const fullAccount: MemberAccount | undefined = account?.email
-                ? { memberId: id, email: account.email, password: account.password ?? '', active: account.active ?? true }
+                ? { memberId: id, email: account.email, password: account.password || undefined, active: account.active ?? true }
                 : undefined;
-              addMember(fullMember, fullAccount);
+              addMember(fullMember);
               toast.success('Đã thêm thành viên');
+              if (fullAccount) {
+                setMemberAccount(fullAccount)
+                  .catch(e => toast.error(`Chưa tạo được account: ${(e as Error).message}`));
+              }
             }
             setShowForm(false);
             setEditItem(null);
@@ -304,7 +310,8 @@ function MemberFormModal({ item, existingAccount, onClose, onSave }: {
   const roleChanged = !!item && nextRoleHistory(item, form, effectiveFrom) !== undefined;
   const [createAccount, setCreateAccount] = useState(!!existingAccount);
   const [accEmail, setAccEmail] = useState(existingAccount?.email ?? '');
-  const [accPass, setAccPass] = useState(existingAccount?.password ?? '');
+  // Server không trả mật khẩu về → để trống = giữ mật khẩu cũ
+  const [accPass, setAccPass] = useState('');
   const [accActive, setAccActive] = useState(existingAccount?.active ?? true);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -312,7 +319,8 @@ function MemberFormModal({ item, existingAccount, onClose, onSave }: {
     if (!form.name?.trim()) { toast.error('Cần tên'); return; }
     if (createAccount) {
       if (!accEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accEmail)) { toast.error('Email không hợp lệ'); return; }
-      if (!accPass || accPass.length < 4) { toast.error('Mật khẩu tối thiểu 4 ký tự'); return; }
+      if (!existingAccount && !accPass) { toast.error('Cần đặt mật khẩu cho account mới'); return; }
+      if (accPass && accPass.length < 4) { toast.error('Mật khẩu tối thiểu 4 ký tự'); return; }
     }
     let toSave = form;
     if (item) {
@@ -462,10 +470,12 @@ function MemberFormModal({ item, existingAccount, onClose, onSave }: {
                       placeholder="user@longchau.com" />
                   </div>
                   <div className="form-group">
-                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Mật khẩu * (≥4 ký tự)</label>
-                    <input className="form-input" type="text" value={accPass}
+                    <label className="form-label" style={{ fontSize: '0.8rem' }}>
+                      {existingAccount ? 'Mật khẩu mới (≥4 ký tự)' : 'Mật khẩu * (≥4 ký tự)'}
+                    </label>
+                    <input className="form-input" type="password" value={accPass} autoComplete="new-password"
                       onChange={e => setAccPass(e.target.value)}
-                      placeholder="Mật khẩu" />
+                      placeholder={existingAccount ? 'Để trống = giữ mật khẩu cũ' : 'Mật khẩu'} />
                   </div>
                   <div className="form-group">
                     <label className="form-label" style={{ fontSize: '0.8rem' }}>Trạng thái</label>

@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  computeTaskProgress, overallProgress, computeSchedule, resolveStartDate,
+  computeTaskProgress, overallProgress, computeSchedule, resolveStartDate, projectSchedule,
   summarizeProject, sortByRisk, submissionHours,
 } from '../src/shared/selectors/projectProgress.ts';
 import type { KPISubmission, Project, ProjectTask } from '../src/shared/types/index.ts';
@@ -227,5 +227,36 @@ describe('sortByRisk', () => {
       mk('slow', { deadline: '2026-12-01', startDate: '2026-10-01' }, 10),
     ].sort(sortByRisk).map(s => s.project.id);
     assert.deepEqual(list, ['late', 'slow', 'ok', 'done']);
+  });
+});
+
+describe('projectSchedule — theo trạng thái Manager đặt', () => {
+  const today = new Date(2026, 10, 4); // 2026-11-04
+
+  test('Hoàn thành → done, không báo quá hạn dù % task < 100', () => {
+    const s = projectSchedule(project({ status: 'Hoàn thành', deadline: '2026-09-30' }), 82, [], today);
+    assert.equal(s.status, 'done');
+  });
+  test('Chưa bắt đầu, ngày bắt đầu trong tương lai → startsIn dương', () => {
+    const s = projectSchedule(project({ status: 'Chưa bắt đầu', startDate: '2026-11-14' }), 0, [], today);
+    assert.equal(s.status, 'not_started');
+    assert.equal(s.startsIn, 10);
+  });
+  test('Chưa bắt đầu nhưng đã qua ngày bắt đầu → startsIn âm (trễ khởi động)', () => {
+    assert.equal(projectSchedule(project({ status: 'Chưa bắt đầu', startDate: '2026-11-01' }), 0, [], today).startsIn, -3);
+  });
+  test('Chưa bắt đầu, chưa đặt ngày → không suy từ submission / activeMonths', () => {
+    const s = projectSchedule(project({ status: 'Chưa bắt đầu', activeMonths: '2026-10' }), 0, [sub()], today);
+    assert.equal(s.startsIn, undefined);
+    assert.equal(s.startDate, undefined);
+  });
+  test('Đang chạy vẫn so % việc với % thời gian như cũ', () => {
+    const s = projectSchedule(project({ status: 'Đang chạy', deadline: '2026-11-01' }), 50, [], today);
+    assert.equal(s.status, 'overdue');
+  });
+  test('summarizeProject dùng lịch theo trạng thái', () => {
+    const s = summarizeProject(project({ status: 'Hoàn thành', deadline: '2026-09-30', manualProgress: 60 }), [], [], { today });
+    assert.equal(s.schedule.status, 'done');
+    assert.equal(s.progress, 60);
   });
 });

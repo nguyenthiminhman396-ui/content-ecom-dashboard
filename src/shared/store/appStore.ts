@@ -4,6 +4,7 @@ import type { AppState, FilterState, KPISubmission, Member, MemberAccount, Weekl
   CiCheck, CiFinding, CiTask, CiSettings, CiOpportunity } from '@/shared/types';
 import { DEFAULT_KPI_SCALE_CONFIG } from '@/shared/types';
 import { mockProjects, mockContents, mockMembers, mockClients, mockExpenses, defaultTaskPointRules, defaultSites } from '@/shared/data/mockData';
+import { saveAccount, deleteAccount, logout as apiLogout } from '@/shared/services/authApi';
 
 // ── Postgres DB keys ──────────────────────────────────────────────────────
 const DB_SUBMISSIONS = 'hcms_submissions';
@@ -24,7 +25,6 @@ const DB_CLIENTS     = 'hcms_clients';
 const DB_EXPENSES    = 'hcms_expenses';
 const DB_TASK_PT_RULES = 'hcms_task_point_rules';
 const DB_PERF_REVIEWS  = 'hcms_perf_reviews';
-const DB_USER          = 'hcms_current_user';
 const DB_NOTIFICATIONS = 'hcms_notifications';
 const DB_CI_CHECKS     = 'hcms_ci_checks';
 const DB_CI_FINDINGS   = 'hcms_ci_findings';
@@ -41,9 +41,10 @@ function saveDB(key: string, value: unknown) {
       body: JSON.stringify({ key, value })
     })
       .then(res => {
-        if (!res.ok && attempt < 3) {
-          setTimeout(() => postToDb(attempt + 1), 1000 * attempt);
-        }
+        if (res.ok) return;
+        // 401/403: chưa đăng nhập / không có quyền → thử lại cũng vô ích
+        if (res.status >= 400 && res.status < 500) { handleAuthError(res.status, key); return; }
+        if (attempt < 3) setTimeout(() => postToDb(attempt + 1), 1000 * attempt);
       })
       .catch(() => {
         if (attempt < 3) {
@@ -66,6 +67,7 @@ async function appendDB(key: string, items: unknown[]): Promise<boolean> {
         body: JSON.stringify({ key, op: 'append', items })
       });
       if (res.ok) return true;
+      if (res.status >= 400 && res.status < 500) { handleAuthError(res.status, key); return false; }
       if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
     } catch {
       if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
@@ -85,6 +87,7 @@ async function removeItemDB(key: string, ids: string[]): Promise<boolean> {
         body: JSON.stringify({ key, op: 'remove', ids })
       });
       if (res.ok) return true;
+      if (res.status >= 400 && res.status < 500) { handleAuthError(res.status, key); return false; }
       if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
     } catch {
       if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
@@ -104,6 +107,7 @@ async function updateItemDB(key: string, id: string, data: unknown): Promise<boo
         body: JSON.stringify({ key, op: 'update', id, data })
       });
       if (res.ok) return true;
+      if (res.status >= 400 && res.status < 500) { handleAuthError(res.status, key); return false; }
       if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
     } catch {
       if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
@@ -113,21 +117,13 @@ async function updateItemDB(key: string, id: string, data: unknown): Promise<boo
   return false;
 }
 
-// ── Accounts: mảng không có `id` nên không dùng được update/remove atomic ──
-// Trước khi ghi đè, lấy bản mới nhất trên server rồi mới áp thay đổi, để không xoá mất
-// account mà Manager khác vừa cấp nhưng máy này chưa tải lại.
-async function mutateAccountsDB(mutate: (accs: MemberAccount[]) => MemberAccount[], local: MemberAccount[]): Promise<MemberAccount[]> {
-  let base = local;
-  try {
-    const res = await fetch('/api/store', { cache: 'no-store' });
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data[DB_ACCOUNTS])) base = data[DB_ACCOUNTS];
-    }
-  } catch { /* offline / dev không có API → dùng bản local */ }
-  const next = mutate(base);
-  saveDB(DB_ACCOUNTS, next);
-  return next;
+/** Server từ chối ghi: hết phiên → về màn đăng nhập; thiếu quyền → ghi log */
+function handleAuthError(status: number, key: string) {
+  if (status === 401) {
+    useAppStore.getState().setCurrentUser(null);
+  } else {
+    console.error(`DB write rejected (${status}):`, key);
+  }
 }
 
 const defaultFilters: FilterState = {
@@ -324,7 +320,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const members = [...get().members, m];
     set({ members });
     appendDB(DB_MEMBERS, [m]);
-    if (account) get().setMemberAccount(account);
+    if (account) get().setMemberAccount(account).catch(e => console.error('Tạo tài khoản thất bại:', e));
   },
   updateMember: (id, updates) => {
     const members = get().members.map(m => m.id === id ? { ...m, ...updates } : m);
@@ -346,18 +342,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     removeItemDB(DB_MEMBERS, [id]);
     get().removeMemberAccount(id);
   },
-  setMemberAccount: (account) => {
-    const apply = (accs: MemberAccount[]) => [...accs.filter(a => a.memberId !== account.memberId), account];
-    set({ memberAccounts: apply(get().memberAccounts) });
-    mutateAccountsDB(apply, get().memberAccounts).then(accs => set({ memberAccounts: accs }));
+  // Tài khoản: mật khẩu chỉ xử lý ở server (/api/auth), store chỉ giữ danh sách không có mật khẩu
+  setMemberAccount: async (account) => {
+    const accs = await saveAccount(account);
+    set({ memberAccounts: accs });
   },
-  removeMemberAccount: (memberId) => {
-    const apply = (accs: MemberAccount[]) => accs.filter(a => a.memberId !== memberId);
-    const local = get().memberAccounts;
-    // Không có account nào để xoá → không ghi gì (tránh ghi đè cả danh sách bằng bản cũ)
-    if (!local.some(a => a.memberId === memberId)) return;
-    set({ memberAccounts: apply(local) });
-    mutateAccountsDB(apply, get().memberAccounts).then(accs => set({ memberAccounts: accs }));
+  removeMemberAccount: async (memberId) => {
+    if (!get().memberAccounts.some(a => a.memberId === memberId)) return;
+    const accs = await deleteAccount(memberId);
+    set({ memberAccounts: accs });
   },
 
   // ── Site CRUD ────────────────────────────────────────────────────────────
@@ -573,13 +566,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setCiSettings: (ciSettings) => { set({ ciSettings }); saveDB(DB_CI_SETTINGS, ciSettings); },
 
   // ── UI actions ────────────────────────────────────────────────────────────
-  setCurrentUser:  (user) => {
-    set({ currentUser: user });
-    // Persist per-device (localStorage, KHÔNG lưu DB chung vì mỗi máy 1 acc)
-    try {
-      if (user) localStorage.setItem('hcms_current_user', JSON.stringify(user));
-      else localStorage.removeItem('hcms_current_user');
-    } catch { /* ignore */ }
+  // Phiên đăng nhập nằm trong cookie HttpOnly do server cấp — không lưu user vào localStorage
+  setCurrentUser:  (user) => set({ currentUser: user }),
+  logout: async () => {
+    await apiLogout();
+    set({ currentUser: null });
   },
   setFilter:       (key, value)        => set((s) => ({ filters: { ...s.filters, [key]: value } })),
   resetFilters:    ()                  => set({ filters: defaultFilters }),
@@ -627,7 +618,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (missing.length > 0) {
       const sites = [...state.sites, ...missing];
       set({ sites });
-      saveDB(DB_SITES, sites);
+      if (state.currentUser?.role === 'Manager') saveDB(DB_SITES, sites);
     }
   },
 }));
@@ -649,11 +640,8 @@ export async function refreshCiFromDB(): Promise<boolean> {
   }
 }
 
-export async function initFromDB() {
-  try {
-    const res = await fetch('/api/store', { cache: 'no-store' });
-    if (!res.ok) return;
-    const data = await res.json();
+/** Đưa dữ liệu dạng { dbKey: value } vào store (dùng cho cả app chính lẫn trang chia sẻ) */
+export function applyStoreData(data: Record<string, unknown>): Record<string, unknown> {
     const stateUpdate: Record<string, unknown> = {};
     
     const keyMap: Record<string, string> = {
@@ -688,6 +676,17 @@ export async function initFromDB() {
         stateUpdate[stateKey] = data[key];
       }
     }
+    if (Object.keys(stateUpdate).length > 0) useAppStore.setState(stateUpdate);
+    return stateUpdate;
+}
+
+export async function initFromDB() {
+  try {
+    const res = await fetch('/api/store', { cache: 'no-store' });
+    if (res.status === 401) { useAppStore.getState().setCurrentUser(null); return; }
+    if (!res.ok) return;
+    const data = await res.json();
+    const stateUpdate = applyStoreData(data);
 
     // Apply scale config migration
     if (stateUpdate['scaleConfig']) {
@@ -699,7 +698,8 @@ export async function initFromDB() {
       if (sc.memberTargetPoints <= 264) { sc.memberTargetPoints = 294; dirty = true; }
       if (dirty) {
         stateUpdate['scaleConfig'] = sc;
-        saveDB(DB_SCALE, sc);
+        // Chỉ Manager có quyền ghi cấu hình; người khác chỉ áp dụng tạm trên máy mình
+        if (useAppStore.getState().currentUser?.role === 'Manager') saveDB(DB_SCALE, sc);
       }
     }
     
@@ -723,15 +723,6 @@ export async function initFromDB() {
           useAppStore.getState().setCurrentUser(freshUser);
         }
       }
-    }
-
-    // Migration: xoá key currentUser cũ khỏi DB chung (không dùng nữa, mỗi máy lưu localStorage)
-    if (data[DB_USER]) {
-      fetch('/api/store', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: DB_USER }),
-      }).catch(() => {});
     }
 
     useAppStore.getState().ensureDefaultProjects();

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '@/shared/store/appStore';
+import { copyShareUrl } from '@/shared/services/authApi';
 import { flattenDailyTasks } from '@/shared/selectors/dailyTasks';
 import {
   BarChart3, Calendar, FileText, Plus, Edit3, Trash2, X, Save,
@@ -224,10 +225,11 @@ export default function ReportsPage() {
     toast.success('Đã export HTML!');
   };
 
+  // Link có chữ ký do server cấp: chỉ mở được đúng báo cáo này, không sửa tham số được
   const handleShareLink = (report: WeeklyReport) => {
-    const url = `${window.location.origin}/share/weekly-report?id=${report.id}`;
-    navigator.clipboard.writeText(url);
-    toast.success('Đã sao chép link báo cáo công khai! Ai có link đều xem được.');
+    copyShareUrl('weekly', report.id)
+      .then(copied => { if (copied) toast.success('Đã sao chép link báo cáo công khai! Ai có link đều xem được.'); })
+      .catch(e => toast.error((e as Error).message));
   };
 
 

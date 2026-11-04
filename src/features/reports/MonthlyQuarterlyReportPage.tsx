@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useAppStore } from '@/shared/store/appStore';
+import { copyShareUrl } from '@/shared/services/authApi';
 import type { Site } from '@/shared/types';
 import {
   CalendarRange, Calendar, TrendingUp, TrendingDown, Minus,
@@ -1078,9 +1079,9 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
                 <KeyRound size={14} />
               </button>
               <button className="btn btn-secondary" onClick={() => {
-                const shareUrl = `${window.location.origin}/share/report?period=${encodeURIComponent(periodLabel)}`;
-                navigator.clipboard.writeText(shareUrl);
-                toast.success('Đã sao chép link báo cáo công khai vào clipboard!');
+                copyShareUrl('periodic', periodLabel)
+                  .then(copied => { if (copied) toast.success('Đã sao chép link báo cáo công khai vào clipboard!'); })
+                  .catch(e => toast.error((e as Error).message));
               }} title="Chia sẻ link báo cáo chỉ xem (không cần đăng nhập)"
                 style={{ background: 'linear-gradient(135deg,#eff6ff,#dbeafe)', border: '1px solid #93c5fd', color: '#1d4ed8', fontWeight: 600 }}>
                 <Share2 size={14} /> Chia sẻ link

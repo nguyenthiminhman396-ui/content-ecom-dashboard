@@ -39,7 +39,7 @@ interface HeaderProps {
 }
 
 export default function Header({ title }: HeaderProps) {
-  const { sidebarCollapsed, isSyncing, currentUser, setCurrentUser, todos, updateTodo,
+  const { sidebarCollapsed, isSyncing, currentUser, todos, updateTodo,
     notifications, markNotificationRead, markAllNotificationsRead } = useAppStore();
 
   // ── 1) Task assigned to me (chưa hoàn thành) ──
@@ -86,9 +86,11 @@ export default function Header({ title }: HeaderProps) {
 
   const handleLogout = () => {
     if (window.confirm('Bạn có chắc muốn đăng xuất?')) {
-      setCurrentUser(null);
-      toast.success('Đã đăng xuất');
-      window.location.href = '/';
+      // Xoá cookie phiên ở server trước, rồi mới về trang đăng nhập
+      useAppStore.getState().logout().finally(() => {
+        toast.success('Đã đăng xuất');
+        window.location.href = '/';
+      });
     }
   };
 

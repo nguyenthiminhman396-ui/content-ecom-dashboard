@@ -118,6 +118,7 @@ export function getContentStatusClass(status: ContentStatus): string {
 
 export function getProjectStatusClass(status: ProjectStatus): string {
   const map: Record<ProjectStatus, string> = {
+    'Chưa bắt đầu': 'status-waiting',
     'Đang chạy': 'status-running',
     'Hoàn thành': 'status-completed',
     'Tạm dừng': 'status-paused',

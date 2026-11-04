@@ -11,7 +11,7 @@ import toast from 'react-hot-toast';
 import { computeTaskProgress, overallProgress } from '@/shared/selectors/projectProgress';
 
 const projectTypes: ProjectType[] = ['Campaign', 'Series', 'Client'];
-const projectStatuses: ProjectStatus[] = ['Đang chạy', 'Hoàn thành', 'Tạm dừng', 'Hủy'];
+const projectStatuses: ProjectStatus[] = ['Chưa bắt đầu', 'Đang chạy', 'Hoàn thành', 'Tạm dừng', 'Hủy'];
 
 export default function Projects() {
   const { projects, contents, clients, expenses, members, submissions, projectTasks, addProject, updateProject, deleteProject, currentUser, addTodo } = useAppStore();
@@ -186,9 +186,9 @@ export default function Projects() {
                     )}
                     {project.status !== 'Đang chạy' && (
                       <button className="btn btn-sm btn-secondary" style={{ fontSize: '0.7rem', padding: '3px 8px', color: 'var(--primary-600)' }}
-                        onClick={(e) => { e.stopPropagation(); updateProject(project.id, { status: 'Đang chạy' }); toast.success('Đã mở lại dự án!'); }}
-                        title="Mở lại dự án (Đang chạy)">
-                        Mở lại
+                        onClick={(e) => { e.stopPropagation(); updateProject(project.id, { status: 'Đang chạy' }); toast.success(project.status === 'Chưa bắt đầu' ? 'Đã bắt đầu dự án!' : 'Đã mở lại dự án!'); }}
+                        title="Chuyển sang Đang chạy">
+                        {project.status === 'Chưa bắt đầu' ? 'Bắt đầu' : 'Mở lại'}
                       </button>
                     )}
                     <button className="btn btn-icon btn-ghost" onClick={(e) => openEdit(e, project)} title="Sửa dự án">
@@ -281,9 +281,9 @@ export default function Projects() {
                                </>
                              ) : (
                                <button className="btn btn-sm btn-secondary" style={{ fontSize: '0.7rem', padding: '2px 6px', color: 'var(--primary-600)' }}
-                                 onClick={(e) => { e.stopPropagation(); updateProject(project.id, { status: 'Đang chạy' }); toast.success('Đã mở lại dự án!'); }}
-                                 title="Mở lại dự án">
-                                 Mở lại
+                                 onClick={(e) => { e.stopPropagation(); updateProject(project.id, { status: 'Đang chạy' }); toast.success(project.status === 'Chưa bắt đầu' ? 'Đã bắt đầu dự án!' : 'Đã mở lại dự án!'); }}
+                                 title="Chuyển sang Đang chạy">
+                                 {project.status === 'Chưa bắt đầu' ? 'Bắt đầu' : 'Mở lại'}
                                </button>
                              )}
                              <button className="btn btn-icon btn-ghost" onClick={(e) => openEdit(e, project)} title="Sửa dự án">

@@ -6,7 +6,7 @@
 // ── Enums & Literal Types ──────────────────────────────────────────────────
 
 export type ProjectType = 'Campaign' | 'Series' | 'Client' | 'Thương hiệu' | 'Project tháng';
-export type ProjectStatus = 'Đang chạy' | 'Hoàn thành' | 'Tạm dừng' | 'Hủy';
+export type ProjectStatus = 'Chưa bắt đầu' | 'Đang chạy' | 'Hoàn thành' | 'Tạm dừng' | 'Hủy';
 /**
  * Manager  – quyền cao nhất: đánh giá tất cả, xem tổng thể, set up hệ thống
  * Leader   – đánh giá nhân sự thuộc team mình, xem tổng team
@@ -131,8 +131,8 @@ export interface MemberAccount {
   /** Member.id liên kết */
   memberId: string;
   email: string;
-  /** Plain text — phù hợp prototype, production cần hash */
-  password: string;
+  /** Chỉ dùng khi gửi lên server để tạo/đổi mật khẩu. Server lưu dạng hash và KHÔNG bao giờ trả về. */
+  password?: string;
   active: boolean;
 }
 
@@ -639,8 +639,9 @@ export interface AppState {
 
   // Account management
   memberAccounts: MemberAccount[];
-  setMemberAccount: (a: MemberAccount) => void;
-  removeMemberAccount: (memberId: string) => void;
+  /** Gọi /api/auth (Manager). password rỗng = giữ mật khẩu cũ. Lỗi → throw */
+  setMemberAccount: (a: MemberAccount) => Promise<void>;
+  removeMemberAccount: (memberId: string) => Promise<void>;
 
   // Site CRUD
   addSite: (s: Site) => void;
@@ -731,6 +732,8 @@ export interface AppState {
 
   // UI actions
   setCurrentUser: (user: Member | null) => void;
+  /** Xoá cookie phiên ở server rồi về màn đăng nhập */
+  logout: () => Promise<void>;
   setFilter: (key: keyof FilterState, value: string) => void;
   resetFilters: () => void;
   toggleSidebar: () => void;

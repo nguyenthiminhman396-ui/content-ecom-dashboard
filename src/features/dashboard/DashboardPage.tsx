@@ -10,9 +10,10 @@ import {
   BarElement, ArcElement, Tooltip, Legend, Filler
 } from 'chart.js';
 import { Doughnut, Line } from 'react-chartjs-2';
-import type { KPISubmission, Member } from '@/shared/types';
+import type { KPISubmission, Member, ProjectStatus } from '@/shared/types';
+import toast from 'react-hot-toast';
 import { computeLeadershipMetrics } from '@/shared/selectors/leadershipMetrics';
-import { summarizeProject, sortByRisk } from '@/shared/selectors/projectProgress';
+import { summarizeProject, sortByRisk, type ProjectSummary } from '@/shared/selectors/projectProgress';
 import ScheduleBadge from '@/shared/components/ScheduleBadge';
 import { kpiRoster, memberTarget, monthBounds, teamTarget } from '@/shared/selectors/teamKpi';
 
@@ -52,8 +53,12 @@ function fmtDate(d: Date): string {
 function startOfMonth(d: Date): Date { return new Date(d.getFullYear(), d.getMonth(), 1); }
 function endOfMonth(d: Date): Date { return new Date(d.getFullYear(), d.getMonth() + 1, 0); }
 
+const PROJECT_TABS = ['Đang chạy', 'Chưa bắt đầu', 'Hoàn thành'] as const satisfies readonly ProjectStatus[];
+type DashboardProjectTab = typeof PROJECT_TABS[number];
+const STATUS_OPTIONS: ProjectStatus[] = ['Chưa bắt đầu', 'Đang chạy', 'Hoàn thành', 'Tạm dừng', 'Hủy'];
+
 export default function DashboardPage() {
-  const { submissions, projects, scaleConfig, members, currentUser, projectTasks, bonusPoints, rndLogs } = useAppStore();
+  const { submissions, projects, scaleConfig, members, currentUser, projectTasks, bonusPoints, rndLogs, updateProject } = useAppStore();
   const navigate = useNavigate();
 
   const now = new Date();
@@ -381,13 +386,26 @@ export default function DashboardPage() {
   // ── Project progress (auto từ tasks cứng) ──
   // Link/giờ/điểm là LUỸ KẾ dự án (khớp với % tiến độ), kèm phần phát sinh trong kỳ đang lọc.
   // Sắp xếp theo rủi ro: quá hạn → chậm tiến độ → … để Manager thấy dự án cần xử lý trước.
-  const projectProgress = useMemo(() => {
+  // Switch trạng thái: Đang chạy / Chưa bắt đầu / Hoàn thành (Tạm dừng, Hủy không hiện ở Dashboard)
+  const [projectTab, setProjectTab] = useState<DashboardProjectTab>('Đang chạy');
+  const canManageProjects = currentUser?.role === 'Manager' || currentUser?.role === 'Leader';
+  const projectGroups = useMemo(() => {
     const today = new Date();
-    return projects
-      .filter(p => p.status === 'Đang chạy')
-      .map(p => summarizeProject(p, projectTasks, submissions, { today, periodFrom: fromMs, periodTo: toMs }))
-      .sort(sortByRisk);
+    const groups: Record<DashboardProjectTab, ProjectSummary[]> = { 'Đang chạy': [], 'Chưa bắt đầu': [], 'Hoàn thành': [] };
+    for (const p of projects) {
+      if (!(PROJECT_TABS as readonly string[]).includes(p.status)) continue;
+      groups[p.status as DashboardProjectTab].push(
+        summarizeProject(p, projectTasks, submissions, { today, periodFrom: fromMs, periodTo: toMs }));
+    }
+    groups['Đang chạy'].sort(sortByRisk);
+    // Chưa bắt đầu: trễ khởi động / sắp bắt đầu lên trước, chưa đặt ngày xuống cuối
+    groups['Chưa bắt đầu'].sort((a, b) =>
+      (a.schedule.startsIn ?? Number.POSITIVE_INFINITY) - (b.schedule.startsIn ?? Number.POSITIVE_INFINITY));
+    // Hoàn thành: deadline gần nhất (mới xong) lên trước
+    groups['Hoàn thành'].sort((a, b) => (b.project.deadline || '').localeCompare(a.project.deadline || ''));
+    return groups;
   }, [projects, projectTasks, submissions, fromMs, toMs]);
+  const projectProgress = projectGroups[projectTab];
 
   // ── Chi tiết đầu việc — kỳ này vs cùng kỳ tháng trước ──
   // Leader: xem TOÀN BỘ submissions (cross-team) để quản lý đầu việc mình phụ trách
@@ -915,13 +933,31 @@ export default function DashboardPage() {
       {/* Project progress + Top performers */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '16px' }}>
         <div className="card" style={{ padding: '18px' }}>
-          <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: '12px',
-                        display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <FolderKanban size={15} color="var(--primary-500)" /> Tiến độ dự án (đang chạy)
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+            <div style={{ fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FolderKanban size={15} color="var(--primary-500)" /> Tiến độ dự án
+            </div>
+            <div role="tablist" aria-label="Lọc dự án theo trạng thái" style={{ display: 'inline-flex', padding: 2, gap: 2,
+                          background: 'var(--bg-secondary)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)' }}>
+              {PROJECT_TABS.map(tab => {
+                const active = projectTab === tab;
+                return (
+                  <button key={tab} type="button" role="tab" aria-selected={active} onClick={() => setProjectTab(tab)}
+                    style={{ border: 'none', cursor: 'pointer', borderRadius: 'calc(var(--radius-md) - 2px)',
+                             padding: '4px 10px', fontSize: '0.76rem', fontWeight: active ? 700 : 500,
+                             background: active ? 'var(--bg-card, #fff)' : 'transparent',
+                             color: active ? 'var(--primary-600)' : 'var(--text-secondary)',
+                             boxShadow: active ? '0 1px 2px rgba(0,0,0,0.08)' : 'none' }}>
+                    {tab} <span style={{ opacity: 0.7 }}>({projectGroups[tab].length})</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
           {projectProgress.length === 0 && (
             <div style={{ color: 'var(--text-tertiary)', fontSize: '0.85rem', padding: '10px' }}>
-              Chưa có dự án đang chạy.
+              Không có dự án {projectTab.toLowerCase()}.
             </div>
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -946,11 +982,27 @@ export default function DashboardPage() {
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
                               marginBottom: '6px', flexWrap: 'wrap', gap: '6px' }}>
-                  <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>
-                    {project.isMonthly ? '📅 ' : ''}{project.name}
-                    <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 6, fontSize: '0.78rem' }}>
-                      · {project.type}
+                  <div style={{ fontWeight: 600, fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span>
+                      {project.isMonthly ? '📅 ' : ''}{project.name}
+                      <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 6, fontSize: '0.78rem' }}>
+                        · {project.type}
+                      </span>
                     </span>
+                    {canManageProjects && (
+                      <select aria-label={`Trạng thái dự án ${project.name}`} value={project.status}
+                        onClick={e => e.stopPropagation()}
+                        onChange={e => {
+                          const status = e.target.value as ProjectStatus;
+                          updateProject(project.id, { status });
+                          toast.success(`${project.name}: ${status}`);
+                        }}
+                        style={{ fontSize: '0.72rem', padding: '1px 4px', borderRadius: 4, cursor: 'pointer',
+                                 border: '1px solid var(--border-light)', background: 'var(--bg-card, #fff)',
+                                 color: 'var(--text-secondary)' }}>
+                        {STATUS_OPTIONS.map(st => <option key={st} value={st}>{st}</option>)}
+                      </select>
+                    )}
                   </div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', textAlign: 'right' }}>
                     {metrics.length > 0
@@ -989,6 +1041,12 @@ export default function DashboardPage() {
               );
             })}
           </div>
+          {projectProgress.length > 6 && (
+            <button type="button" className="btn btn-ghost" onClick={() => navigate('/projects')}
+              style={{ marginTop: '10px', width: '100%', fontSize: '0.8rem', justifyContent: 'center' }}>
+              Xem thêm {projectProgress.length - 6} dự án {projectTab.toLowerCase()} →
+            </button>
+          )}
         </div>
 
         <div className="card" style={{ padding: '18px' }}>

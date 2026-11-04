@@ -3,9 +3,10 @@ import { Settings, Database, RefreshCw, User, Moon, Sun, Lock, Eye, EyeOff, Chec
 import { useAppStore, initFromDB } from '@/shared/store/appStore';
 import toast from 'react-hot-toast';
 import SitesSettings from './SitesSettings';
+import { changePassword } from '@/shared/services/authApi';
 
 export default function SettingsPage() {
-  const { isSyncing, lastSyncTime, currentUser, memberAccounts, setMemberAccount } = useAppStore();
+  const { isSyncing, lastSyncTime, currentUser, memberAccounts } = useAppStore();
   const [darkMode, setDarkMode] = useState(document.documentElement.getAttribute('data-theme') === 'dark');
 
   // Password change state
@@ -41,16 +42,15 @@ export default function SettingsPage() {
     useAppStore.getState().toggleTheme();
   };
 
-  const handleChangePassword = (e: React.FormEvent) => {
+  const [pwSaving, setPwSaving] = useState(false);
+
+  // Kiểm tra mật khẩu hiện tại và lưu mật khẩu mới (đã hash) đều làm ở server
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPwError('');
 
     if (!myAccount) {
       setPwError('Không tìm thấy tài khoản. Liên hệ Manager.');
-      return;
-    }
-    if (currentPw !== myAccount.password) {
-      setPwError('Mật khẩu hiện tại không đúng.');
       return;
     }
     if (newPw.length < 4) {
@@ -66,8 +66,15 @@ export default function SettingsPage() {
       return;
     }
 
-    // Update password
-    setMemberAccount({ ...myAccount, password: newPw });
+    setPwSaving(true);
+    try {
+      await changePassword(currentPw, newPw);
+    } catch (err) {
+      setPwError((err as Error).message);
+      return;
+    } finally {
+      setPwSaving(false);
+    }
     toast.success('Đổi mật khẩu thành công!');
     setCurrentPw('');
     setNewPw('');
@@ -229,9 +236,9 @@ export default function SettingsPage() {
                   <button type="button" className="btn btn-secondary" onClick={() => {
                     setShowPwForm(false); setCurrentPw(''); setNewPw(''); setConfirmPw(''); setPwError('');
                   }}>Hủy</button>
-                  <button type="submit" className="btn btn-primary"
+                  <button type="submit" className="btn btn-primary" disabled={pwSaving}
                     style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Check size={14} /> Lưu mật khẩu
+                    <Check size={14} /> {pwSaving ? 'Đang lưu…' : 'Lưu mật khẩu'}
                   </button>
                 </div>
               </form>
@@ -270,7 +277,7 @@ export default function SettingsPage() {
         {/* Logout */}
         <div className="card" style={{ padding: '16px' }}>
           <button className="btn btn-danger-outline" style={{ width: '100%' }}
-            onClick={() => { useAppStore.getState().setCurrentUser(null); toast.success('Đã đăng xuất'); }}>
+            onClick={() => { useAppStore.getState().logout().finally(() => toast.success('Đã đăng xuất')); }}>
             Đăng xuất
           </button>
         </div>
