@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 import type { ProjectType, ProjectStatus, Project } from '@/shared/types';
 import toast from 'react-hot-toast';
-import { computeTaskProgress, overallProgress } from '@/shared/selectors/projectProgress';
+import { computeTaskProgress, overallProgress, projectSchedule } from '@/shared/selectors/projectProgress';
+import ScheduleBadge from '@/shared/components/ScheduleBadge';
 
 const projectTypes: ProjectType[] = ['Campaign', 'Series', 'Client'];
 const projectStatuses: ProjectStatus[] = ['Chưa bắt đầu', 'Đang chạy', 'Hoàn thành', 'Tạm dừng', 'Hủy'];
@@ -148,7 +149,7 @@ export default function Projects() {
                   <span className={`project-type ${typeClass}`}>{project.type}</span>
                 </div>
 
-                <div style={{ margin: '16px 0' }}>
+                <div style={{ margin: '14px 0 10px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                     <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Tiến độ</span>
                     <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--primary-600)' }}>{progress}%</span>
@@ -158,6 +159,9 @@ export default function Projects() {
                       className={`progress-bar-fill ${progress < 30 ? 'low' : progress < 70 ? 'medium' : progress === 100 ? 'complete' : 'high'}`}
                       style={{ width: `${progress}%` }}
                     ></div>
+                  </div>
+                  <div style={{ marginTop: '6px' }}>
+                    <ScheduleBadge schedule={projectSchedule(project, progress, submissions.filter(s => s.projectId === project.id), new Date())} />
                   </div>
                 </div>
 
@@ -248,11 +252,14 @@ export default function Projects() {
                     <td className="cell-secondary">{client?.name || '—'}</td>
                     <td className="cell-secondary">{leader?.name || '—'}</td>
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '120px' }}>
-                        <div className="progress-bar-bg" style={{ flex: 1 }}>
-                          <div className={`progress-bar-fill ${progress === 100 ? 'complete' : 'high'}`} style={{ width: `${progress}%` }}></div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: '130px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div className="progress-bar-bg" style={{ flex: 1 }}>
+                            <div className={`progress-bar-fill ${progress === 100 ? 'complete' : 'high'}`} style={{ width: `${progress}%` }}></div>
+                          </div>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{progress}%</span>
                         </div>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{progress}%</span>
+                        <ScheduleBadge schedule={projectSchedule(project, progress, submissions.filter(s => s.projectId === project.id), new Date())} />
                       </div>
                     </td>
                     <td className="cell-secondary">{formatCurrency(spent)} / {formatCurrency(project.budget)}</td>
