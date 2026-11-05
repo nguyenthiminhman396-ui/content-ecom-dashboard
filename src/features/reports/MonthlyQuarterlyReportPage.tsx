@@ -15,7 +15,7 @@ import {
 import {
   generateFullReport, generateInsights, generateBottleneck,
   generateRecommendation, generateNextPlan, generateCustomerCommentAnalysis,
-  chatWithAI, getStoredModel, setStoredModel,
+  chatWithAI, getStoredModel, setStoredModel, commentsByIds,
   type ReportContext, type AIGeneratedReport, type ChatMessage
 } from '@/shared/services/aiService';
 import { readTabularFile, detectFreeTextColumn } from '@/shared/utils/csvImport';
@@ -892,7 +892,8 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
     projectProgress,
     projectsFocus,
     tasksBreakdown,
-    customerCommentsRaw: customerCommentsRawText.trim() ? customerCommentsRawText.split('\n').map((l, i) => `[ID: ${i+1}] ${l}`).join('\n') : '',
+    // Gửi dữ liệu thô — aiService tự đánh số [ID: n] theo các dòng không rỗng
+    customerCommentsRaw: customerCommentsRawText,
     additionalContext: additionalContextText,
   }), [periodLabel, stats, teamBreakdown, topEmployees, qualityStats, projectProgress, projectsFocus, tasksBreakdown, customerCommentsRawText, additionalContextText]);
 
@@ -912,30 +913,27 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
 
   const handleAIBlock = async (block: 'insights' | 'bottleneck' | 'recommendation' | 'nextPlan' | 'customerCommentAnalysis') => {
     setAiLoading(block);
+    // Khối văn bản hiện chữ dần (streaming) → giữ bản cũ để khôi phục nếu AI lỗi giữa chừng
+    const previous = { insights: summaryText, bottleneck: bottleneckText, recommendation: recommendationText };
     try {
       const ctx = buildReportContext();
       if (block === 'insights') {
-        const result = await generateInsights(ctx);
+        const result = await generateInsights(ctx, setSummaryText);
         setSummaryText(result);
         toast.success('AI đã viết nhận xét!');
       } else if (block === 'bottleneck') {
-        const result = await generateBottleneck(ctx);
+        const result = await generateBottleneck(ctx, setBottleneckText);
         setBottleneckText(result);
         toast.success('AI đã phân tích điểm nghẽn!');
       } else if (block === 'recommendation') {
-        const result = await generateRecommendation(ctx);
+        const result = await generateRecommendation(ctx, setRecommendationText);
         setRecommendationText(result);
         toast.success('AI đã viết đề xuất!');
       } else if (block === 'customerCommentAnalysis') {
         const result = await generateCustomerCommentAnalysis(ctx);
         setCustomerCommentAnalysisText(result.text);
-        const rawLines = customerCommentsRawText.split('\n');
-        setHotspotComments(
-          result.hotspotIds.map(id => rawLines[id - 1]?.trim()).filter(Boolean)
-        );
-        setImprovementComments(
-          result.improvementIds.map(id => rawLines[id - 1]?.trim()).filter(Boolean)
-        );
+        setHotspotComments(commentsByIds(customerCommentsRawText, result.hotspotIds));
+        setImprovementComments(commentsByIds(customerCommentsRawText, result.improvementIds));
         toast.success('AI đã phân tích comment khách hàng!');
       } else if (block === 'nextPlan') {
         const result = await generateNextPlan(ctx);
@@ -949,6 +947,9 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
         toast.success('AI đã gợi ý kế hoạch!');
       }
     } catch (err: unknown) {
+      if (block === 'insights') setSummaryText(previous.insights);
+      else if (block === 'bottleneck') setBottleneckText(previous.bottleneck);
+      else if (block === 'recommendation') setRecommendationText(previous.recommendation);
       toast.error(err instanceof Error ? err.message : 'Lỗi không xác định');
     } finally {
       setAiLoading(null);
@@ -960,15 +961,10 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
     setSummaryText(aiReviewData.insights);
     setBottleneckText(aiReviewData.bottleneck);
     setRecommendationText(aiReviewData.recommendation);
-    if (aiReviewData.customerCommentAnalysis) {
+    if (aiReviewData.customerCommentAnalysis?.text) {
       setCustomerCommentAnalysisText(aiReviewData.customerCommentAnalysis.text);
-      const rawLines = customerCommentsRawText.split('\n');
-      setHotspotComments(
-        (aiReviewData.customerCommentAnalysis.hotspotIds || []).map(id => rawLines[id - 1]?.trim()).filter(Boolean)
-      );
-      setImprovementComments(
-        (aiReviewData.customerCommentAnalysis.improvementIds || []).map(id => rawLines[id - 1]?.trim()).filter(Boolean)
-      );
+      setHotspotComments(commentsByIds(customerCommentsRawText, aiReviewData.customerCommentAnalysis.hotspotIds));
+      setImprovementComments(commentsByIds(customerCommentsRawText, aiReviewData.customerCommentAnalysis.improvementIds));
     }
     if (aiReviewData.nextPlan) {
       setOverride('plan_general', aiReviewData.nextPlan.general);
@@ -990,10 +986,13 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
     setChatMessages(newMessages);
     setChatInput('');
     setChatLoading(true);
+    // Hiện câu trả lời dần trong một bong bóng ở cuối danh sách
+    const setReply = (text: string) => setChatMessages([...newMessages, { role: 'model', text }]);
     try {
-      const reply = await chatWithAI(newMessages, buildReportContext());
-      setChatMessages(prev => [...prev, { role: 'model', text: reply }]);
+      const reply = await chatWithAI(newMessages, buildReportContext(), setReply);
+      setReply(reply);
     } catch (err: unknown) {
+      setChatMessages(newMessages);
       toast.error(err instanceof Error ? err.message : 'Lỗi chat');
     } finally {
       setChatLoading(false);
@@ -2337,14 +2336,16 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
                       background: msg.role === 'user' ? '#10b981' : '#fff',
                       color: msg.role === 'user' ? '#fff' : '#0f172a',
                       boxShadow: msg.role === 'model' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                      whiteSpace: 'pre-wrap', fontSize: '0.9rem', lineHeight: 1.5
+                      whiteSpace: msg.role === 'user' ? 'pre-wrap' : 'normal', fontSize: '0.9rem', lineHeight: 1.5
                     }}>
-                      {msg.text}
+                      {msg.role === 'model'
+                        ? <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown></div>
+                        : msg.text}
                     </div>
                   </div>
                 ))
               )}
-              {chatLoading && (
+              {chatLoading && chatMessages[chatMessages.length - 1]?.role !== 'model' && (
                 <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
                   <div style={{ padding: '12px 16px', borderRadius: '12px', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
                     <Loader2 size={16} className="spin" color="#10b981" />

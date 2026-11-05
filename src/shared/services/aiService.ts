@@ -1,6 +1,11 @@
 /**
- * AI Service — Gemini 2.5 Pro via Vercel Serverless Proxy
- * API Key giấu ở server-side (/api/ai), frontend không bao giờ nhìn thấy key
+ * AI Service — Gemini via Vercel Serverless Proxy (/api/ai)
+ * API Key giấu ở server-side, frontend không bao giờ nhìn thấy key.
+ *
+ * - Các khối có cấu trúc (báo cáo đầy đủ, kế hoạch, phân tích comment, báo cáo tuần)
+ *   yêu cầu Gemini trả JSON theo `responseSchema` → không phải bóc thẻ XML bằng regex.
+ * - Các khối văn bản đơn (nhận xét, điểm nghẽn, đề xuất) và chat hỗ trợ streaming
+ *   qua callback `onDelta` để hiện chữ dần khi AI đang viết.
  */
 
 // ─── Types ─────────────────────────────────────────────────
@@ -17,9 +22,10 @@ export interface ReportContext {
     toiUu: number;
     employeeCount: number;
     avgPointsPerEmp: number;
-    deltaLinks: number;
-    deltaPoints: number;
-    deltaSubmits: number;
+    /** % so kỳ trước; null = kỳ trước không có dữ liệu để so sánh */
+    deltaLinks: number | null;
+    deltaPoints: number | null;
+    deltaSubmits: number | null;
   };
   teamBreakdown: [string, { links: number; points: number }][];
   topEmployees: { name: string; links: number; points: number }[];
@@ -33,45 +39,89 @@ export interface ReportContext {
   projectProgress: { name: string; progress: number }[];
   projectsFocus: { name: string; type: string; links: number }[];
   tasksBreakdown: { type: string; details: { name: string; links: number; points: number }[] }[];
-  /** Nội dung comment/nhận xét khách hàng thực tế, do người phụ trách dán vào (mỗi dòng 1 comment). */
+  /** Nội dung comment/nhận xét khách hàng thực tế, dạng thô (mỗi dòng 1 comment, KHÔNG tự đánh số). */
   customerCommentsRaw?: string;
-  /** Thông tin bổ sung ngoài dữ liệu hệ thống (note họp, feedback thị trường...) do người dùng cung cấp để AI khai thác thêm. */
+  /** Thông tin bổ sung ngoài dữ liệu hệ thống (note họp, feedback thị trường...) do người dùng cung cấp. */
   additionalContext?: string;
+}
+
+export interface NextPlan {
+  general: string;
+  goals: string;
+  topics: string;
+  team: string;
+  team_baiviet: string;
+  team_sanpham: string;
+  team_multimedia: string;
+}
+
+export interface CommentAnalysis {
+  text: string;
+  /** ID 1-based, khớp với `splitCommentLines(customerCommentsRaw)` */
+  hotspotIds: number[];
+  improvementIds: number[];
 }
 
 export interface AIGeneratedReport {
   insights: string;
   bottleneck: string;
   recommendation: string;
-  customerCommentAnalysis?: { text: string; hotspotIds: number[]; improvementIds: number[] };
-  nextPlan: {
-    general: string;
-    goals: string;
-    topics: string;
-    team: string;
-    team_baiviet: string;
-    team_sanpham: string;
-    team_multimedia: string;
-  };
+  customerCommentAnalysis?: CommentAnalysis;
+  nextPlan: NextPlan;
 }
 
-type AIBlockType = 'insights' | 'bottleneck' | 'recommendation' | 'nextPlan' | 'fullReport' | 'customerCommentAnalysis' | 'weeklyReport';
+export interface WeeklyAIResult {
+  insights: string;
+  bottlenecks: string;
+  aiAssessment: string;
+  nextWeekPlan: string;
+}
+
+export interface ChatMessage {
+  role: 'user' | 'model';
+  text: string;
+}
+
+type OnDelta = (fullTextSoFar: string) => void;
 
 // ─── Model Config (stored client-side, no secret) ──────────
 
 const AI_MODEL_STORAGE = 'ai_gemini_model';
+const DEFAULT_MODEL = 'gemini-2.5-pro';
 
 export function getStoredModel(): string {
-  return localStorage.getItem(AI_MODEL_STORAGE) || 'gemini-2.5-pro';
+  try { return localStorage.getItem(AI_MODEL_STORAGE) || DEFAULT_MODEL; } catch { return DEFAULT_MODEL; }
 }
 
 export function setStoredModel(model: string): void {
-  localStorage.setItem(AI_MODEL_STORAGE, model);
+  try { localStorage.setItem(AI_MODEL_STORAGE, model); } catch { /* ignore */ }
 }
+
+/** Phân tích số liệu cần ổn định, ít "sáng tác"; chat cho phép tự nhiên hơn một chút. */
+const ANALYSIS_TEMPERATURE = 0.3;
+const CHAT_TEMPERATURE = 0.6;
+/** Gemini 2.5 tính cả token "suy nghĩ" vào giới hạn này → để rộng tránh bị cắt giữa chừng. */
+const MAX_OUTPUT_TOKENS = 32768;
 
 // ─── Context Builder ───────────────────────────────────────
 
-function buildContextString(ctx: ReportContext): string {
+/** Tách comment thô thành các dòng không rỗng. ID gửi cho AI = vị trí trong mảng này + 1. */
+export function splitCommentLines(raw?: string): string[] {
+  return (raw || '').split('\n').map(l => l.trim()).filter(Boolean);
+}
+
+/** Đổi danh sách ID (1-based) AI trả về thành nội dung comment tương ứng. */
+export function commentsByIds(raw: string | undefined, ids: number[]): string[] {
+  const lines = splitCommentLines(raw);
+  return ids.map(id => lines[id - 1]).filter((l): l is string => !!l);
+}
+
+function fmtDelta(d: number | null): string {
+  if (d === null) return 'chưa có dữ liệu kỳ trước';
+  return `${d > 0 ? '+' : ''}${d}%`;
+}
+
+export function buildContextString(ctx: ReportContext): string {
   const lines: string[] = [];
 
   lines.push(`## Kỳ báo cáo: ${ctx.periodLabel}`);
@@ -83,7 +133,7 @@ function buildContextString(ctx: ReportContext): string {
   lines.push(`- Lượt submit: ${ctx.stats.totalSubmits}`);
   lines.push(`- Số nhân viên: ${ctx.stats.employeeCount}`);
   lines.push(`- Điểm trung bình/nhân viên: ${ctx.stats.avgPointsPerEmp.toFixed(1)}`);
-  lines.push(`- So kỳ trước — Link: ${ctx.stats.deltaLinks > 0 ? '+' : ''}${ctx.stats.deltaLinks}%, Điểm: ${ctx.stats.deltaPoints > 0 ? '+' : ''}${ctx.stats.deltaPoints}%`);
+  lines.push(`- So kỳ trước — Link: ${fmtDelta(ctx.stats.deltaLinks)}, Điểm: ${fmtDelta(ctx.stats.deltaPoints)}, Submit: ${fmtDelta(ctx.stats.deltaSubmits)}`);
   lines.push('');
 
   lines.push('### Phân bổ theo nhóm công việc');
@@ -118,23 +168,21 @@ function buildContextString(ctx: ReportContext): string {
     lines.push('');
   }
 
-  if (ctx.customerCommentsRaw && ctx.customerCommentsRaw.trim()) {
-    const allLines = ctx.customerCommentsRaw.split('\n').map(l => l.trim()).filter(Boolean);
-    const MAX_CHARS = 45000; 
-
-    let commentsForPrompt = allLines.map((l, i) => `[ID: ${i + 1}] ${l}`).join('\n');
+  const commentLines = splitCommentLines(ctx.customerCommentsRaw);
+  if (commentLines.length > 0) {
+    const MAX_CHARS = 45000;
+    let shown = commentLines.map((l, i) => ({ id: i + 1, l }));
+    let body = shown.map(c => `[ID: ${c.id}] ${c.l}`).join('\n');
     let sampleNote = '';
-    if (commentsForPrompt.length > MAX_CHARS && allLines.length > 1) {
-      const avgLen = Math.max(1, commentsForPrompt.length / allLines.length);
-      const targetCount = Math.max(1, Math.floor(MAX_CHARS / avgLen));
-      const step = Math.max(1, Math.ceil(allLines.length / targetCount));
-      const sampled = allLines.map((l, i) => ({l, i})).filter((_, i) => i % step === 0);
-      commentsForPrompt = sampled.map(item => `[ID: ${item.i + 1}] ${item.l}`).join('\n');
-      sampleNote = ` — đây là mẫu ${sampled.length}/${allLines.length} dòng, hãy suy rộng nhận định cho cả tổng thể`;
+    if (body.length > MAX_CHARS && commentLines.length > 1) {
+      const avgLen = Math.max(1, body.length / commentLines.length);
+      const step = Math.max(1, Math.ceil(commentLines.length / Math.max(1, Math.floor(MAX_CHARS / avgLen))));
+      shown = shown.filter((_, i) => i % step === 0);
+      body = shown.map(c => `[ID: ${c.id}] ${c.l}`).join('\n');
+      sampleNote = ` — đây là mẫu ${shown.length}/${commentLines.length} dòng, hãy suy rộng nhận định cho cả tổng thể`;
     }
-
-    lines.push(`### Nội dung comment khách hàng (dữ liệu thô, đánh số ID, tổng ${allLines.length} dòng${sampleNote})`);
-    lines.push(commentsForPrompt);
+    lines.push(`### Nội dung comment khách hàng (dữ liệu thô, đánh số ID, tổng ${commentLines.length} dòng${sampleNote})`);
+    lines.push(body);
     lines.push('');
   }
 
@@ -175,310 +223,298 @@ function buildContextString(ctx: ReportContext): string {
   return lines.join('\n');
 }
 
-// ─── Prompt Templates ──────────────────────────────────────
+// ─── Prompts ───────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `Bạn là trợ lý phân tích nội dung chuyên sâu của phòng Content Ecom tại Long Châu.
 
 Quy tắc CỐT LÕI:
 1. Viết bằng tiếng Việt, văn phong chuyên nghiệp, chiến lược.
-2. LUÔN trích dẫn số liệu cụ thể.
-3. Sử dụng markdown (in đậm, gạch đầu dòng).
-4. Phân tích phải có chiều sâu, kết nối dữ liệu với giá trị thương hiệu.
-5. Nếu có "Nội dung comment khách hàng", hãy đọc kỹ ID và khai thác thực chất.`;
+2. LUÔN trích dẫn số liệu cụ thể, và CHỈ dùng số liệu có trong dữ liệu được cung cấp — không tự bịa hay tự tính ra số mới không có căn cứ.
+3. Nếu một mục ghi "chưa có dữ liệu kỳ trước" thì không được nhận định tăng/giảm cho mục đó.
+4. Sử dụng markdown (in đậm, gạch đầu dòng), ngắn gọn, dễ scan.
+5. Phân tích phải có chiều sâu, kết nối dữ liệu với giá trị thương hiệu.
+6. Nếu có "Nội dung comment khách hàng", hãy đọc kỹ và trích dẫn theo [ID: x].
+7. Viết trọn vẹn, không bỏ dở câu.`;
 
-const PROMPTS: Record<AIBlockType, string> = {
-  insights: `Dựa trên dữ liệu báo cáo bên dưới, hãy viết phần "Nhận xét tổng quan" cho báo cáo kỳ này. Chỉ trả về nội dung, không cần tiêu đề.`,
+const TEXT_PROMPTS = {
+  insights: 'Hãy viết phần "Nhận xét tổng quan" cho báo cáo kỳ này. Chỉ trả về nội dung markdown, không cần tiêu đề.',
+  bottleneck: 'Hãy phân tích "Điểm nghẽn & Khó khăn" của kỳ này. Chỉ trả về nội dung markdown, không cần tiêu đề.',
+  recommendation: 'Hãy viết phần "Mở rộng & Đề xuất" mang tính định hướng. Chỉ trả về nội dung markdown, không cần tiêu đề.',
+} as const;
 
-  bottleneck: `Dựa trên dữ liệu báo cáo bên dưới, hãy phân tích "Điểm nghẽn & Khó khăn". Chỉ trả về nội dung, không cần tiêu đề.`,
+type TextBlock = keyof typeof TEXT_PROMPTS;
 
-  recommendation: `Dựa trên dữ liệu báo cáo bên dưới, hãy viết phần "Mở rộng & Đề xuất" mang tính định hướng. Chỉ trả về nội dung, không cần tiêu đề.`,
+const COMMENT_RULES = `Phân tích comment khách hàng (các dòng đánh số [ID: x]):
+- hotspotIds: ID comment "điểm nóng" (tiêu cực rõ ràng, phàn nàn gay gắt, rủi ro thương hiệu, cần xử lý khẩn).
+- improvementIds: ID comment "cần cải thiện" (thắc mắc, thiếu thông tin, góp ý xây dựng, cơ hội tối ưu).
+- Chỉ dùng ID có thật trong dữ liệu. Không có comment thì để mảng rỗng và text rỗng.
+- text: bài phân tích markdown súc tích, BẮT BUỘC đủ 3 phần, mỗi phần có % ước tính và trích 1-2 comment tiêu biểu [ID: x]:
+  **Điểm sáng** (hướng phát huy) · **Điểm nóng** (hành động xử lý) · **Cơ hội / Cần cải thiện** (hướng tối ưu).`;
 
-   customerCommentAnalysis: `Đọc kỹ mục "Nội dung comment khách hàng (dữ liệu thô)" và "Thông tin bổ sung" (nếu có). Dữ liệu comment thô đã được đánh số [ID: x].
+const NEXT_PLAN_RULES = `Kế hoạch triển khai kỳ tới (mỗi trường là markdown gạch đầu dòng ngắn gọn, in đậm ý chính):
+general = định hướng chung; goals = mục tiêu (có số cụ thể); topics = chủ đề focus; team = phát triển đội ngũ;
+team_baiviet / team_sanpham / team_multimedia = công việc của từng team.`;
 
-Yêu cầu:
-1. Lọc ra các ID của comment thuộc nhóm "điểm nóng" (tiêu cực rõ ràng, phàn nàn gay gắt, rủi ro thương hiệu, cần xử lý khẩn) ➔ đặt trong thẻ <hotspot_ids>...</hotspot_ids> (phân tách dấu phẩy).
-2. Lọc ra các ID của comment thuộc nhóm "cần cải thiện" (thắc mắc, thiếu thông tin, góp ý xây dựng, cơ hội tối ưu) ➔ đặt trong thẻ <improvement_ids>...</improvement_ids> (phân tách dấu phẩy).
-3. Viết bài phân tích súc tích vào thẻ <customerCommentAnalysis>...</customerCommentAnalysis>, BẮT BUỘC ĐỀ CẬP ĐỦ 3 PHẦN:
-   - **Điểm sáng**: Ước tính % tích cực, nhận định ngắn gọn, trích dẫn 1-2 comment tiêu biểu [ID: x], hướng phát huy.
-   - **Điểm nóng**: Ước tính % phàn nàn/rủi ro, nhận định ngắn gọn, trích dẫn 1-2 comment tiêu biểu [ID: x], hành động xử lý.
-   - **Cơ hội / Cần cải thiện**: Ước tính % nhu cầu/thắc mắc, nhận định ngắn gọn, trích dẫn 1-2 comment tiêu biểu [ID: x], hướng tối ưu.
+// ─── JSON Schemas (Gemini responseSchema) ──────────────────
 
-Quy tắc:
-- Nêu rõ con số phần trăm (%) ước tính cho từng phần.
-- Viết ngắn gọn, súc tích, dễ đọc, tuyệt đối hoàn chỉnh 100% không bị ngắt câu.
-- TUYỆT ĐỐI KHÔNG nhắc đến tên các thẻ XML (như <hotspot_ids> hay <improvement_ids>) trong nội dung bài viết.`,
+const STR = { type: 'STRING' } as const;
+const INT_ARR = { type: 'ARRAY', items: { type: 'INTEGER' } } as const;
 
-  nextPlan: `Dựa trên dữ liệu báo cáo kỳ này bên dưới, hãy gợi ý "Kế hoạch triển khai kỳ tới" sử dụng thẻ XML: <general>, <goals>, <topics>, <team>, <team_baiviet>, <team_sanpham>, <team_multimedia>.`,
+function obj(props: Record<string, unknown>) {
+  const keys = Object.keys(props);
+  return { type: 'OBJECT', properties: props, required: keys, propertyOrdering: keys };
+}
 
-  fullReport: `Dựa trên dữ liệu báo cáo bên dưới, hãy sinh toàn bộ nội dung phân tích cho báo cáo kỳ này.
-Trả về kết quả bằng cách sử dụng đúng các thẻ XML theo thứ tự sau:
-<insights>Nhận xét tổng quan</insights>
-<bottleneck>Điểm nghẽn</bottleneck>
-<recommendation>Mở rộng & Đề xuất</recommendation>
-<hotspot_ids>ID comment điểm nóng. Nếu không có, để trống.</hotspot_ids>
-<improvement_ids>ID comment cần cải thiện. Nếu không có, để trống.</improvement_ids>
-<customerCommentAnalysis>Phân tích comment ngắn gọn đề cập đủ 3 phần (% Điểm sáng, % Điểm nóng, % Cơ hội/Cải thiện)</customerCommentAnalysis>
-<nextPlan>
-  <general>Định hướng chung</general>
-  <goals>Mục tiêu</goals>
-  <topics>Chủ đề Focus</topics>
-  <team>Phát triển đội ngũ</team>
-  <team_baiviet>Công việc Team Bài viết</team_baiviet>
-  <team_sanpham>Công việc Team Sản phẩm</team_sanpham>
-  <team_multimedia>Công việc Team Multimedia</team_multimedia>
-</nextPlan>
+const NEXT_PLAN_SCHEMA = obj({
+  general: STR, goals: STR, topics: STR, team: STR,
+  team_baiviet: STR, team_sanpham: STR, team_multimedia: STR,
+});
 
-Quy tắc:
-- TUYỆT ĐỐI KHÔNG nhắc đến tên các thẻ XML (như <hotspot_ids> hay <improvement_ids>) trong nội dung bài viết.
-- Viết dạng gạch đầu dòng ngắn gọn, in đậm ý chính (**), có con số % ước tính cho các nhóm comment.
-- Đảm bảo hoàn thành trọn vẹn 100% nội dung, không bị đứt câu giữa chừng.`,
+const COMMENT_SCHEMA = obj({ hotspotIds: INT_ARR, improvementIds: INT_ARR, text: STR });
 
-  weeklyReport: `Dựa trên dữ liệu báo cáo tuần bên dưới, hãy phân tích và sinh nội dung đánh giá cho báo cáo tuần này.
+const FULL_REPORT_SCHEMA = obj({
+  insights: STR,
+  bottleneck: STR,
+  recommendation: STR,
+  customerCommentAnalysis: COMMENT_SCHEMA,
+  nextPlan: NEXT_PLAN_SCHEMA,
+});
 
-Trả về kết quả bằng cách sử dụng đúng các thẻ XML sau (bên trong mỗi thẻ viết dưới dạng gạch đầu dòng ngắn gọn, dễ hiểu, in đậm các ý chính):
+const WEEKLY_SCHEMA = obj({ insights: STR, bottlenecks: STR, aiAssessment: STR, nextWeekPlan: STR });
 
-<insights>Nhận xét từ số liệu tuần: tóm tắt ngắn gọn năng suất, sản lượng, so sánh giữa các nhóm việc và top nhân sự nổi bật</insights>
-<bottleneck>Điểm nghẽn & Rủi ro tuần: nhận diện các vấn đề chậm tiến độ dự án, rủi ro về KPI hoặc chất lượng</bottleneck>
-<aiAssessment>Đánh giá AI: Nhận định chính về kết quả chung, rủi ro tiềm ẩn và đề xuất hành động thiết thực ngay trong tuần tới</aiAssessment>
-<nextWeekPlan>Kế hoạch tuần tới: định hướng hành động cụ thể cho tuần tới</nextWeekPlan>
+// ─── Transport ─────────────────────────────────────────────
 
-Quy tắc:
-- Trình bày ngắn gọn, chuyên nghiệp, dễ scan.
-- Sử dụng markdown: gạch đầu dòng (-) và in đậm (**) để làm nổi bật ý.
-- PHẢI trích dẫn số liệu cụ thể.
-- BẮT BUỘC dùng thẻ XML (ví dụ: <insights>...</insights>).`
-};
+interface GeminiContent { role: 'user' | 'model'; parts: { text: string }[] }
+interface GeminiPart { text?: string; thought?: boolean }
+interface GeminiResponse {
+  candidates?: { content?: { parts?: GeminiPart[] }; finishReason?: string }[];
+  promptFeedback?: { blockReason?: string };
+}
 
-// ─── API Call via Vercel Proxy ─────────────────────────────
+interface CallOptions {
+  contents: GeminiContent[];
+  temperature: number;
+  responseSchema?: unknown;
+  onDelta?: OnDelta;
+  systemPrompt?: string;
+}
 
-async function callAIProxy(
-  model: string,
-  systemPrompt: string,
-  userPrompt: string
-): Promise<string> {
+const TIMEOUT_MS = 180_000;
+
+function partsText(r: GeminiResponse): string {
+  return (r.candidates?.[0]?.content?.parts || [])
+    .filter(p => !p.thought && typeof p.text === 'string')
+    .map(p => p.text)
+    .join('');
+}
+
+function finishProblem(r: GeminiResponse): string | null {
+  if (r.promptFeedback?.blockReason) return `AI từ chối yêu cầu (${r.promptFeedback.blockReason}).`;
+  const reason = r.candidates?.[0]?.finishReason;
+  if (reason === 'MAX_TOKENS') return 'Câu trả lời của AI quá dài nên bị cắt. Hãy thử lại hoặc rút gọn dữ liệu bổ sung.';
+  if (reason === 'SAFETY' || reason === 'RECITATION' || reason === 'PROHIBITED_CONTENT') return `AI dừng giữa chừng (${reason}).`;
+  return null;
+}
+
+async function errorFromResponse(res: Response): Promise<Error> {
+  const body = await res.json().catch(() => null) as { error?: string } | null;
+  return new Error(body?.error || `Lỗi API (${res.status})`);
+}
+
+/** Đọc luồng SSE `data: {...}` từ proxy, gọi onDelta với toàn bộ văn bản đã nhận. */
+async function readStream(res: Response, onDelta: OnDelta): Promise<{ text: string; last: GeminiResponse }> {
+  if (!res.body) throw new Error('Trình duyệt không hỗ trợ streaming.');
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let text = '';
+  let last: GeminiResponse = {};
+
+  const handleEvent = (raw: string) => {
+    const data = raw.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trim()).join('');
+    if (!data || data === '[DONE]') return;
+    let chunk: GeminiResponse & { error?: { message?: string } | string };
+    try { chunk = JSON.parse(data); } catch { return; }
+    if (chunk.error) throw new Error(typeof chunk.error === 'string' ? chunk.error : chunk.error.message || 'Lỗi AI');
+    last = chunk;
+    const piece = partsText(chunk);
+    if (piece) { text += piece; onDelta(text); }
+  };
+
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+    let idx;
+    while ((idx = buf.indexOf('\n\n')) !== -1) {
+      handleEvent(buf.slice(0, idx));
+      buf = buf.slice(idx + 2);
+    }
+  }
+  if (buf.trim()) handleEvent(buf);
+  return { text, last };
+}
+
+async function callGemini({ contents, temperature, responseSchema, onDelta, systemPrompt = SYSTEM_PROMPT }: CallOptions): Promise<string> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s timeout for Gemini 2.5 Pro
+  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const stream = !!onDelta && !responseSchema;
 
   try {
     const res = await fetch('/api/ai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model,
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: `${systemPrompt}\n\n---\n\n${userPrompt}` }],
-          },
-        ],
+        model: getStoredModel(),
+        stream,
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents,
         generationConfig: {
-          temperature: 0.7,
+          temperature,
           topP: 0.95,
-          topK: 40,
-          maxOutputTokens: 8192,
+          maxOutputTokens: MAX_OUTPUT_TOKENS,
+          ...(responseSchema ? { responseMimeType: 'application/json', responseSchema } : {}),
         },
       }),
       signal: controller.signal,
     });
 
-    clearTimeout(timeoutId);
+    if (!res.ok) throw await errorFromResponse(res);
 
-    if (!res.ok) {
-      const errBody = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-      throw new Error(errBody.error || `Lỗi API (${res.status})`);
+    let text: string;
+    let last: GeminiResponse;
+    if (stream) {
+      ({ text, last } = await readStream(res, onDelta!));
+    } else {
+      last = await res.json() as GeminiResponse;
+      text = partsText(last);
     }
 
-    const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new Error('AI không trả về kết quả. Vui lòng thử lại.');
+    const problem = finishProblem(last);
+    if (problem && (responseSchema || !text.trim())) throw new Error(problem);
+    if (!text.trim()) throw new Error('AI không trả về kết quả. Vui lòng thử lại.');
     return text.trim();
   } catch (err: unknown) {
-    clearTimeout(timeoutId);
     if (err instanceof Error && err.name === 'AbortError') {
-      throw new Error('Request timeout (120s). Vui lòng thử lại.');
+      throw new Error(`Quá thời gian chờ (${TIMEOUT_MS / 1000}s). Vui lòng thử lại.`);
     }
     throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
+/** Gemini đôi khi bọc JSON trong ```json … ``` dù đã yêu cầu JSON thuần. */
+export function parseJsonResponse<T>(raw: string): T {
+  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {
+    throw new Error('AI trả về dữ liệu không đúng định dạng. Vui lòng thử lại.');
+  }
+}
 
+const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+const ids = (v: unknown) => (Array.isArray(v) ? v.map(Number).filter(n => Number.isInteger(n) && n > 0) : []);
+
+function normalizeNextPlan(v: unknown): NextPlan {
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  return {
+    general: str(o.general), goals: str(o.goals), topics: str(o.topics), team: str(o.team),
+    team_baiviet: str(o.team_baiviet), team_sanpham: str(o.team_sanpham), team_multimedia: str(o.team_multimedia),
+  };
+}
+
+function normalizeComments(v: unknown): CommentAnalysis {
+  const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  return { text: str(o.text), hotspotIds: ids(o.hotspotIds), improvementIds: ids(o.improvementIds) };
+}
+
+function userTurn(instruction: string, ctx: ReportContext): GeminiContent[] {
+  return [{ role: 'user', parts: [{ text: `${instruction}\n\n---\n\nDỮ LIỆU BÁO CÁO:\n${buildContextString(ctx)}` }] }];
+}
+
+async function generateJson<T>(instruction: string, ctx: ReportContext, schema: unknown): Promise<T> {
+  const raw = await callGemini({ contents: userTurn(instruction, ctx), temperature: ANALYSIS_TEMPERATURE, responseSchema: schema });
+  return parseJsonResponse<T>(raw);
+}
 
 // ─── Public API ────────────────────────────────────────────
 
-export async function generateBlock(
-  blockType: AIBlockType,
-  context: ReportContext
-): Promise<string> {
-  const model = getStoredModel();
-  const contextStr = buildContextString(context);
-  const prompt = `${PROMPTS[blockType]}\n\n---\n\nDỮ LIỆU BÁO CÁO:\n${contextStr}`;
-
-  return callAIProxy(model, SYSTEM_PROMPT, prompt);
+export async function generateTextBlock(block: TextBlock, ctx: ReportContext, onDelta?: OnDelta): Promise<string> {
+  return callGemini({ contents: userTurn(TEXT_PROMPTS[block], ctx), temperature: ANALYSIS_TEMPERATURE, onDelta });
 }
 
-export async function generateInsights(context: ReportContext): Promise<string> {
-  return generateBlock('insights', context);
-}
+export const generateInsights = (ctx: ReportContext, onDelta?: OnDelta) => generateTextBlock('insights', ctx, onDelta);
+export const generateBottleneck = (ctx: ReportContext, onDelta?: OnDelta) => generateTextBlock('bottleneck', ctx, onDelta);
+export const generateRecommendation = (ctx: ReportContext, onDelta?: OnDelta) => generateTextBlock('recommendation', ctx, onDelta);
 
-export async function generateBottleneck(context: ReportContext): Promise<string> {
-  return generateBlock('bottleneck', context);
-}
-
-export async function generateRecommendation(context: ReportContext): Promise<string> {
-  return generateBlock('recommendation', context);
-}
-
-export async function generateCustomerCommentAnalysis(context: ReportContext): Promise<{ text: string; hotspotIds: number[]; improvementIds: number[] }> {
-  const raw = await generateBlock('customerCommentAnalysis', context);
-  const text = extractTag(raw, 'customerCommentAnalysis');
-  const hotspotStr = extractTag(raw, 'hotspot_ids');
-  const improvementStr = extractTag(raw, 'improvement_ids');
-  const hotspotIds = hotspotStr ? hotspotStr.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n)) : [];
-  const improvementIds = improvementStr ? improvementStr.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n)) : [];
-  return { text, hotspotIds, improvementIds };
-}
-
-function extractTag(text: string, tag: string): string {
-  const match = text.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, 'i'));
-  let res = match ? match[1].trim() : '';
-  if (!res) {
-    const fallback = text.match(new RegExp(`<${tag}>(.*)`, 'is'));
-    res = fallback ? fallback[1].trim() : '';
+export async function generateCustomerCommentAnalysis(ctx: ReportContext): Promise<CommentAnalysis> {
+  if (splitCommentLines(ctx.customerCommentsRaw).length === 0) {
+    throw new Error('Chưa có comment khách hàng để phân tích.');
   }
-  // Strip any leaked XML tags in text content
-  if (['customerCommentAnalysis', 'insights', 'bottleneck', 'recommendation'].includes(tag)) {
-    res = res.replace(/<\/?(hotspot_ids|improvement_ids|customerCommentAnalysis|insights|bottleneck|recommendation|nextPlan)[^>]*>/gi, '').trim();
-  }
-  return res;
+  const result = normalizeComments(await generateJson<unknown>(COMMENT_RULES, ctx, COMMENT_SCHEMA));
+  if (!result.text) throw new Error('AI trả về thiếu nội dung phân tích. Vui lòng thử lại.');
+  return result;
 }
 
-export async function generateNextPlan(context: ReportContext): Promise<AIGeneratedReport['nextPlan']> {
-  const raw = await generateBlock('nextPlan', context);
-  
-  const general = extractTag(raw, 'general');
-  if (!general) throw new Error('AI trả về thiếu thông tin. Vui lòng thử lại. (Lỗi: ' + raw.substring(0, 50) + ')');
+export async function generateNextPlan(ctx: ReportContext): Promise<NextPlan> {
+  const plan = normalizeNextPlan(await generateJson<unknown>(
+    `Dựa trên dữ liệu kỳ này, hãy gợi ý kế hoạch kỳ tới.\n${NEXT_PLAN_RULES}`, ctx, NEXT_PLAN_SCHEMA,
+  ));
+  if (!plan.general) throw new Error('AI trả về thiếu thông tin. Vui lòng thử lại.');
+  return plan;
+}
 
-  return {
-    general,
-    goals: extractTag(raw, 'goals'),
-    topics: extractTag(raw, 'topics'),
-    team: extractTag(raw, 'team'),
-    team_baiviet: extractTag(raw, 'team_baiviet'),
-    team_sanpham: extractTag(raw, 'team_sanpham'),
-    team_multimedia: extractTag(raw, 'team_multimedia'),
+export async function generateFullReport(ctx: ReportContext): Promise<AIGeneratedReport> {
+  const instruction = `Hãy sinh toàn bộ nội dung phân tích cho báo cáo kỳ này. Mỗi trường văn bản là markdown gạch đầu dòng ngắn gọn, in đậm ý chính.
+- insights: Nhận xét tổng quan.
+- bottleneck: Điểm nghẽn & khó khăn.
+- recommendation: Mở rộng & đề xuất.
+- customerCommentAnalysis: ${COMMENT_RULES}
+- nextPlan: ${NEXT_PLAN_RULES}`;
+  const o = await generateJson<Record<string, unknown>>(instruction, ctx, FULL_REPORT_SCHEMA);
+  const report: AIGeneratedReport = {
+    insights: str(o.insights),
+    bottleneck: str(o.bottleneck),
+    recommendation: str(o.recommendation),
+    customerCommentAnalysis: normalizeComments(o.customerCommentAnalysis),
+    nextPlan: normalizeNextPlan(o.nextPlan),
   };
+  if (!report.insights) throw new Error('AI trả về thiếu thông tin. Vui lòng thử lại.');
+  return report;
 }
 
-export async function generateFullReport(context: ReportContext): Promise<AIGeneratedReport> {
-  const raw = await generateBlock('fullReport', context);
-  
-  const insights = extractTag(raw, 'insights');
-  if (!insights) throw new Error('AI trả về thiếu thông tin. Vui lòng thử lại. (Lỗi: ' + raw.substring(0, 50) + ')');
-
-  return {
-    insights,
-    bottleneck: extractTag(raw, 'bottleneck'),
-    recommendation: extractTag(raw, 'recommendation'),
-    customerCommentAnalysis: {
-      text: extractTag(raw, 'customerCommentAnalysis'),
-      hotspotIds: extractTag(raw, 'hotspot_ids').split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n)),
-      improvementIds: extractTag(raw, 'improvement_ids').split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n)),
-    },
-    nextPlan: {
-      general: extractTag(raw, 'general'),
-      goals: extractTag(raw, 'goals'),
-      topics: extractTag(raw, 'topics'),
-      team: extractTag(raw, 'team'),
-      team_baiviet: extractTag(raw, 'team_baiviet'),
-      team_sanpham: extractTag(raw, 'team_sanpham'),
-      team_multimedia: extractTag(raw, 'team_multimedia'),
-    }
+export async function generateWeeklyReport(ctx: ReportContext): Promise<WeeklyAIResult> {
+  const instruction = `Hãy phân tích và sinh nội dung đánh giá cho báo cáo TUẦN này. Mỗi trường là markdown gạch đầu dòng ngắn gọn, in đậm ý chính, có số liệu cụ thể:
+- insights: Nhận xét từ số liệu tuần — năng suất, sản lượng, so với tuần trước, so sánh giữa các nhóm việc và nhân sự nổi bật.
+- bottlenecks: Điểm nghẽn & rủi ro tuần — dự án chậm tiến độ, rủi ro KPI hoặc chất lượng.
+- aiAssessment: Đánh giá chung — kết quả, rủi ro tiềm ẩn và hành động thiết thực ngay tuần tới.
+- nextWeekPlan: Kế hoạch tuần tới — hành động cụ thể, mỗi dòng có mức ưu tiên và người phụ trách gợi ý.`;
+  const o = await generateJson<Record<string, unknown>>(instruction, ctx, WEEKLY_SCHEMA);
+  const result: WeeklyAIResult = {
+    insights: str(o.insights), bottlenecks: str(o.bottlenecks),
+    aiAssessment: str(o.aiAssessment), nextWeekPlan: str(o.nextWeekPlan),
   };
+  if (!result.insights && !result.aiAssessment) throw new Error('AI trả về thiếu thông tin. Vui lòng thử lại.');
+  return result;
 }
 
-export async function generateWeeklyReport(context: ReportContext): Promise<{
-  insights: string;
-  bottlenecks: string;
-  aiAssessment: string;
-  nextWeekPlan: string;
-}> {
-  const raw = await generateBlock('weeklyReport', context);
-  return {
-    insights: extractTag(raw, 'insights'),
-    bottlenecks: extractTag(raw, 'bottleneck'),
-    aiAssessment: extractTag(raw, 'aiAssessment'),
-    nextWeekPlan: extractTag(raw, 'nextWeekPlan')
-  };
-}
+// ─── Chat (conversational, streaming) ──────────────────────
 
-// ─── Chat (conversational) ─────────────────────────────────
-
-export interface ChatMessage {
-  role: 'user' | 'model';
-  text: string;
-}
-
-export async function chatWithAI(
-  messages: ChatMessage[],
-  context: ReportContext
-): Promise<string> {
-  const model = getStoredModel();
-  const contextStr = buildContextString(context);
-
-  const systemWithContext = `${SYSTEM_PROMPT}
+export async function chatWithAI(messages: ChatMessage[], ctx: ReportContext, onDelta?: OnDelta): Promise<string> {
+  const systemPrompt = `${SYSTEM_PROMPT}
 
 Dưới đây là dữ liệu báo cáo hiện tại mà bạn có thể tham chiếu khi trả lời:
 
-${contextStr}
+${buildContextString(ctx)}
 
-Khi user hỏi, hãy trả lời dựa trên dữ liệu này. Nếu user hỏi ngoài phạm vi data, hãy trả lời theo kiến thức chung nhưng luôn liên hệ lại với context công việc Content Ecom.`;
+Khi user hỏi, hãy trả lời dựa trên dữ liệu này. Nếu user hỏi ngoài phạm vi data, hãy trả lời theo kiến thức chung nhưng luôn liên hệ lại với context công việc Content Ecom, và nói rõ phần nào không có trong dữ liệu.`;
 
-  const contents = messages.map(m => ({
-    role: m.role,
-    parts: [{ text: m.text }],
-  }));
-
-  // Prepend system context
-  if (contents.length > 0 && contents[0].role === 'user') {
-    contents[0].parts[0].text = `${systemWithContext}\n\n---\n\nCâu hỏi: ${contents[0].parts[0].text}`;
-  }
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120000);
-
-  try {
-    const res = await fetch('/api/ai', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        contents,
-        generationConfig: {
-          temperature: 0.8,
-          topP: 0.95,
-          topK: 40,
-          maxOutputTokens: 8192,
-        },
-      }),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!res.ok) {
-      const errBody = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-      throw new Error(errBody.error || `Lỗi API (${res.status})`);
-    }
-
-    const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new Error('AI không trả về kết quả.');
-    return text.trim();
-  } catch (err: unknown) {
-    clearTimeout(timeoutId);
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw new Error('Request timeout. Vui lòng thử lại.');
-    }
-    throw err;
-  }
+  return callGemini({
+    systemPrompt,
+    contents: messages.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
+    temperature: CHAT_TEMPERATURE,
+    onDelta,
+  });
 }
