@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 
 import { useAppStore } from '@/shared/store/appStore';
 import { copyShareUrl } from '@/shared/services/authApi';
-import type { Site } from '@/shared/types';
+import type { Site, KPISubmission } from '@/shared/types';
 import {
   CalendarRange, Calendar, TrendingUp, TrendingDown, Minus,
   FileText, BarChart3, Target,
@@ -24,6 +24,7 @@ import {
   CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, ArcElement, RadialLinearScale, Filler,
   Tooltip, Legend,
+  type TooltipItem,
 } from 'chart.js';
 import { Line, Doughnut, Bar, Radar, Pie } from 'react-chartjs-2';
 import ReactMarkdown from 'react-markdown';
@@ -129,9 +130,11 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
   const [selectedQuarter, setSelectedQuarter] = useState(() => Math.ceil((now.getMonth() + 1) / 3));
   const [selectedYear, setSelectedYear] = useState(() => now.getFullYear());
 
-  useEffect(() => {
-    const periodParam = searchParams.get('period');
-    if (periodParam) {
+  const periodParam = searchParams.get('period');
+  const [appliedPeriodParam, setAppliedPeriodParam] = useState<string | null>(null);
+  if (periodParam && periodParam !== appliedPeriodParam) {
+    setAppliedPeriodParam(periodParam);
+    {
       const monthMatch = periodParam.match(/Tháng\s+(\d{1,2})\/(\d{4})/i);
       if (monthMatch) {
         setMode('month');
@@ -146,7 +149,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
         }
       }
     }
-  }, [searchParams]);
+  }
 
   const [siteFilter, setSiteFilter] = useState<string>('all');
   
@@ -226,9 +229,12 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
   /* ── load/save config ── */
   const reportId = `report_config_${periodLabel}`;
   
-  useEffect(() => {
-    try {
-      const saved = monthlyReports.find(r => r.id === reportId);
+  const savedConfig = monthlyReports.find(r => r.id === reportId);
+  const [loadedConfig, setLoadedConfig] = useState<{ id: string; saved: typeof savedConfig } | null>(null);
+  if (!loadedConfig || loadedConfig.id !== reportId || loadedConfig.saved !== savedConfig) {
+    setLoadedConfig({ id: reportId, saved: savedConfig });
+    {
+      const saved = savedConfig;
       if (saved) {
         if (saved.summaryText) setSummaryText(saved.summaryText);
         if (saved.recommendationText) setRecommendationText(saved.recommendationText);
@@ -252,10 +258,8 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
         setHotspotComments([]);
         setImprovementComments([]);
       }
-    } catch (e) {
-      console.error(e);
     }
-  }, [reportId, monthlyReports]);
+  }
 
   // Manual save handler for report config
   const handleSaveConfig = () => {
@@ -428,7 +432,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
       deltaPoints: pct(totalPoints, prevPoints),
       deltaSubmits: pct(totalSubmits, prevSubmits),
     };
-  }, [prodSubs, prevProdSubs, reportSites]);
+  }, [prodSubs, prevProdSubs, reportSites, categorizeSubmission]);
   // "NT: 12 · TC: 5 · XN: 3" — mọi site đang hoạt động
   const siteSubtitle = (kind: string) =>
     reportSites.map(site => `${siteAbbr(site)}: ${stats.bySite[kind]?.[site.id] ?? 0}`).join(' · ');
@@ -1000,7 +1004,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
-  const AIBlockButton = ({ block, label }: { block: 'insights' | 'bottleneck' | 'recommendation' | 'nextPlan' | 'customerCommentAnalysis'; label?: string }) => {
+  const renderAIButton = (block: 'insights' | 'bottleneck' | 'recommendation' | 'nextPlan' | 'customerCommentAnalysis', label?: string) => {
     if (isPublicShare) return null;
     return (
       <button className="btn btn-ghost btn-icon" onClick={() => handleAIBlock(block)}
@@ -1216,7 +1220,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
             <h3 style={{ fontWeight: 800, fontSize: '1.2rem', color: '#4c1d95', margin: 0 }}>Tóm tắt điều hành</h3>
           </div>
           <div style={{ display: 'flex', gap: '4px' }}>
-            <AIBlockButton block="insights" label="AI viết nhận xét" />
+            {renderAIButton('insights', 'AI viết nhận xét')}
             {!isPublicShare && (
               <button className="btn btn-ghost btn-icon" onClick={() => setIsEditingSummary(!isEditingSummary)} style={{ color: '#6d28d9' }}>
                 {isEditingSummary ? <Save size={18} /> : <Edit3 size={18} />}
@@ -1486,7 +1490,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
                   {isImportingComments ? <Loader2 size={14} className="spin" /> : <Upload size={14} />} Import CSV/Excel
                 </button>
               )}
-              <AIBlockButton block="customerCommentAnalysis" label="AI phân tích comment" />
+              {renderAIButton('customerCommentAnalysis', 'AI phân tích comment')}
               {hotspotComments.length > 0 && (
                 <>
                   <button className="btn" onClick={handleExportHotspots}
@@ -1952,7 +1956,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
                             tooltip: {
                               backgroundColor: 'rgba(15,23,42,.92)', padding: 10, cornerRadius: 8,
                               callbacks: {
-                                label: (ctx: any) => ` ${ctx.raw} link (${Math.round((Number(ctx.raw) / projectsFocus.reduce((s,p) => s+p.links, 0)) * 100)}%)`
+                                label: (ctx: TooltipItem<'pie'>) => ` ${ctx.raw} link (${Math.round((Number(ctx.raw) / projectsFocus.reduce((s,p) => s+p.links, 0)) * 100)}%)`
                               }
                             },
                           }
@@ -2036,7 +2040,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
               <h3 style={{ fontWeight: 800, fontSize: '1.2rem', color: '#7f1d1d', margin: 0 }}>Điểm nghẽn & Khó khăn</h3>
             </div>
           <div style={{ display: 'flex', gap: '4px' }}>
-            <AIBlockButton block="bottleneck" label="AI phân tích điểm nghẽn" />
+            {renderAIButton('bottleneck', 'AI phân tích điểm nghẽn')}
             {!isPublicShare && (
               <button className="btn btn-ghost btn-icon" onClick={() => setIsEditingBottleneck(!isEditingBottleneck)} style={{ color: '#dc2626' }}>
                 {isEditingBottleneck ? <Save size={18} /> : <Edit3 size={18} />}
@@ -2063,7 +2067,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
               <h3 style={{ fontWeight: 800, fontSize: '1.2rem', color: '#1e40af', margin: 0 }}>Mở rộng & Đề xuất</h3>
             </div>
           <div style={{ display: 'flex', gap: '4px' }}>
-            <AIBlockButton block="recommendation" label="AI viết đề xuất" />
+            {renderAIButton('recommendation', 'AI viết đề xuất')}
             {!isPublicShare && (
               <button className="btn btn-ghost btn-icon" onClick={() => setIsEditingRec(!isEditingRec)} style={{ color: '#2563eb' }}>
                 {isEditingRec ? <Save size={18} /> : <Edit3 size={18} />}
@@ -2092,7 +2096,7 @@ export default function MonthlyQuarterlyReportPage({ isShareMode = false }: { is
               <h3 style={{ fontWeight: 800, fontSize: '1.25rem', color: '#0f172a', margin: 0 }}>Kế hoạch triển khai kỳ tới</h3>
             </div>
             <div style={{ display: 'flex', gap: '4px' }}>
-              <AIBlockButton block="nextPlan" label="AI gợi ý kế hoạch" />
+              {renderAIButton('nextPlan', 'AI gợi ý kế hoạch')}
             </div>
           </div>
           
@@ -2432,7 +2436,11 @@ function EmptyChart() {
 
 interface ReportHtmlData {
   title: string; periodLabel: string;
-  stats: any; qualityStats: any;
+  stats: {
+    totalLinks: number; totalPoints: number; totalSubmits: number; employeeCount: number;
+    deltaLinks: number; deltaPoints: number; deltaSubmits: number;
+  };
+  qualityStats: { totalReviews: number; avgScore: number; totalComments: number; pctPositive: number; pctNegative: number };
   teamBreakdown: [string, { links: number; points: number }][];
   tasksBreakdown: { type: string; details: { name: string; links: number; points: number }[] }[];
   topEmployees: { name: string; links: number; points: number; qcAvg: number }[];
@@ -2886,7 +2894,7 @@ ${s1}${s2}${s3}${s4}${s5}${s5_1}${s5_2}${s5_3}${s6}${s6_5a}${s6_5b}${s7}
 </body></html>`;
 }
 
-function DrillDownModal({ data, onClose }: { data: { title: string; subs: any[] }; onClose: () => void }) {
+function DrillDownModal({ data, onClose }: { data: { title: string; subs: KPISubmission[] }; onClose: () => void }) {
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }} onClick={onClose}>
       <div className="card" onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: '900px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

@@ -1,181 +1,168 @@
 import { useState, useMemo } from 'react';
 import { useAppStore } from '@/shared/store/appStore';
-import { copyShareUrl } from '@/shared/services/authApi';
-import { flattenDailyTasks } from '@/shared/selectors/dailyTasks';
 import {
-  BarChart3, Calendar, FileText, Plus, Edit3, Trash2, X, Save,
-  Lock, Unlock, Sparkles, ChevronDown, ChevronUp, Download, Globe,
-  TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle2,
-  ArrowRight, Zap, Target, Users, Share2, Star,
+  BarChart3, FileText, Plus, Edit3, Trash2, X, Save,
+  Lock, Unlock, Sparkles, Download,
+  AlertTriangle, Zap, Star, MoreHorizontal, Copy, Eye,
 } from 'lucide-react';
 import type { WeeklyReport, WeeklyReportProject } from '@/shared/types';
 import { exportCsv, makeId } from '@/shared/utils/helpers';
-import { exportHtmlFile, buildReportHtml } from '@/shared/utils/exportHtml';
 import toast from 'react-hot-toast';
 import WeeklyReportViewer from './WeeklyReportViewer';
 import { generateWeeklyReport, type ReportContext } from '@/shared/services/aiService';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import ErrorBoundary from '@/shared/components/ErrorBoundary';
 
 /* ─────────────────────────────────────────────────────────── helpers ── */
 
+/**
+ * Khoá tuần đang lưu trong DB. Giữ nguyên cách tính cũ để khớp với các báo cáo
+ * đã lưu (do toISOString lệch múi giờ nên khoá thường rơi vào Chủ nhật).
+ */
 function getWeekStart(d: Date): string {
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   return new Date(d.getFullYear(), d.getMonth(), diff).toISOString().slice(0, 10);
 }
 
-function parseDate(ts: string): Date | null {
-  if (!ts) return null;
-  const parts = ts.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-  if (parts) return new Date(`${parts[3]}-${parts[2]}-${parts[1]}`);
-  const d = new Date(ts);
-  return isNaN(d.getTime()) ? null : d;
+/** Cộng/trừ ngày trên khoá tuần (tính theo UTC để không lệch múi giờ). */
+function shiftKey(key: string, days: number): string {
+  const d = new Date(`${key}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
-function formatWeek(ws: string): string {
-  const d = new Date(ws);
-  const end = new Date(d); end.setDate(d.getDate() + 6);
-  return `${d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} — ${end.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+/** Thứ Hai thực của tuần (giờ địa phương) ứng với một khoá tuần. */
+function weekMonday(key: string): Date {
+  const [y, m, d] = key.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  const day = date.getDay();
+  if (day !== 1) date.setDate(date.getDate() + (day === 0 ? 1 : 1 - day));
+  return date;
 }
 
-function formatWeekShort(ws: string): string {
-  const d = new Date(ws);
-  return `${d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}`;
+const dm  = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+const dmy = (d: Date) => `${dm(d)}/${d.getFullYear()}`;
+
+function formatWeek(key: string): string {
+  const mon = weekMonday(key);
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  return `${dm(mon)} – ${dmy(sun)}`;
 }
 
-function pct(a: number, b: number): number {
-  if (b === 0) return 0;
+function formatWeekShort(key: string): string {
+  return dm(weekMonday(key));
+}
+
+/** % thay đổi; null khi không có mốc so sánh. */
+function pct(a: number, b: number): number | null {
+  if (!b) return null;
   return Math.round(((a - b) / b) * 100);
 }
+
+const avgProgress = (r: WeeklyReport): number | null =>
+  r.projectProgress.length > 0
+    ? Math.round(r.projectProgress.reduce((s, p) => s + p.progress, 0) / r.projectProgress.length)
+    : null;
+
+const progressColor = (v: number) => (v >= 80 ? 'var(--success)' : v >= 50 ? 'var(--primary-500)' : 'var(--warning)');
+
+type Period = 'all' | '3m' | 'year';
+const PERIODS: { key: Period; label: string }[] = [
+  { key: 'all',  label: 'Tất cả' },
+  { key: '3m',   label: '3 tháng gần nhất' },
+  { key: 'year', label: 'Năm nay' },
+];
 
 /* ─────────────────────────────────────────────────────── main page ── */
 
 export default function ReportsPage() {
   const {
     weeklyReports, addWeeklyReport, updateWeeklyReport, deleteWeeklyReport,
-    projects, kpiEntries, submissions, taskPointRules, currentUser,
+    submissions, currentUser,
   } = useAppStore();
 
-  const [showForm, setShowForm]         = useState(false);
-  const [editItem, setEditItem]         = useState<WeeklyReport | null>(null);
-  const [expandedReport, setExpandedReport] = useState<string | null>(null);
-  const [viewingReport, setViewingReport]   = useState<WeeklyReport | null>(null);
-  const [dateFrom, setDateFrom]         = useState('');
-  const [dateTo,   setDateTo]           = useState('');
-  const [hoveredBar, setHoveredBar]     = useState<string | null>(null);
+  const [showForm, setShowForm]           = useState(false);
+  const [editItem, setEditItem]           = useState<WeeklyReport | null>(null);
+  const [viewingReport, setViewingReport] = useState<WeeklyReport | null>(null);
+  const [period, setPeriod]               = useState<Period>('all');
+  const [now] = useState(() => Date.now());
 
   const isManager = currentUser?.role === 'Manager';
-  const canEdit   = isManager;
+
+  const currentWeekStart = getWeekStart(new Date());
+  const currentReport    = weeklyReports.find(r => r.weekStart === currentWeekStart);
+  const reportByWeek     = useMemo(() => new Map(weeklyReports.map(r => [r.weekStart, r])), [weeklyReports]);
+
+  /* Sản lượng thực tế theo tuần — cùng công thức với lúc tạo báo cáo (submissions). */
+  const sumRange = useMemo(() => {
+    const items = submissions
+      .map(s => ({ t: new Date(s.submittedAt).getTime(), links: s.links?.length ?? 0, points: s.totalPoints || 0 }))
+      .filter(x => !isNaN(x.t));
+    return (from: number, to: number) => items.reduce(
+      (acc, x) => (x.t >= from && x.t < to ? { links: acc.links + x.links, points: acc.points + x.points } : acc),
+      { links: 0, points: 0 },
+    );
+  }, [submissions]);
+
+  const trend = useMemo(() => {
+    return Array.from({ length: 8 }, (_, i) => {
+      const key  = shiftKey(currentWeekStart, (i - 7) * 7);
+      const from = weekMonday(key).getTime();
+      const to   = from + 7 * 86400000;
+      return { key, ...sumRange(from, Math.min(to, now + 1)), report: reportByWeek.get(key), isCurrent: i === 7 };
+    });
+  }, [currentWeekStart, sumRange, reportByWeek, now]);
+
+  /* Tuần này so với CÙNG KỲ tuần trước (cùng số ngày) để so sánh công bằng. */
+  const thisWeek = useMemo(() => {
+    const mon     = weekMonday(currentWeekStart).getTime();
+    const elapsed = now - mon;
+    const cur     = sumRange(mon, now + 1);
+    const prev    = sumRange(mon - 7 * 86400000, mon - 7 * 86400000 + elapsed);
+    const dayNo   = Math.min(7, Math.floor(elapsed / 86400000) + 1);
+    return { cur, prev, dayNo };
+  }, [currentWeekStart, sumRange, now]);
+
+  const visibleReports = useMemo(() => {
+    let cutoff = '';
+    if (period === '3m')   cutoff = shiftKey(currentWeekStart, -13 * 7);
+    if (period === 'year') cutoff = `${new Date().getFullYear()}-01-01`;
+    return [...weeklyReports]
+      .filter(r => !cutoff || r.weekStart >= cutoff)
+      .sort((a, b) => b.weekStart.localeCompare(a.weekStart));
+  }, [weeklyReports, period, currentWeekStart]);
 
   if (!isManager) {
     return (
       <div className="card" style={{ padding: '60px', textAlign: 'center', marginTop: '20px' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '12px' }}>🔒</div>
+        <Lock size={36} style={{ color: 'var(--text-tertiary)', marginBottom: '12px' }} />
         <h3 style={{ fontWeight: 700, marginBottom: '8px' }}>Không có quyền truy cập</h3>
         <p style={{ color: 'var(--text-tertiary)' }}>Chỉ Manager mới xem được báo cáo tuần.</p>
       </div>
     );
   }
 
-  const dailyTasks = useMemo(
-    () => flattenDailyTasks(kpiEntries, projects, taskPointRules),
-    [kpiEntries, projects, taskPointRules],
-  );
-
-  /* last 8 weeks sorted ascending for chart */
-  const last8Weeks = useMemo(() => {
-    const ws = getWeekStart(new Date());
-    const weeks: string[] = [];
-    for (let i = 7; i >= 0; i--) {
-      const d = new Date(ws);
-      d.setDate(d.getDate() - i * 7);
-      weeks.push(d.toISOString().slice(0, 10));
-    }
-    return weeks;
-  }, []);
-
-  const weekDataMap = useMemo(() => {
-    const map = new Map<string, { links: number; points: number }>();
-    last8Weeks.forEach(ws => {
-      const r = weeklyReports.find(x => x.weekStart === ws);
-      map.set(ws, { links: r?.totalLinks ?? 0, points: r?.totalPoints ?? 0 });
-    });
-    return map;
-  }, [weeklyReports, last8Weeks]);
-
-  const maxLinks = useMemo(
-    () => Math.max(...Array.from(weekDataMap.values()).map(v => v.links), 1),
-    [weekDataMap],
-  );
-
-  const sortedReports = useMemo(() => {
-    let r = [...weeklyReports];
-    if (dateFrom) r = r.filter(x => x.weekStart >= dateFrom);
-    if (dateTo)   r = r.filter(x => x.weekStart <= dateTo);
-    return r.sort((a, b) => b.weekStart.localeCompare(a.weekStart));
-  }, [weeklyReports, dateFrom, dateTo]);
-
-  const currentWeekStart = getWeekStart(new Date());
-  const prevWeekStart    = (() => {
-    const d = new Date(currentWeekStart); d.setDate(d.getDate() - 7);
-    return d.toISOString().slice(0, 10);
-  })();
-
-  const currentWeekData = useMemo(() => {
-    const weekEnd = new Date(currentWeekStart);
-    weekEnd.setDate(weekEnd.getDate() + 6);
-    const tasks = [...dailyTasks, ...submissions.flatMap((s, si) =>
-      s.links.map((l, i) => ({
-        id: `${s.id}_${si}_${i}`, entryId: s.id, linkIndex: i, link: l,
-        employeeName: s.employeeName, taskType: s.taskType, taskDetail: s.taskDetail,
-        point: s.pointPerLink, timestamp: s.submittedAt, projectName: '', projectId: s.projectId,
-      }))
-    )].filter(t => {
-      const d = parseDate(t.timestamp);
-      return d && d >= new Date(currentWeekStart) && d <= weekEnd;
-    });
-    return {
-      totalLinks:  tasks.length,
-      totalPoints: tasks.reduce((s, t) => s + t.point, 0),
-      totalTasks:  tasks.length,
-    };
-  }, [dailyTasks, submissions, currentWeekStart]);
-
-  const prevWeekReport = weeklyReports.find(r => r.weekStart === prevWeekStart);
-  const deltaLinks  = pct(currentWeekData.totalLinks,  prevWeekReport?.totalLinks  ?? 0);
-  const deltaPoints = pct(currentWeekData.totalPoints, prevWeekReport?.totalPoints ?? 0);
-  const currentReport = weeklyReports.find(r => r.weekStart === currentWeekStart);
-  const projectsOnTrack = currentReport
-    ? currentReport.projectProgress.filter(p => p.progress >= 50).length
-    : 0;
-  const totalProjects = currentReport ? currentReport.projectProgress.length : 0;
-
-  const generateId = () => makeId('wr');
-
   const handleCreateNew = () => {
-    const existing = weeklyReports.find(r => r.weekStart === currentWeekStart);
-    setEditItem(existing ?? null);
+    setEditItem(currentReport ?? null);
     setShowForm(true);
   };
 
   const handleExportCSV = () => {
-    if (sortedReports.length === 0) { toast.error('Không có báo cáo nào'); return; }
-    const rows = sortedReports.map(r => ({
-      weekStart: r.weekStart, createdBy: r.createdBy,
-      totalLinks: r.totalLinks, totalPoints: r.totalPoints,
+    if (visibleReports.length === 0) { toast.error('Không có báo cáo nào'); return; }
+    const rows = visibleReports.map(r => ({
+      week: formatWeek(r.weekStart), createdBy: r.createdBy,
+      totalLinks: r.totalLinks, totalPoints: Math.round(r.totalPoints),
       totalTasksCompleted: r.totalTasksCompleted, summary: r.summary,
       managerAssessment: r.managerAssessment || r.aiAssessment,
       issues: r.issues, nextWeekPlan: r.nextWeekPlan,
       projectsSummary: r.projectProgress.map(p => `${p.projectName}:${p.progress}%`).join(' | '),
       locked: r.locked ? 'yes' : 'no',
     }));
-    exportCsv(rows, `bao-cao-tuan_${dateFrom || 'all'}_${dateTo || 'all'}`);
+    exportCsv(rows, `bao-cao-tuan_${period}`);
     toast.success(`Đã export ${rows.length} báo cáo`);
   };
 
-  const handleExportText = (report: WeeklyReport) => {
+  const handleCopyText = (report: WeeklyReport) => {
     const lines = [
       `📊 BÁO CÁO TUẦN — ${formatWeek(report.weekStart)}`,
       `━━━━━━━━━━━━━━━━━━━━━━━━━━`,
@@ -189,160 +176,92 @@ export default function ReportsPage() {
         return arr;
       }),
       '', `📊 SỐ LIỆU: ${report.totalLinks} link | ${report.totalPoints.toFixed(0)} điểm | ${report.totalTasksCompleted} việc`,
-      report.insights     ? `\n💡 NHẬN XÉT: ${report.insights}`                    : '',
-      report.bottlenecks  ? `\n🚧 ĐIỂM NGHẼN: ${report.bottlenecks}`               : '',
+      report.insights     ? `\n💡 NHẬN XÉT: ${report.insights}`              : '',
+      report.bottlenecks  ? `\n🚧 ĐIỂM NGHẼN: ${report.bottlenecks}`         : '',
       '', `👤 ĐÁNH GIÁ: ${report.managerAssessment || report.aiAssessment}`,
-      report.issues       ? `\n⚠️ VẤN ĐỀ: ${report.issues}`                       : '',
-      report.nextWeekPlan ? `\n📋 KẾ HOẠCH TUẦN TỚI: ${report.nextWeekPlan}`       : '',
+      report.issues       ? `\n⚠️ VẤN ĐỀ: ${report.issues}`                 : '',
+      report.nextWeekPlan ? `\n📋 KẾ HOẠCH TUẦN TỚI: ${report.nextWeekPlan}` : '',
     ].filter(Boolean).join('\n');
     navigator.clipboard.writeText(lines)
-      .then(() => toast.success('Đã copy báo cáo!'))
+      .then(() => toast.success('Đã copy nội dung báo cáo'))
       .catch(() => toast.error('Lỗi copy'));
   };
-
-  const handleExportHTML = (report: WeeklyReport) => {
-    const html = buildReportHtml({
-      title: `Báo cáo tuần — ${formatWeek(report.weekStart)}`,
-      period: formatWeek(report.weekStart),
-      overview: [
-        { label: 'Tổng link',    value: report.totalLinks },
-        { label: 'Tổng điểm',   value: Math.round(report.totalPoints) },
-        { label: 'Lượt submit',  value: report.totalTasksCompleted },
-        { label: 'Dự án',        value: report.projectProgress.length },
-      ],
-      taskBreakdown: report.taskBreakdownByTeam || [],
-      projectProgress: report.projectProgress.map(p => ({
-        name: p.projectName, progress: p.progress,
-        done: p.tasksCompleted, total: p.tasksTotal, notes: p.notes,
-        remarks: p.remarks, attentionNotes: p.attentionNotes,
-      })),
-      insights:    report.insights    || '',
-      bottlenecks: report.bottlenecks || '',
-      managerNotes: report.managerAssessment || report.aiAssessment || '',
-      nextPlan:    report.nextWeekPlan || '',
-    });
-    exportHtmlFile(html, `bao-cao-${report.weekStart}`);
-    toast.success('Đã export HTML!');
-  };
-
-  // Link có chữ ký do server cấp: chỉ mở được đúng báo cáo này, không sửa tham số được
-  const handleShareLink = (report: WeeklyReport) => {
-    copyShareUrl('weekly', report.id)
-      .then(copied => { if (copied) toast.success('Đã sao chép link báo cáo công khai! Ai có link đều xem được.'); })
-      .catch(e => toast.error((e as Error).message));
-  };
-
 
   /* ── render ── */
   return (
     <div>
-      {/* ── header ── */}
+      {/* ── header: 1 hành động chính duy nhất ── */}
       <div className="page-header">
         <div>
           <h2 className="page-title">
             <span className="icon"><BarChart3 size={20} /></span>Báo cáo tuần
           </h2>
-          <p className="page-subtitle">Tổng hợp tiến độ · So sánh trend · Xuất báo cáo nhanh</p>
+          <p className="page-subtitle">Sản lượng thực tế theo tuần và lưu trữ các báo cáo đã lập</p>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="btn btn-secondary" onClick={handleExportCSV} disabled={sortedReports.length === 0}>
-            <Download size={14} /> Export CSV
+        {currentReport ? (
+          <button className="btn btn-primary" onClick={() => setViewingReport(currentReport)}>
+            <Eye size={16} /> Mở báo cáo tuần này
           </button>
-          {canEdit && (
-            <button className="btn btn-primary" onClick={handleCreateNew}
-              style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', border: 'none', boxShadow: '0 4px 14px rgba(99,102,241,.35)' }}>
-              <Plus size={16} /> Tạo báo cáo
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* ── quick-status banner ── */}
-      <QuickStatusBanner
-        currentWeekStart={currentWeekStart}
-        currentWeekData={currentWeekData}
-        deltaLinks={deltaLinks}
-        deltaPoints={deltaPoints}
-        prevWeekReport={prevWeekReport}
-        projectsOnTrack={projectsOnTrack}
-        totalProjects={totalProjects}
-        canEdit={canEdit}
-        hasCurrentReport={!!currentReport}
-        onCreateNew={handleCreateNew}
-      />
-
-      {/* ── trend chart ── */}
-      {weeklyReports.length > 0 && (
-        <TrendChart
-          last8Weeks={last8Weeks}
-          weekDataMap={weekDataMap}
-          maxLinks={maxLinks}
-          currentWeekStart={currentWeekStart}
-          hoveredBar={hoveredBar}
-          setHoveredBar={setHoveredBar}
-        />
-      )}
-
-      {/* ── date filter ── */}
-      <div className="card" style={{ padding: '12px 16px', marginBottom: '16px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <Calendar size={14} color="var(--primary-500)" />
-        <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>Lọc:</span>
-        <input className="form-input" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-          style={{ width: 'auto', fontSize: '0.85rem' }} />
-        <span style={{ color: 'var(--text-tertiary)' }}>→</span>
-        <input className="form-input" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-          style={{ width: 'auto', fontSize: '0.85rem' }} />
-        {(dateFrom || dateTo) && (
-          <button className="btn btn-ghost" onClick={() => { setDateFrom(''); setDateTo(''); }}
-            style={{ padding: '4px 8px', fontSize: '0.78rem' }}>
-            <X size={12} /> Bỏ lọc
+        ) : (
+          <button className="btn btn-primary" onClick={handleCreateNew}>
+            <Plus size={16} /> Tạo báo cáo tuần này
           </button>
         )}
-        <span style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', marginLeft: 'auto' }}>
-          {sortedReports.length} / {weeklyReports.length} báo cáo
-        </span>
       </div>
 
-      {/* ── reports list ── */}
-      {sortedReports.length === 0 ? (
-        <div className="card" style={{ padding: '60px', textAlign: 'center' }}>
-          <FileText size={48} style={{ color: 'var(--text-tertiary)', marginBottom: '16px', opacity: 0.3 }} />
-          <h3 style={{ fontWeight: 700, marginBottom: '8px' }}>Chưa có báo cáo tuần</h3>
-          <p style={{ color: 'var(--text-tertiary)', fontSize: '0.88rem', marginBottom: '20px' }}>
-            Bấm "Tạo báo cáo" để bắt đầu — hệ thống sẽ tự fill số liệu từ submissions.
-          </p>
-          {canEdit && (
-            <button className="btn btn-primary" onClick={handleCreateNew}
-              style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', border: 'none' }}>
-              <Sparkles size={14} /> Tạo báo cáo đầu tiên
+      {/* ── tổng quan tuần này + trend ── */}
+      <WeekOverview
+        currentWeekStart={currentWeekStart}
+        currentReport={currentReport}
+        thisWeek={thisWeek}
+        trend={trend}
+        onOpenReport={setViewingReport}
+      />
+
+      {/* ── lịch sử báo cáo ── */}
+      <div className="card wr-history">
+        <div className="wr-history-head">
+          <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
+            Lịch sử báo cáo <span style={{ color: 'var(--text-tertiary)', fontWeight: 500 }}>({visibleReports.length})</span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginLeft: 'auto' }}>
+            <select className="form-input" value={period} onChange={e => setPeriod(e.target.value as Period)}
+              style={{ width: 'auto', fontSize: '0.82rem', padding: '6px 10px' }} aria-label="Khoảng thời gian">
+              {PERIODS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+            </select>
+            <button className="btn btn-ghost btn-sm" onClick={handleExportCSV} disabled={visibleReports.length === 0}
+              title="Xuất danh sách đang hiển thị ra CSV">
+              <Download size={14} /> CSV
             </button>
-          )}
+          </div>
         </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {sortedReports.map((report, idx) => {
-            const isExpanded = expandedReport === report.id;
-            const prevReport = sortedReports[idx + 1];
-            const linkDelta = prevReport ? pct(report.totalLinks, prevReport.totalLinks) : null;
-            return (
-              <ReportCard
-                key={report.id}
-                report={report}
-                isExpanded={isExpanded}
-                linkDelta={linkDelta}
-                canEdit={canEdit}
-                onToggle={() => setExpandedReport(isExpanded ? null : report.id)}
-                onView={() => setViewingReport(report)}
-                onEdit={() => { setEditItem(report); setShowForm(true); }}
-                onDelete={() => { if (window.confirm('Xóa báo cáo này?')) { deleteWeeklyReport(report.id); toast.success('Đã xóa'); } }}
-                onCopy={() => handleExportText(report)}
-                onExportHtml={() => handleExportHTML(report)}
-                onShare={() => handleShareLink(report)}
-              />
-            );
-          })}
-        </div>
-      )}
+
+        {visibleReports.length === 0 ? (
+          <div style={{ padding: '48px 20px', textAlign: 'center' }}>
+            <FileText size={40} style={{ color: 'var(--text-tertiary)', opacity: 0.4, marginBottom: '12px' }} />
+            <div style={{ fontWeight: 600, marginBottom: '4px' }}>
+              {weeklyReports.length === 0 ? 'Chưa có báo cáo tuần nào' : 'Không có báo cáo trong khoảng này'}
+            </div>
+            <div style={{ color: 'var(--text-tertiary)', fontSize: '0.85rem' }}>
+              {weeklyReports.length === 0 && 'Bấm "Tạo báo cáo tuần này" — số liệu sẽ được tự điền từ submissions.'}
+            </div>
+          </div>
+        ) : (
+          <ReportTable
+            reports={visibleReports}
+            reportByWeek={reportByWeek}
+            currentWeekStart={currentWeekStart}
+            onView={setViewingReport}
+            onEdit={r => { setEditItem(r); setShowForm(true); }}
+            onCopy={handleCopyText}
+            onDelete={r => {
+              if (window.confirm(`Xóa báo cáo tuần ${formatWeek(r.weekStart)}?`)) {
+                deleteWeeklyReport(r.id); toast.success('Đã xóa');
+              }
+            }}
+          />
+        )}
+      </div>
 
       {showForm && (
         <ErrorBoundary fallbackTitle="Lỗi hiển thị Form Báo cáo">
@@ -355,7 +274,7 @@ export default function ReportsPage() {
                 updateWeeklyReport(editItem.id, { ...data, updatedAt: new Date().toISOString() });
                 toast.success('Đã cập nhật báo cáo');
               } else {
-                addWeeklyReport({ ...data, id: generateId(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as WeeklyReport);
+                addWeeklyReport({ ...data, id: makeId('wr'), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as WeeklyReport);
                 toast.success('Đã tạo báo cáo');
               }
               setShowForm(false); setEditItem(null);
@@ -364,11 +283,11 @@ export default function ReportsPage() {
         </ErrorBoundary>
       )}
 
-      {/* ── full-screen report viewer ── */}
+      {/* ── trình xem báo cáo (chia sẻ, tải HTML, in, sửa nội dung nằm ở đây) ── */}
       {viewingReport && (
         <WeeklyReportViewer
           report={viewingReport}
-          canEdit={canEdit}
+          canEdit={isManager}
           onClose={() => setViewingReport(null)}
           onSave={updates => {
             updateWeeklyReport(viewingReport.id, { ...updates, updatedAt: new Date().toISOString() });
@@ -381,412 +300,209 @@ export default function ReportsPage() {
   );
 }
 
-/* ─────────────────────────────────────────── QuickStatusBanner ── */
+/* ─────────────────────────────────────────── small pieces ── */
 
-function DeltaBadge({ value }: { value: number }) {
-  if (value === 0) return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.75rem', fontWeight: 700, color: '#64748b', background: '#f1f5f9', borderRadius: '999px', padding: '2px 8px' }}>
-      <Minus size={10} /> 0%
-    </span>
-  );
-  const up = value > 0;
+function Delta({ value, suffix }: { value: number | null; suffix?: string }) {
+  if (value === null) return <span className="wr-delta wr-delta-none">{suffix ? `chưa có dữ liệu ${suffix}` : '—'}</span>;
+  const cls = value > 0 ? 'wr-delta-up' : value < 0 ? 'wr-delta-down' : 'wr-delta-flat';
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.75rem', fontWeight: 700,
-      color: up ? '#16a34a' : '#dc2626',
-      background: up ? '#dcfce7' : '#fee2e2',
-      borderRadius: '999px', padding: '2px 8px' }}>
-      {up ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-      {up ? '+' : ''}{value}%
+    <span className={`wr-delta ${cls}`}>
+      {value > 0 ? '▲' : value < 0 ? '▼' : '='} {Math.abs(value)}%{suffix && <span className="wr-hide-sm"> {suffix}</span>}
     </span>
   );
 }
 
-function QuickStatusBanner({
-  currentWeekStart, currentWeekData, deltaLinks, deltaPoints,
-  prevWeekReport, projectsOnTrack, totalProjects,
-  canEdit, hasCurrentReport, onCreateNew,
-}: {
-  currentWeekStart: string; currentWeekData: { totalLinks: number; totalPoints: number };
-  deltaLinks: number; deltaPoints: number; prevWeekReport: WeeklyReport | undefined;
-  projectsOnTrack: number; totalProjects: number;
-  canEdit: boolean; hasCurrentReport: boolean; onCreateNew: () => void;
+function StatusChip({ report }: { report: WeeklyReport | undefined }) {
+  if (!report) return <span className="wr-chip wr-chip-warn"><AlertTriangle size={11} /> Chưa lập báo cáo</span>;
+  if (report.locked) return <span className="wr-chip wr-chip-ok"><Lock size={11} /> Đã chốt</span>;
+  return <span className="wr-chip wr-chip-draft"><Edit3 size={11} /> Bản nháp</span>;
+}
+
+/* ─────────────────────────────────────────── WeekOverview ── */
+
+type TrendPoint = { key: string; links: number; points: number; report?: WeeklyReport; isCurrent: boolean };
+
+function WeekOverview({ currentWeekStart, currentReport, thisWeek, trend, onOpenReport }: {
+  currentWeekStart: string;
+  currentReport: WeeklyReport | undefined;
+  thisWeek: { cur: { links: number; points: number }; prev: { links: number; points: number }; dayNo: number };
+  trend: TrendPoint[];
+  onOpenReport: (r: WeeklyReport) => void;
 }) {
-  const allGood = deltaLinks >= 0 && deltaPoints >= 0;
-  const gradientColor = allGood
-    ? 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)'
-    : 'linear-gradient(135deg, #fff7ed 0%, #fed7aa 100%)';
-  const accentColor = allGood ? '#16a34a' : '#ea580c';
+  const max = Math.max(...trend.map(t => t.links), 1);
+  const BAR_H = 96;
+  const missing = trend.filter(t => !t.isCurrent && !t.report).length;
 
   return (
-    <div style={{
-      borderRadius: 'var(--radius-lg)',
-      background: gradientColor,
-      border: `2px solid ${allGood ? '#86efac' : '#fdba74'}`,
-      padding: '20px 24px',
-      marginBottom: '16px',
-      position: 'relative',
-      overflow: 'hidden',
-    }}>
-      {/* decorative blobs */}
-      <div style={{ position: 'absolute', right: -20, top: -20, width: 140, height: 140, borderRadius: '50%',
-        background: allGood ? 'rgba(134,239,172,.25)' : 'rgba(253,186,116,.25)', pointerEvents: 'none' }} />
-      <div style={{ position: 'absolute', right: 60, bottom: -30, width: 80, height: 80, borderRadius: '50%',
-        background: allGood ? 'rgba(134,239,172,.15)' : 'rgba(253,186,116,.15)', pointerEvents: 'none' }} />
+    <div className="card wr-overview">
+      {/* trái: tuần này */}
+      <div className="wr-now">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 700 }}>Tuần này</span>
+          <span style={{ color: 'var(--text-tertiary)', fontSize: '0.82rem' }}>{formatWeek(currentWeekStart)}</span>
+        </div>
+        <div style={{ marginTop: '6px' }}><StatusChip report={currentReport} /></div>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px', position: 'relative' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <Calendar size={16} color={accentColor} />
-            <span style={{ fontWeight: 700, fontSize: '0.95rem', color: accentColor }}>
-              Tuần này: {formatWeek(currentWeekStart)}
-            </span>
+        <div className="wr-kpis">
+          <div>
+            <div className="wr-kpi-label">Link đã nộp</div>
+            <div className="wr-kpi-value">{thisWeek.cur.links.toLocaleString('vi-VN')}</div>
+            <Delta value={pct(thisWeek.cur.links, thisWeek.prev.links)} />
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'center' }}>
-            {/* links */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontWeight: 800, fontSize: '1.6rem', color: 'var(--text-primary)', lineHeight: 1 }}>
-                {currentWeekData.totalLinks}
-              </span>
-              <div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', lineHeight: 1.2 }}>link</div>
-                <DeltaBadge value={deltaLinks} />
-              </div>
-            </div>
-            <div style={{ width: 1, height: 36, background: 'rgba(0,0,0,.1)' }} />
-            {/* points */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontWeight: 800, fontSize: '1.6rem', color: 'var(--text-primary)', lineHeight: 1 }}>
-                {currentWeekData.totalPoints.toFixed(0)}
-              </span>
-              <div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', lineHeight: 1.2 }}>điểm</div>
-                <DeltaBadge value={deltaPoints} />
-              </div>
-            </div>
-            {totalProjects > 0 && (
+          <div>
+            <div className="wr-kpi-label">Điểm</div>
+            <div className="wr-kpi-value">{Math.round(thisWeek.cur.points).toLocaleString('vi-VN')}</div>
+            <Delta value={pct(thisWeek.cur.points, thisWeek.prev.points)} />
+          </div>
+        </div>
+        <div className="wr-note">
+          Tính đến hôm nay (ngày {thisWeek.dayNo}/7), so với cùng kỳ tuần trước
+          ({thisWeek.prev.links} link · {Math.round(thisWeek.prev.points)} điểm).
+        </div>
+      </div>
+
+      {/* phải: trend 8 tuần */}
+      <div className="wr-trend">
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 700 }}>Link theo tuần</span>
+          <span style={{ color: 'var(--text-tertiary)', fontSize: '0.78rem' }}>8 tuần gần nhất · số liệu thực tế</span>
+          {missing > 0 && (
+            <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--warning)', fontWeight: 600 }}>
+              {missing} tuần chưa lập báo cáo
+            </span>
+          )}
+        </div>
+        <div className="wr-bars">
+          {trend.map(t => {
+            const h = t.links > 0 ? Math.max(4, Math.round((t.links / max) * BAR_H)) : 2;
+            const clickable = !!t.report;
+            const title = `${formatWeek(t.key)}\n${t.links} link · ${Math.round(t.points)} điểm\n`
+              + (t.isCurrent ? 'Tuần đang diễn ra' : t.report ? 'Bấm để mở báo cáo' : 'Chưa lập báo cáo');
+            return (
+              <button key={t.key} type="button" className="wr-bar-col" title={title}
+                disabled={!clickable} onClick={() => t.report && onOpenReport(t.report)}>
+                <span className="wr-bar-val">{t.links || ''}</span>
+                <span className="wr-bar-track" style={{ height: BAR_H }}>
+                  <span className={`wr-bar ${t.isCurrent ? 'wr-bar-current' : ''}`} style={{ height: h }} />
+                </span>
+                <span className={`wr-bar-label ${t.isCurrent ? 'is-current' : ''}`}>
+                  {t.isCurrent ? 'Tuần này' : formatWeekShort(t.key)}
+                </span>
+                <span className={`wr-dot ${t.report ? 'has' : t.isCurrent ? 'cur' : 'none'}`} />
+              </button>
+            );
+          })}
+        </div>
+        <div className="wr-legend">
+          <span><span className="wr-dot has" /> Đã có báo cáo</span>
+          <span><span className="wr-dot none" /> Chưa lập báo cáo</span>
+          <span><span className="wr-legend-cur" /> Tuần đang diễn ra</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────── ReportTable ── */
+
+function ReportTable({ reports, reportByWeek, currentWeekStart, onView, onEdit, onCopy, onDelete }: {
+  reports: WeeklyReport[];
+  reportByWeek: Map<string, WeeklyReport>;
+  currentWeekStart: string;
+  onView: (r: WeeklyReport) => void;
+  onEdit: (r: WeeklyReport) => void;
+  onCopy: (r: WeeklyReport) => void;
+  onDelete: (r: WeeklyReport) => void;
+}) {
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+
+  const rows: React.ReactNode[] = [];
+  reports.forEach((r, idx) => {
+    const prevWeek = reportByWeek.get(shiftKey(r.weekStart, -7));
+    const linkDelta = prevWeek ? pct(r.totalLinks, prevWeek.totalLinks) : null;
+    const avg = avgProgress(r);
+    const isCurrent = r.weekStart === currentWeekStart;
+
+    rows.push(
+      <div key={r.id} className="wr-row" role="button" tabIndex={0}
+        onClick={() => onView(r)}
+        onKeyDown={e => { if (e.key === 'Enter') onView(r); }}>
+        <div className="wr-c-week">
+          <div style={{ fontWeight: 600 }}>{formatWeek(r.weekStart)}</div>
+          <div style={{ marginTop: '3px', display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <StatusChip report={r} />
+            {isCurrent && <span className="wr-chip wr-chip-cur">Tuần này</span>}
+          </div>
+        </div>
+        <div className="wr-c-num">
+          <div className="wr-num">{r.totalLinks.toLocaleString('vi-VN')}</div>
+          {prevWeek && <Delta value={linkDelta} suffix="vs tuần trước" />}
+        </div>
+        <div className="wr-c-num"><div className="wr-num">{Math.round(r.totalPoints).toLocaleString('vi-VN')}</div></div>
+        <div className="wr-c-num wr-c-hide-sm"><div className="wr-num">{r.projectProgress.length}</div></div>
+        <div className="wr-c-prog wr-c-hide-sm">
+          {avg === null ? <span style={{ color: 'var(--text-tertiary)' }}>—</span> : (
+            <>
+              <div className="wr-prog-track"><div className="wr-prog-fill" style={{ width: `${Math.min(100, avg)}%`, background: progressColor(avg) }} /></div>
+              <span style={{ fontWeight: 700, fontSize: '0.8rem', color: progressColor(avg), minWidth: 34, textAlign: 'right' }}>{avg}%</span>
+            </>
+          )}
+        </div>
+        <div className="wr-c-act" onClick={e => e.stopPropagation()}>
+          <button className="btn btn-ghost btn-sm" onClick={() => onView(r)}>Xem</button>
+          <div style={{ position: 'relative' }}>
+            <button className="btn btn-icon btn-ghost" aria-label="Thêm thao tác"
+              onClick={() => setMenuFor(menuFor === r.id ? null : r.id)}>
+              <MoreHorizontal size={16} />
+            </button>
+            {menuFor === r.id && (
               <>
-                <div style={{ width: 1, height: 36, background: 'rgba(0,0,0,.1)' }} />
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  {projectsOnTrack === totalProjects
-                    ? <CheckCircle2 size={16} color="#16a34a" />
-                    : <AlertTriangle size={16} color="#ea580c" />}
-                  <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-                    {projectsOnTrack}/{totalProjects} dự án đúng tiến độ
-                  </span>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setMenuFor(null)} />
+                <div className="wr-menu">
+                  {!r.locked && (
+                    <button onClick={() => { setMenuFor(null); onEdit(r); }}><Edit3 size={14} /> Cập nhật số liệu</button>
+                  )}
+                  <button onClick={() => { setMenuFor(null); onCopy(r); }}><Copy size={14} /> Copy nội dung (text)</button>
+                  {!r.locked && (
+                    <button className="danger" onClick={() => { setMenuFor(null); onDelete(r); }}><Trash2 size={14} /> Xóa báo cáo</button>
+                  )}
+                  {r.locked && <div className="wr-menu-note">Báo cáo đã chốt — không sửa/xóa được</div>}
                 </div>
               </>
             )}
-            {!prevWeekReport && (
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
-                (chưa có báo cáo tuần trước để so sánh)
-              </span>
-            )}
           </div>
         </div>
-        {canEdit && !hasCurrentReport && (
-          <button onClick={onCreateNew}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: 'var(--radius-md)',
-              background: `linear-gradient(135deg,${accentColor},${accentColor}cc)`, color: '#fff', border: 'none', cursor: 'pointer',
-              fontWeight: 700, fontSize: '0.88rem', boxShadow: `0 4px 14px ${accentColor}44`, whiteSpace: 'nowrap',
-              transition: 'transform .15s,box-shadow .15s' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 8px 20px ${accentColor}55`; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = ''; (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 4px 14px ${accentColor}44`; }}>
-            <Sparkles size={15} /> Tạo báo cáo tuần này <ArrowRight size={14} />
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
+      </div>,
+    );
 
-/* ─────────────────────────────────────────────── TrendChart ── */
-
-function TrendChart({ last8Weeks, weekDataMap, maxLinks, currentWeekStart, hoveredBar, setHoveredBar }: {
-  last8Weeks: string[];
-  weekDataMap: Map<string, { links: number; points: number }>;
-  maxLinks: number;
-  currentWeekStart: string;
-  hoveredBar: string | null;
-  setHoveredBar: (v: string | null) => void;
-}) {
-  const maxBarHeight = 80;
+    /* khoảng trống giữa 2 báo cáo liên tiếp */
+    const next = reports[idx + 1];
+    if (next) {
+      const gapWeeks = Math.round((Date.parse(r.weekStart) - Date.parse(next.weekStart)) / (7 * 86400000)) - 1;
+      if (gapWeeks > 0) {
+        const firstMissing = shiftKey(next.weekStart, 7);
+        const lastMissing  = shiftKey(r.weekStart, -7);
+        rows.push(
+          <div key={`gap-${r.id}`} className="wr-gap">
+            <AlertTriangle size={12} /> Không có báo cáo {gapWeeks} tuần
+            ({gapWeeks === 1 ? formatWeek(firstMissing) : `${formatWeekShort(firstMissing)} → ${formatWeek(lastMissing).split(' – ')[1]}`})
+          </div>,
+        );
+      }
+    }
+  });
 
   return (
-    <div className="card" style={{ padding: '20px', marginBottom: '16px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-        <div style={{ padding: '6px', borderRadius: 'var(--radius-sm)', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
-          <TrendingUp size={14} color="#fff" />
-        </div>
-        <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>Trend 8 tuần gần nhất</span>
-        <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-          Hover để xem chi tiết
-        </span>
+    <div className="wr-table">
+      <div className="wr-row wr-row-head">
+        <div className="wr-c-week">Tuần</div>
+        <div className="wr-c-num">Link</div>
+        <div className="wr-c-num">Điểm</div>
+        <div className="wr-c-num wr-c-hide-sm">Dự án</div>
+        <div className="wr-c-prog wr-c-hide-sm" title="Trung bình % tiến độ các dự án có trong báo cáo">Tiến độ dự án (TB)</div>
+        <div className="wr-c-act" />
       </div>
-
-      <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-        {last8Weeks.map(ws => {
-          const data  = weekDataMap.get(ws) ?? { links: 0, points: 0 };
-          const isCur = ws === currentWeekStart;
-          const isHov = hoveredBar === ws;
-          const barH  = maxLinks > 0 ? Math.max(4, Math.round((data.links / maxLinks) * maxBarHeight)) : 4;
-          const hasData = data.links > 0;
-
-          return (
-            <div key={ws} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', position: 'relative' }}
-              onMouseEnter={() => setHoveredBar(ws)} onMouseLeave={() => setHoveredBar(null)}>
-
-              {/* tooltip */}
-              {isHov && (
-                <div style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
-                  background: 'rgba(15,23,42,.92)', color: '#fff', borderRadius: 'var(--radius-md)',
-                  padding: '8px 12px', fontSize: '0.75rem', whiteSpace: 'nowrap', zIndex: 20,
-                  boxShadow: '0 8px 24px rgba(0,0,0,.3)', marginBottom: '6px', lineHeight: 1.6 }}>
-                  <div style={{ fontWeight: 700, marginBottom: '2px' }}>{formatWeek(ws)}</div>
-                  <div>🔗 {data.links} link</div>
-                  <div>⭐ {data.points.toFixed(0)} điểm</div>
-                  {isCur && <div style={{ color: '#a5b4fc', fontSize: '0.7rem', marginTop: '2px' }}>← Tuần này</div>}
-                </div>
-              )}
-
-              {/* bar */}
-              <div style={{
-                width: '100%', height: `${maxBarHeight}px`,
-                display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-              }}>
-                <div style={{
-                  width: '100%', height: `${barH}px`,
-                  borderRadius: '6px 6px 2px 2px',
-                  background: isCur
-                    ? 'linear-gradient(180deg,#6366f1,#8b5cf6)'
-                    : hasData
-                      ? (isHov ? 'linear-gradient(180deg,#60a5fa,#3b82f6)' : 'linear-gradient(180deg,#93c5fd,#bfdbfe)')
-                      : 'var(--border-light)',
-                  transition: 'height .3s cubic-bezier(.34,1.56,.64,1), background .2s',
-                  boxShadow: isCur ? '0 4px 12px rgba(99,102,241,.4)' : isHov ? '0 2px 8px rgba(59,130,246,.3)' : 'none',
-                  cursor: 'pointer',
-                }} />
-              </div>
-
-              {/* week label */}
-              <div style={{ fontSize: '0.65rem', color: isCur ? 'var(--primary-600)' : 'var(--text-tertiary)',
-                fontWeight: isCur ? 700 : 400, textAlign: 'center', lineHeight: 1.2 }}>
-                {formatWeekShort(ws)}
-                {isCur && <div style={{ color: 'var(--primary-500)', fontSize: '0.6rem' }}>●</div>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* legend */}
-      <div style={{ display: 'flex', gap: '16px', marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--border-light)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>
-          <div style={{ width: 12, height: 12, borderRadius: 3, background: 'linear-gradient(180deg,#6366f1,#8b5cf6)' }} />
-          Tuần hiện tại
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>
-          <div style={{ width: 12, height: 12, borderRadius: 3, background: 'linear-gradient(180deg,#93c5fd,#bfdbfe)' }} />
-          Tuần khác
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>
-          <div style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--border-light)' }} />
-          Chưa có báo cáo
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────── ReportCard ── */
-
-function ReportCard({ report, isExpanded, linkDelta, canEdit, onToggle, onView, onEdit, onDelete, onCopy, onExportHtml, onShare }: {
-  report: WeeklyReport; isExpanded: boolean; linkDelta: number | null;
-  canEdit: boolean; onToggle: () => void; onView: () => void; onEdit: () => void; onDelete: () => void;
-  onCopy: () => void; onExportHtml: () => void; onShare: () => void;
-}) {
-  const overallProgress = report.projectProgress.length > 0
-    ? Math.round(report.projectProgress.reduce((s, p) => s + p.progress, 0) / report.projectProgress.length)
-    : null;
-
-  const progressColor = overallProgress == null ? '#94a3b8'
-    : overallProgress >= 80 ? '#16a34a'
-    : overallProgress >= 50 ? '#2563eb'
-    : '#ea580c';
-
-  return (
-    <div className="card" style={{ overflow: 'hidden', transition: 'box-shadow .2s',
-      boxShadow: isExpanded ? '0 8px 32px rgba(99,102,241,.12)' : undefined }}>
-      <button onClick={onToggle}
-        style={{ width: '100%', padding: '16px 20px', background: 'transparent', border: 'none', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', gap: '12px', textAlign: 'left' }}>
-
-        {/* calendar icon */}
-        <div style={{ width: 42, height: 42, borderRadius: 'var(--radius-md)', flexShrink: 0,
-          background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(99,102,241,.3)' }}>
-          <Calendar size={18} color="#fff" />
-        </div>
-
-        {/* title + meta */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            {formatWeek(report.weekStart)}
-            {report.locked && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.68rem', fontWeight: 600,
-                color: '#64748b', background: '#f1f5f9', borderRadius: '999px', padding: '2px 6px' }}>
-                <Lock size={9} /> Đã chốt
-              </span>
-            )}
-            {linkDelta !== null && <DeltaBadge value={linkDelta} />}
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '4px' }}>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>
-              🔗 {report.totalLinks} link
-            </span>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>
-              ⭐ {Math.round(report.totalPoints)} điểm
-            </span>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>
-              📦 {report.projectProgress.length} dự án
-            </span>
-            {overallProgress !== null && (
-              <span style={{ fontSize: '0.78rem', fontWeight: 700, color: progressColor }}>
-                {overallProgress}% tiến độ TB
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* actions */}
-        <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-          {canEdit && !report.locked && (
-            <>
-              <button className="btn btn-icon btn-ghost" onClick={onEdit} title="Chỉnh sửa"><Edit3 size={14} /></button>
-              <button className="btn btn-icon btn-ghost" onClick={onDelete} style={{ color: 'var(--danger)' }} title="Xóa"><Trash2 size={14} /></button>
-            </>
-          )}
-          <button className="btn btn-ghost" onClick={onView}
-            style={{ fontSize: '12px', padding: '4px 10px', color: 'var(--primary-600)', fontWeight: 600 }}
-            title="Xem báo cáo đẹp">
-            👁 Xem
-          </button>
-          <button className="btn btn-icon btn-ghost" onClick={onShare} title="Copy link chia sẻ công khai"
-            style={{ color: '#1d4ed8' }}><Share2 size={14} /></button>
-          <button className="btn btn-icon btn-ghost" onClick={onCopy} title="Copy text"><Download size={14} /></button>
-          <button className="btn btn-icon btn-ghost" onClick={onExportHtml} style={{ color: 'var(--primary-600)' }} title="Export HTML"><Globe size={14} /></button>
-        </div>
-        {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-      </button>
-
-      {isExpanded && (
-        <div style={{ padding: '0 20px 20px', borderTop: '1px solid var(--border-light)', animationName: 'fadeInDown', animationDuration: '.2s', animationFillMode: 'both' }}>
-          {report.summary && (
-            <div style={{ padding: '12px 14px', margin: '12px 0', background: 'linear-gradient(135deg,#f8fafc,#f1f5f9)',
-              borderRadius: 'var(--radius-md)', fontSize: '0.88rem', borderLeft: '3px solid var(--primary-400)' }}>
-              <strong>📝 Tổng quan:</strong> {report.summary}
-            </div>
-          )}
-
-          {/* project progress */}
-          {report.projectProgress.length > 0 && (
-            <div style={{ marginBottom: '14px' }}>
-              <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Target size={14} color="var(--primary-500)" /> Tiến độ dự án
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {report.projectProgress.map(p => {
-                  const c = p.progress >= 80 ? '#16a34a' : p.progress >= 40 ? '#2563eb' : '#ea580c';
-                  return (
-                    <div key={p.projectId} style={{ display: 'flex', alignItems: 'center', gap: '10px',
-                      padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)',
-                      borderLeft: `3px solid ${c}` }}>
-                      <span style={{ fontWeight: 600, fontSize: '0.85rem', flex: 1 }}>{p.projectName}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '150px' }}>
-                        <div style={{ flex: 1, height: '6px', borderRadius: '999px', background: 'var(--border-light)', overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${p.progress}%`, borderRadius: '999px',
-                            background: `linear-gradient(90deg,${c}99,${c})`, transition: 'width .5s ease' }} />
-                        </div>
-                        <span style={{ fontSize: '0.78rem', fontWeight: 800, color: c, minWidth: 32 }}>{p.progress}%</span>
-                      </div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', minWidth: 50 }}>
-                        {p.tasksCompleted}/{p.tasksTotal}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* task breakdown by team */}
-          {report.taskBreakdownByTeam && report.taskBreakdownByTeam.length > 0 && (
-            <div style={{ marginBottom: '14px' }}>
-              <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Users size={14} color="var(--primary-500)" /> Chi tiết đầu việc theo nhóm
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '8px' }}>
-                {report.taskBreakdownByTeam.map(t => (
-                  <div key={t.team} style={{ padding: '10px 12px', background: 'var(--bg-secondary)',
-                    borderRadius: 'var(--radius-md)', borderLeft: `3px solid ${t.color}` }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.82rem', marginBottom: '6px', color: t.color }}>
-                      {t.team}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '6px' }}>
-                      {t.items.reduce((s, i) => s + i.links, 0)} link · {t.items.reduce((s, i) => s + i.points, 0).toFixed(0)}đ
-                    </div>
-                    {t.items.map((item, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem', padding: '2px 0',
-                        color: 'var(--text-secondary)', borderBottom: i < t.items.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
-                        <span>{item.label}</span>
-                        <span style={{ fontWeight: 600 }}>{item.links}L · {item.points.toFixed(0)}đ</span>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* insights + bottlenecks + assessment */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {report.insights && (
-              <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg,#eff6ff,#dbeafe)',
-                border: '1px solid #bfdbfe', fontSize: '0.85rem', color: '#1e40af' }}>
-                💡 <strong>Nhận xét từ số liệu:</strong> 
-                <div style={{ marginTop: '4px' }}><div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{report.insights}</ReactMarkdown></div></div>
-              </div>
-            )}
-            {report.bottlenecks && (
-              <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg,#fef2f2,#fee2e2)',
-                border: '1px solid #fecaca', fontSize: '0.85rem', color: '#991b1b' }}>
-                🚧 <strong>Điểm nghẽn:</strong>
-                <div style={{ marginTop: '4px' }}><div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{report.bottlenecks}</ReactMarkdown></div></div>
-              </div>
-            )}
-            {report.managerAssessment && (
-              <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg,#f0fdf4,#dcfce7)',
-                border: '1px solid #bbf7d0', fontSize: '0.85rem', color: '#14532d' }}>
-                👤 <strong>Manager đánh giá:</strong>
-                <div style={{ marginTop: '4px' }}><div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{report.managerAssessment}</ReactMarkdown></div></div>
-              </div>
-            )}
-            {report.issues && (
-              <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg,#fff7ed,#fed7aa)',
-                border: '1px solid #fdba74', fontSize: '0.85rem', color: '#9a3412' }}>
-                ⚠️ <strong>Vấn đề:</strong>
-                <div style={{ marginTop: '4px' }}><div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{report.issues}</ReactMarkdown></div></div>
-              </div>
-            )}
-            {report.nextWeekPlan && (
-              <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg,#faf5ff,#ede9fe)',
-                border: '1px solid #c4b5fd', fontSize: '0.85rem', color: '#5b21b6' }}>
-                📋 <strong>Kế hoạch tuần tới:</strong>
-                <div style={{ marginTop: '4px' }}><div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{report.nextWeekPlan}</ReactMarkdown></div></div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {rows}
     </div>
   );
 }

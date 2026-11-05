@@ -17,7 +17,11 @@ function fmt(date: Date, opts: { year?: boolean } = {}): string {
 }
 
 function formatWeekLabel(weekStart: string): string {
-  const d = new Date(weekStart);
+  // Khoá tuần cũ thường lưu lệch về Chủ nhật (do múi giờ) → chuẩn hoá về Thứ Hai
+  const [y, m, day] = weekStart.split('-').map(Number);
+  const d = new Date(y, m - 1, day);
+  const wd = d.getDay();
+  if (wd !== 1) d.setDate(d.getDate() + (wd === 0 ? 1 : 1 - wd));
   const end = new Date(d);
   end.setDate(d.getDate() + 6);
   return `${fmt(d)} — ${fmt(end, { year: true })}`;
