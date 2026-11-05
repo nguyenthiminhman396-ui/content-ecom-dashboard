@@ -305,14 +305,24 @@ export default function Projects() {
           {showClient && <span>{clientName.get(p.clientId) ?? '—'}</span>}
         </div>
 
-        <div className="pm-progress">
-          <div className="progress-bar-bg">
-            <div className={`progress-bar-fill ${barClass(s)}`} style={{ width: `${Math.min(100, s.progress)}%` }}></div>
+        {isClosed(s) ? (
+          // Đã đóng: 1 dòng duy nhất — không lặp thanh 100% + badge "Hoàn thành"
+          <div className={`pm-closed-line ${p.status === 'Hủy' ? 'cancelled' : ''}`}>
+            {p.status === 'Hủy'
+              ? <><Ban size={13} /> Đã hủy · dừng ở {s.progress}%</>
+              : <><CheckCircle2 size={13} /> Hoàn thành</>}
           </div>
-          <span className="pm-progress-pct">{s.progress}%</span>
-        </div>
-
-        <div className="pm-state">{renderState(s)}</div>
+        ) : (
+          <>
+            <div className="pm-progress">
+              <div className="progress-bar-bg">
+                <div className={`progress-bar-fill ${barClass(s)}`} style={{ width: `${Math.min(100, s.progress)}%` }}></div>
+              </div>
+              <span className="pm-progress-pct">{s.progress}%</span>
+            </div>
+            <div className="pm-state">{renderState(s)}</div>
+          </>
+        )}
 
         <div className="pm-card-foot">
           <span>{outputText(s)}</span>
