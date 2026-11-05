@@ -10,7 +10,7 @@ import {
 import type { ProjectTask, Expense } from '@/shared/types';
 import { defaultTaskCategories } from '@/shared/data/mockData';
 import toast from 'react-hot-toast';
-import { computeTaskProgress, overallProgress as calcOverallProgress, computeSchedule, resolveStartDate } from '@/shared/selectors/projectProgress';
+import { computeTaskProgress, overallProgress as calcOverallProgress, projectSchedule } from '@/shared/selectors/projectProgress';
 import ScheduleBadge from '@/shared/components/ScheduleBadge';
 
 // Sử dụng makeId() từ shared/utils/helpers — UUID v4 để tránh collision khi
@@ -87,7 +87,7 @@ export default function ProjectDetailPage() {
   const hasTasks = taskProgress.length > 0;
   // Có task nhỏ → auto-calc (bỏ qua manualProgress); không có → manualProgress
   const overallProgress = calcOverallProgress(project, taskProgress);
-  const schedule = computeSchedule(overallProgress, project.deadline, resolveStartDate(project, projectSubs), new Date());
+  const schedule = projectSchedule(project, overallProgress, projectSubs, new Date());
 
   // ── Chi phí ─────────────────────────────────────────────────────────────
   const totalExpense = projectExpenses.reduce((s, e) => s + e.amount, 0);
